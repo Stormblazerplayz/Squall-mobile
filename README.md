@@ -1,19 +1,39 @@
 # Squall mobile
 
-The iPhone app for Squall, Storm's AI team. It's a SwiftUI app (iOS 17+) with three tabs:
+The iPhone app for Squall, Storm's AI team, built from the Squall Mobile design concepts. It's a SwiftUI app (iOS 17+) with the dark, glowy look from the concepts. Everything runs on pretend data for now, so you can tap through every screen before it's linked to Squall desktop.
 
-- **Team**: your crew (Chief, Forge, Prism, Scout, Echo) with what each one is doing.
-- **Chat**: a team chat. It runs in demo mode until linking to Squall desktop is added.
-- **Settings**: desktop address, haptics, app version.
+## Screens
+
+Tabs along the bottom:
+
+- **Team**: Chief's card (message Chief, see its steps), quick actions (new teammate, new group, routines) and the team list with unread badges. Long-press a bot, then tap the glowing Chief card to hand its work to Chief.
+- **Chat**: one-on-one chat with any bot. Bots reply, Chief shows its grouped "needs an update" error with Try again, there's a strip to jump between bots, reply chips, the Live switch and a call button.
+- **Inbox**: things that need you (Barry's push request, Fox's icon question), problems (Chief's update error) and finished work. Allow, Deny, pick, Clear, Undo, and filters.
+- **Board**: every bot as a card with Chat, Steps and hand-off, plus Starx, Sessions, Vault and To do tabs. Barry's card has Watch live.
+- **Routines**: routines that wake a bot on a schedule, with on/off switches. Long-press one to delete it.
+
+Screens that slide in:
+
+- **New teammate** (sheet): role, name with a dice button, color, what they do, then Bring to life.
+- **Hand off to Chief** (sheet): pick what Chief should do and add a note.
+- **Routine editor**: who wakes up, what they do, when (days and time), rules, preview and next run.
+- **Live work**: watch Barry fix the Farside build step by step, with Steps, Terminal and Files tabs, the push OK, Pause, To Chief and Stop.
+- **Group chat**: pick bots, name the group, let Chief lead, then chat with @mentions.
+- **Settings**: Chief napping, safety, the Claude Code update, accent color, notifications and Clear all chats.
+- **Call Chief**: a pretend voice call with live captions where Chief catches you up.
+- **Mission control** (the grid button on Team): everyone at once, Pause all, wake Chief, what needs you, recent handoffs and a jump-to search.
 
 The Xcode project is made from `project.yml` by [XcodeGen](https://github.com/yonaskolb/XcodeGen), so you don't need a Mac. GitHub builds the app for you.
 
 ## How the GitHub build works
 
-The workflow is `.github/workflows/ios.yml`.
+The workflow is `.github/workflows/ios.yml`. One job runs every time:
 
-- **Every pull request and push to `main`**: a quick simulator build checks that the code compiles. No Apple account needed.
-- **Run it by hand** (Actions tab > **iOS build** > **Run workflow**): builds a signed `.ipa`, saves it as a downloadable artifact on the run, and uploads it to TestFlight. Untick "Upload the build to TestFlight" if you only want the `.ipa`.
+1. **Builds the app for iPhone.** This is also the check that the code compiles. No Apple account needed.
+2. **Saves an unsigned `.ipa`** on the run (Artifacts > `Squall-unsigned-<number>`). It's unsigned, so an iPhone won't install it as is. It's there so you can see the build worked.
+3. **Signs it and uploads it to TestFlight**, but only when the Apple secrets below are set, and only on a push to `main` or when you press **Run workflow**. Pull requests never upload.
+
+If the secrets aren't set, step 3 is skipped with a "TestFlight skipped" note and the run still passes.
 
 Each run's build number is the GitHub run number, so every upload is newer than the last one. To change the version people see (like `0.1.0`), edit `MARKETING_VERSION` in `project.yml`.
 
@@ -35,15 +55,17 @@ You need to do these steps yourself. Never paste keys into code or chat; they on
    | `APP_STORE_CONNECT_KEY_P8` | The whole `.p8` file, opened in a text editor, including the `BEGIN` and `END` lines |
    | `APPLE_TEAM_ID` | Your Team ID from step 5 |
 
-7. **Run it.** Actions tab > **iOS build** > **Run workflow**. When it finishes, Apple takes a few minutes to process the build, then it shows up in App Store Connect > your app > TestFlight. Add yourself as an internal tester and install it with the TestFlight app on your iPhone.
+7. **Merge the pull request into `main`.** GitHub only shows the Run workflow button for workflows that are on `main`, and every push to `main` uploads a new build.
+8. **Run it.** Actions tab > **iOS build** > **Run workflow** (or just push to `main`). When it finishes, Apple takes a few minutes to process the build, then it shows up in App Store Connect > your app > TestFlight. Add yourself as an internal tester and install it with the TestFlight app on your iPhone.
 
 ### Using a different bundle ID
 
 Add a repository **variable** (not a secret) named `BUNDLE_ID` in Settings > Secrets and variables > Actions > Variables, set to your bundle ID. The workflow uses it instead of `com.stormblazerplayz.squall`.
 
-### If a run fails
+### If a run fails or skips
 
-- **"The GitHub secret ... is missing"**: add that secret (step 6).
+- **"TestFlight skipped: Apple secrets aren't set yet"**: add the missing secrets it names (step 6).
+- **"TestFlight skipped: Pull requests only check the build"**: that's expected. Merge, then push to `main` or use Run workflow.
 - **"doesn't look like a .p8 key"**: paste the whole `.p8` file again, with the BEGIN and END lines.
 - **Signing errors in "Sign and export the .ipa"**: check the API key has the Admin role and the Team ID is right.
 - **Upload errors about the bundle ID**: the app in App Store Connect must use the exact same bundle ID as the build.
@@ -55,3 +77,10 @@ brew install xcodegen
 xcodegen generate
 open Squall.xcodeproj
 ```
+
+## Where the code lives
+
+- `Squall/Theme`: colors and shared pieces (glowing bot spheres, cards, buttons, status pills).
+- `Squall/Models`: bots, chat messages, routines, inbox items and app state.
+- `Squall/Store`: `SquallStore` (everything the app shows) and `SampleData` (the pretend data).
+- `Squall/Views`: one folder per screen.
