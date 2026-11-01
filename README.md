@@ -39,6 +39,8 @@ Each run's build number is the GitHub run number, so every upload is newer than 
 
 ## Setting up TestFlight (one time)
 
+**For a parent or guardian:** [docs/PARENT_SETUP.md](docs/PARENT_SETUP.md) walks through every step an adult needs to do, in plain words. The short version is below.
+
 You need to do these steps yourself. Never paste keys into code or chat; they only go into GitHub secrets.
 
 1. **Join the Apple Developer Program** at developer.apple.com/programs ($99 a year). You have to be 18 or older to enroll, so a parent or guardian needs to sign up (they can add you to the team afterwards).
