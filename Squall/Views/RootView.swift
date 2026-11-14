@@ -2,6 +2,8 @@ import SwiftUI
 
 struct RootView: View {
     @EnvironmentObject private var store: SquallStore
+    @EnvironmentObject private var lock: AppLock
+    @EnvironmentObject private var pairing: PairingStore
 
     var body: some View {
         NavigationStack(path: $store.path) {
@@ -27,15 +29,22 @@ struct RootView: View {
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: store.toast)
         .sheet(isPresented: $store.showNewTeammate) {
             NewTeammateSheet()
+                .lockCover()
                 .environmentObject(store)
+                .environmentObject(lock)
         }
         .sheet(item: $store.handoffTarget) { target in
             HandoffSheet(botID: target.id)
+                .lockCover()
                 .environmentObject(store)
+                .environmentObject(lock)
         }
         .fullScreenCover(isPresented: $store.showCall) {
             CallChiefView()
+                .lockCover()
                 .environmentObject(store)
+                .environmentObject(lock)
+                .environmentObject(pairing)
         }
     }
 

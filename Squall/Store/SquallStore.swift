@@ -9,7 +9,9 @@ final class SquallStore: ObservableObject {
     @Published var typingBotID: String?
     @Published var handed: Set<String> = []
     @Published var picking: String?
-    @Published var currentChatID: String = Bot.chiefID
+    @Published var currentChatID: String = Bot.chiefID {
+        didSet { UserDefaults.standard.set(currentChatID, forKey: Prefs.lastChat) }
+    }
     @Published var retrying = false
 
     // Navigation
@@ -25,22 +27,32 @@ final class SquallStore: ObservableObject {
     // Routines, inbox and settings
     @Published var routines: [Routine] = SampleData.routines
     @Published var inbox: [InboxItem] = SampleData.inbox
-    @Published var pushDecision: PushDecision?
+    @Published var pushDecision: PushDecision? {
+        // Allow or Deny in the app also updates the Lock Screen.
+        didSet { if pushDecision != oldValue { LiveActivities.shared.approvalDecided(pushDecision) } }
+    }
     @Published var iconChoice: String?
-    @Published var settings = AppSettings()
+    @Published var settings: AppSettings {
+        didSet { saveSettings() }
+    }
     @Published var accentHex: UInt32 {
         didSet { UserDefaults.standard.set(Int(accentHex), forKey: Self.accentKey) }
     }
     @Published var claudeCode: ClaudeCodeUpdate = .needed
     @Published var chiefAwake = false
     @Published var chiefJob: String?
-    @Published var pausedAll = false
+    @Published var pausedAll = false {
+        didSet { if pausedAll != oldValue { LiveActivities.shared.setTeamPaused(pausedAll) } }
+    }
+    /// The last Lock Screen button meant for a screen (Pause Barry, Mute, End call).
+    @Published var activityCommand: ActivityCommand?
 
     private static let accentKey = "squall.accentHex"
     private var toastTask: Task<Void, Never>?
     private var replyTask: Task<Void, Never>?
     private var replyTurns: [String: Int] = [:]
     private var inboxUndo: InboxSnapshot?
+    private var activityObserver: NSObjectProtocol?
 
     private struct InboxSnapshot {
         var items: [InboxItem]
@@ -49,8 +61,165 @@ final class SquallStore: ObservableObject {
     }
 
     init() {
-        let saved = UserDefaults.standard.integer(forKey: Self.accentKey)
+        let defaults = UserDefaults.standard
+        let saved = defaults.integer(forKey: Self.accentKey)
         accentHex = saved > 0 ? UInt32(saved) : Theme.defaultAccentHex
+        if let data = defaults.data(forKey: Prefs.settings),
+           let loaded = try? JSONDecoder().decode(AppSettings.self, from: data) {
+            settings = loaded
+        } else {
+            settings = AppSettings()
+        }
+        // "Open Chat on": Chief, or whoever you talked to last.
+        if defaults.string(forKey: Prefs.openChat) == Prefs.OpenChat.last.rawValue,
+           let last = defaults.string(forKey: Prefs.lastChat),
+           SampleData.bots.contains(where: { $0.id == last }) {
+            currentChatID = last
+        }
+        // Buttons pressed on the Lock Screen or in the Dynamic Island.
+        activityObserver = NotificationCenter.default.addObserver(
+            forName: SquallActivityBridge.notification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.handleActivityActions()
+            }
+        }
+        handleActivityActions()
+    }
+
+    // MARK: - Live Activities and links
+
+    /// Catches up on Lock Screen buttons pressed while the app was away.
+    func handleActivityActions() {
+        for action in SquallActivityBridge.drain() {
+            switch action {
+            case .allowPush:
+                allowPush()
+            case .denyPush:
+                denyPush()
+            case .pauseTeam:
+                pausedAll = true
+            case .resumeTeam:
+                pausedAll = false
+            case .skipRoutine:
+                showToast("Skipped today's routine.")
+            case .pauseBuild, .resumeBuild, .muteCall, .unmuteCall, .endCall:
+                activityCommand = ActivityCommand(action: action)
+            }
+        }
+        LiveActivities.shared.refresh()
+    }
+
+    /// Opens the screen a Live Activity link points at, like squall://live.
+    func open(_ url: URL) {
+        guard url.scheme == "squall" else { return }
+        picking = nil
+        switch url.host ?? "" {
+        case "live":
+            if path.last != .live { path = [.live] }
+        case "mission":
+            if path.last != .mission { path = [.mission] }
+        case "inbox":
+            path = []
+            tab = .inbox
+        case "routines":
+            path = []
+            tab = .routines
+        case "board":
+            path = []
+            tab = .board
+        case "chat":
+            openChat(Bot.chiefID)
+        case "call":
+            showCall = true
+        default:
+            break
+        }
+    }
+
+    private func saveSettings() {
+        if let data = try? JSONEncoder().encode(settings) {
+            UserDefaults.standard.set(data, forKey: Prefs.settings)
+        }
+    }
+
+    // MARK: - Settings: data tools
+
+    /// Every chat as plain text, for the Export button.
+    var chatExport: String {
+        var lines = ["Squall chats", "Exported \(Date().formatted(date: .abbreviated, time: .shortened))", ""]
+        for bot in displayBots {
+            let list = messages(for: bot.id)
+            guard !list.isEmpty else { continue }
+            lines.append("== \(bot.name) (\(bot.role)) ==")
+            for message in list {
+                let who: String
+                switch message.kind {
+                case .me: who = "You"
+                case .system: who = "Note"
+                case .handoff(let fromName, _, _): who = "Handoff from \(fromName)"
+                case .error: who = "\(bot.name) error"
+                case .bot: who = self.bot(message.author)?.name ?? bot.name
+                }
+                var text = message.text
+                if let text2 = message.text2 { text += "\n" + text2 }
+                lines.append("[\(message.time)] \(who): \(text)")
+            }
+            lines.append("")
+        }
+        if lines.count == 3 { lines.append("No messages yet.") }
+        return lines.joined(separator: "\n")
+    }
+
+    /// Saves a real voice call into the chat with Chief.
+    func logCall(_ lines: [(fromMe: Bool, text: String)], seconds: Int) {
+        guard !lines.isEmpty else { return }
+        let time = TimeText.now()
+        append(ChatMessage(kind: .system, author: Bot.chiefID, text: "Voice call with Chief · \(TimeText.stopwatch(seconds))", time: time), to: Bot.chiefID)
+        for line in lines {
+            append(ChatMessage(
+                kind: line.fromMe ? .me : .bot,
+                author: line.fromMe ? ChatMessage.meID : Bot.chiefID,
+                text: line.text,
+                time: time
+            ), to: Bot.chiefID)
+        }
+    }
+
+    /// Puts all the pretend data back the way it was on first launch. Settings stay.
+    func resetPretendData() {
+        replyTask?.cancel()
+        bots = SampleData.bots
+        messages = SampleData.messages
+        typingBotID = nil
+        handed = []
+        picking = nil
+        retrying = false
+        currentChatID = Bot.chiefID
+        routines = SampleData.routines
+        inbox = SampleData.inbox
+        pushDecision = nil
+        iconChoice = nil
+        claudeCode = .needed
+        chiefAwake = false
+        chiefJob = nil
+        pausedAll = false
+        replyTurns = [:]
+        inboxUndo = nil
+        showToast("Pretend data is back to how it started.")
+    }
+
+    /// Puts every setting back to its default. Chats and bots stay.
+    func resetSettings() {
+        let defaults = UserDefaults.standard
+        for key in Prefs.all {
+            defaults.removeObject(forKey: key)
+        }
+        settings = AppSettings()
+        accentHex = Theme.defaultAccentHex
+        showToast("Settings are back to normal.")
     }
 
     var accent: Color { Color(hex: accentHex) }
@@ -269,7 +438,7 @@ final class SquallStore: ObservableObject {
             ChatMessage(
                 kind: .bot,
                 author: id,
-                text: "Hey Storm, I'm \(name), your new \(role.lowercased()).",
+                text: "Hey \(Prefs.displayName), I'm \(name), your new \(role.lowercased()).",
                 text2: "What should my job be? Give me a focus, or tell me to stay flexible and take whatever Chief hands me.",
                 chips: ["Research a project idea", "Review code for bugs", "Draft docs or write-ups"],
                 time: TimeText.now()
@@ -487,4 +656,10 @@ final class SquallStore: ObservableObject {
             path.append(.live)
         }
     }
+}
+
+/// A Lock Screen button that one of the screens needs to act on.
+struct ActivityCommand: Equatable {
+    let id = UUID()
+    let action: SquallActivityAction
 }

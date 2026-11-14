@@ -6,7 +6,7 @@ struct NewTeammateSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var name = "Nova"
-    @State private var role = "Generalist"
+    @State private var role = UserDefaults.standard.string(forKey: Prefs.defaultRole) ?? "Generalist"
     @State private var hex: UInt32 = 0x8C72DC
     @State private var desc = ""
 

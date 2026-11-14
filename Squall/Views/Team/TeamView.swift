@@ -3,7 +3,12 @@ import SwiftUI
 /// Home screen: Chief on top, then the rest of the team.
 struct TeamView: View {
     @EnvironmentObject private var store: SquallStore
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var showChiefSteps = false
+    @AppStorage(Prefs.haptics) private var haptics = true
+    @AppStorage(Prefs.teamName) private var teamName = "Storm"
+
+    private var isWide: Bool { sizeClass == .regular }
 
     var body: some View {
         ZStack {
@@ -17,19 +22,32 @@ struct TeamView: View {
                         }
                         .transition(.move(edge: .top).combined(with: .opacity))
                     }
-                    ChiefCard(showSteps: $showChiefSteps)
-                    quickActions
-                    teamSection
+                    if isWide {
+                        // iPad: Chief on the left, the whole team in a grid on the right.
+                        HStack(alignment: .top, spacing: 18) {
+                            VStack(spacing: 18) {
+                                ChiefCard(showSteps: $showChiefSteps)
+                                quickActions
+                            }
+                            .frame(width: 380)
+                            teamSection
+                                .frame(maxWidth: .infinity)
+                        }
+                    } else {
+                        ChiefCard(showSteps: $showChiefSteps)
+                        quickActions
+                        teamSection
+                    }
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, isWide ? 24 : 16)
                 .padding(.top, 8)
                 .padding(.bottom, 24)
-                .readableColumn()
+                .readableColumn(isWide ? Theme.wideWidth : Theme.readableWidth)
             }
             .scrollIndicators(.hidden)
         }
         .animation(.easeOut(duration: 0.25), value: store.picking)
-        .sensoryFeedback(.impact(weight: .medium), trigger: store.picking)
+        .sensoryFeedback(.impact(weight: .medium), trigger: store.picking) { _, _ in haptics }
     }
 
     private var header: some View {
@@ -39,7 +57,7 @@ struct TeamView: View {
                 Text("Squall")
                     .font(.system(size: 22, weight: .bold))
                     .foregroundStyle(Theme.textBright)
-                Text("Storm's AI team")
+                Text(Prefs.teamTitle(teamName))
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.sub)
             }
@@ -84,9 +102,17 @@ struct TeamView: View {
             Text("Long-press a bot, then drop it on Chief to hand off its work.")
                 .font(.system(size: 12.5))
                 .foregroundStyle(Theme.muted)
-            VStack(spacing: 8) {
-                ForEach(store.teammates) { bot in
-                    TeamRow(bot: bot, isPicked: store.picking == bot.id)
+            if isWide {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 300), spacing: 10)], spacing: 10) {
+                    ForEach(store.teammates) { bot in
+                        TeamRow(bot: bot, isPicked: store.picking == bot.id)
+                    }
+                }
+            } else {
+                VStack(spacing: 8) {
+                    ForEach(store.teammates) { bot in
+                        TeamRow(bot: bot, isPicked: store.picking == bot.id)
+                    }
                 }
             }
         }

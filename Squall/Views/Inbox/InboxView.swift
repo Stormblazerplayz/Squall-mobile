@@ -5,20 +5,26 @@ struct InboxView: View {
     @EnvironmentObject private var store: SquallStore
     @State private var filter: InboxItem.Filter = .all
     @State private var openDetails: Set<String> = []
+    @State private var selectedID: String?
+    @Environment(\.horizontalSizeClass) private var sizeClass
 
     var body: some View {
         ZStack {
             GlowBackground()
-            ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    header
-                    filterBar
-                    sections
+            if sizeClass == .regular {
+                wideLayout
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 14) {
+                        header
+                        filterBar
+                        sections
+                    }
+                    .padding(16)
+                    .readableColumn()
                 }
-                .padding(16)
-                .readableColumn()
+                .scrollIndicators(.hidden)
             }
-            .scrollIndicators(.hidden)
         }
         .animation(.easeOut(duration: 0.25), value: store.inbox)
         .animation(.easeOut(duration: 0.2), value: openDetails)
@@ -108,12 +114,169 @@ struct InboxView: View {
             .padding(.top, 4)
             ForEach(items) { item in
                 InboxCard(item: item, showDetails: openDetails.contains(item.id)) {
-                    if openDetails.contains(item.id) {
-                        openDetails.remove(item.id)
+                    toggleDetails(item.id)
+                }
+            }
+        }
+    }
+
+    private func toggleDetails(_ id: String) {
+        if openDetails.contains(id) {
+            openDetails.remove(id)
+        } else {
+            openDetails.insert(id)
+        }
+    }
+
+    // MARK: iPad: list on the left, the picked item on the right
+
+    private var wideLayout: some View {
+        let shown = items(for: filter)
+        let selected = shown.first(where: { $0.id == selectedID }) ?? shown.first
+        return HStack(spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    header
+                    filterBar
+                    if shown.isEmpty {
+                        Text(filter.emptyText)
+                            .font(.system(size: 14))
+                            .foregroundStyle(Theme.sub)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 50)
                     } else {
-                        openDetails.insert(item.id)
+                        listSection("Needs you", dot: Theme.goldBright, items: shown.filter { $0.kind.needsYou }, selected: selected?.id)
+                        listSection("Problems", dot: Theme.redSoft, items: shown.filter { $0.kind == .error }, selected: selected?.id)
+                        listSection("Done", dot: Theme.green, items: shown.filter {
+                            if case .done = $0.kind { return true }
+                            return false
+                        }, selected: selected?.id)
                     }
                 }
+                .padding(20)
+            }
+            .scrollIndicators(.hidden)
+            .frame(width: 400)
+
+            Rectangle()
+                .fill(Theme.cardBorder)
+                .frame(width: 1)
+                .ignoresSafeArea(edges: .vertical)
+
+            ScrollView {
+                Group {
+                    if let selected {
+                        InboxDetail(item: selected, showDetails: openDetails.contains(selected.id)) {
+                            toggleDetails(selected.id)
+                        }
+                    } else {
+                        Text("Pick something on the left.")
+                            .font(.system(size: 14))
+                            .foregroundStyle(Theme.sub)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 80)
+                    }
+                }
+                .padding(24)
+                .readableColumn(720)
+            }
+            .scrollIndicators(.hidden)
+            .frame(maxWidth: .infinity)
+        }
+    }
+
+    @ViewBuilder
+    private func listSection(_ title: String, dot: Color, items: [InboxItem], selected: String?) -> some View {
+        if !items.isEmpty {
+            HStack(spacing: 6) {
+                Circle().fill(dot).frame(width: 7, height: 7)
+                SectionLabel(text: title)
+            }
+            .padding(.top, 4)
+            ForEach(items) { item in
+                InboxRow(item: item, isOn: item.id == selected) {
+                    selectedID = item.id
+                    store.markRead(item.id)
+                }
+            }
+        }
+    }
+}
+
+/// Small row for the iPad list. Tapping it shows the item on the right.
+private struct InboxRow: View {
+    @EnvironmentObject private var store: SquallStore
+    let item: InboxItem
+    let isOn: Bool
+    var select: () -> Void
+
+    var body: some View {
+        Button(action: select) {
+            HStack(alignment: .top, spacing: 10) {
+                if let bot = store.bot(item.botID) {
+                    Sphere(bot: bot, size: 34)
+                }
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 6) {
+                        Text(item.title)
+                            .font(.system(size: 14.5, weight: .bold))
+                            .foregroundStyle(Theme.textBright)
+                            .lineLimit(1)
+                        if item.unread {
+                            Circle().fill(store.accent).frame(width: 7, height: 7)
+                                .accessibilityLabel("Unread")
+                        }
+                        Spacer(minLength: 0)
+                        Text(item.time)
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(Theme.muted)
+                    }
+                    Text(item.body)
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.sub)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                }
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .glassCard(radius: 16, tint: isOn ? store.accentHex : nil, strength: 0.18,
+                       border: isOn ? store.accent.opacity(0.7) : nil)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isOn ? .isSelected : [])
+    }
+}
+
+/// The right side on iPad: who sent it, the full card, and a way to their chat.
+private struct InboxDetail: View {
+    @EnvironmentObject private var store: SquallStore
+    let item: InboxItem
+    let showDetails: Bool
+    var toggleDetails: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            if let bot = store.bot(item.botID) {
+                HStack(spacing: 14) {
+                    Sphere(bot: bot, size: 52)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(bot.name)
+                            .font(.system(size: 22, weight: .bold))
+                            .foregroundStyle(Theme.textBright)
+                        Text(bot.role)
+                            .font(.system(size: 13.5))
+                            .foregroundStyle(Theme.sub)
+                    }
+                    Spacer(minLength: 0)
+                    StatusPill(status: bot.status)
+                }
+            }
+            InboxCard(item: item, showDetails: showDetails, toggleDetails: toggleDetails)
+            if let bot = store.bot(item.botID) {
+                Button("Open chat with \(bot.name)") { store.openChat(bot.id) }
+                    .buttonStyle(GhostButtonStyle(height: 44))
             }
         }
     }
@@ -201,6 +364,10 @@ private struct InboxCard: View {
                     .buttonStyle(FilledButtonStyle(fill: Theme.green.opacity(0.85), foreground: Theme.darkInk, height: 40))
                 Button("Deny") { store.denyPush() }
                     .buttonStyle(GhostButtonStyle(height: 40))
+            }
+            // Ask on the Lock Screen instead, with Allow and Deny right there.
+            LockScreenButton(kind: .approval) {
+                LiveActivities.shared.startApproval()
             }
         case .choice(let options):
             VStack(spacing: 6) {

@@ -3,7 +3,12 @@ import SwiftUI
 /// One-on-one chat with a bot.
 struct ChatView: View {
     @EnvironmentObject private var store: SquallStore
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var draft = ""
+    @State private var sentCount = 0
+    @AppStorage(Prefs.showTyping) private var showTyping = true
+    @AppStorage(Prefs.sendOnReturn) private var sendOnReturn = false
+    @AppStorage(Prefs.haptics) private var haptics = true
     @State private var showLiveLog = false
     @State private var workTimer = true
     @State private var judge = false
@@ -13,61 +18,77 @@ struct ChatView: View {
     var body: some View {
         let bot = store.currentChat
         let list = store.messages(for: bot.id)
+        let isWide = sizeClass == .regular
         ZStack {
             GlowBackground(topHex: bot.hex)
-            VStack(spacing: 0) {
-                ChatHeader(bot: bot, showLiveLog: $showLiveLog)
-                BotStrip()
-                if showLiveLog {
-                    LiveLogPanel(bot: bot)
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 8)
-                        .transition(.opacity)
+            HStack(spacing: 0) {
+                if isWide {
+                    // iPad: every chat in a column beside the conversation.
+                    ChatList()
+                        .frame(width: 320)
+                    Rectangle()
+                        .fill(Theme.cardBorder)
+                        .frame(width: 1)
+                        .ignoresSafeArea(edges: .top)
                 }
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        LazyVStack(spacing: 12) {
-                            DayDivider(text: "TODAY")
-                            if list.isEmpty && store.typingBotID != bot.id {
-                                emptyState(bot)
-                            }
-                            ForEach(list) { message in
-                                MessageView(message: message, bot: bot) { chip in
-                                    store.send(chip)
+                VStack(spacing: 0) {
+                    ChatHeader(bot: bot, showLiveLog: $showLiveLog)
+                    if !isWide {
+                        BotStrip()
+                    }
+                    if showLiveLog {
+                        LiveLogPanel(bot: bot)
+                            .padding(.horizontal, 16)
+                            .padding(.bottom, 8)
+                            .transition(.opacity)
+                    }
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            LazyVStack(spacing: 12) {
+                                DayDivider(text: "TODAY")
+                                if list.isEmpty && store.typingBotID != bot.id {
+                                    emptyState(bot)
                                 }
+                                ForEach(list) { message in
+                                    MessageView(message: message, bot: bot) { chip in
+                                        store.send(chip)
+                                    }
+                                }
+                                if showTyping && store.typingBotID == bot.id {
+                                    TypingRow(bot: bot)
+                                }
+                                Color.clear.frame(height: 1).id("bottom")
                             }
-                            if store.typingBotID == bot.id {
-                                TypingRow(bot: bot)
-                            }
-                            Color.clear.frame(height: 1).id("bottom")
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .readableColumn(780)
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
+                        .scrollIndicators(.hidden)
+                        .scrollDismissesKeyboard(.interactively)
+                        .onAppear { proxy.scrollTo("bottom", anchor: .bottom) }
+                        .onChange(of: list.count) {
+                            withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
+                        }
+                        .onChange(of: store.typingBotID) {
+                            withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
+                        }
+                        .onChange(of: bot.id) {
+                            proxy.scrollTo("bottom", anchor: .bottom)
+                        }
                     }
-                    .scrollIndicators(.hidden)
-                    .scrollDismissesKeyboard(.interactively)
-                    .onAppear { proxy.scrollTo("bottom", anchor: .bottom) }
-                    .onChange(of: list.count) {
-                        withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
+                    if showContext {
+                        contextCard(bot)
+                            .padding(.horizontal, 16)
+                            .padding(.bottom, 6)
                     }
-                    .onChange(of: store.typingBotID) {
-                        withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
-                    }
-                    .onChange(of: bot.id) {
-                        proxy.scrollTo("bottom", anchor: .bottom)
-                    }
+                    chipBar
+                    inputBar(bot)
                 }
-                if showContext {
-                    contextCard(bot)
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 6)
-                }
-                chipBar
-                inputBar(bot)
+                .readableColumn(isWide ? .infinity : Theme.readableWidth)
             }
-            .readableColumn()
         }
         .animation(.easeOut(duration: 0.2), value: showLiveLog)
+        .sensoryFeedback(.impact(weight: .light), trigger: sentCount) { _, _ in haptics }
         .animation(.easeOut(duration: 0.2), value: showContext)
     }
 
@@ -135,6 +156,13 @@ struct ChatView: View {
                 .focused($inputFocused)
                 .submitLabel(.send)
                 .onSubmit(sendDraft)
+                .onChange(of: draft) { old, new in
+                    // "Send with Return": a Return typed at the end sends instead of starting a new line.
+                    if sendOnReturn, new.count == old.count + 1, new.hasSuffix("\n") {
+                        draft = String(new.dropLast())
+                        sendDraft()
+                    }
+                }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 11)
                 .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Theme.field))
@@ -168,6 +196,7 @@ struct ChatView: View {
         guard canSend else { return }
         store.send(draft)
         draft = ""
+        sentCount += 1
     }
 
     private func roundButton(_ icon: String, label: String, action: @escaping () -> Void) -> some View {
@@ -253,6 +282,98 @@ private struct ChatHeader: View {
         }
         .padding(.horizontal, 10)
         .padding(.top, 4)
+    }
+}
+
+/// iPad only: a column listing every chat, next to the open conversation.
+private struct ChatList: View {
+    @EnvironmentObject private var store: SquallStore
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("Chats")
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundStyle(Theme.textBright)
+                Spacer()
+                IconButton(systemName: "person.3", label: "New group") {
+                    store.path.append(.group)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+            .padding(.bottom, 8)
+            ScrollView {
+                VStack(spacing: 6) {
+                    ForEach(store.displayBots) { bot in
+                        row(bot)
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.bottom, 12)
+            }
+            .scrollIndicators(.hidden)
+        }
+        .background(Color.black.opacity(0.18).ignoresSafeArea(edges: .top))
+    }
+
+    private func row(_ bot: Bot) -> some View {
+        let isOn = bot.id == store.currentChatID
+        let last = store.messages(for: bot.id).last
+        return Button {
+            store.openChat(bot.id)
+        } label: {
+            HStack(spacing: 12) {
+                Sphere(bot: bot, size: 42, glow: isOn ? 0.6 : 0.3)
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 6) {
+                        Text(bot.name)
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(Theme.textBright)
+                            .lineLimit(1)
+                        Circle().fill(bot.status.dot).frame(width: 7, height: 7)
+                        Spacer(minLength: 0)
+                        if let last {
+                            Text(last.time)
+                                .font(.system(size: 11))
+                                .foregroundStyle(Theme.muted)
+                        }
+                    }
+                    Text(preview(last, bot: bot))
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.sub)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                }
+                if let unread = bot.unread, !isOn {
+                    Text(unread)
+                        .font(.system(size: 10.5, weight: .bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 5)
+                        .frame(minWidth: 18, minHeight: 18)
+                        .background(Capsule().fill(Theme.red))
+                }
+            }
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(isOn ? Color.white.opacity(0.1) : Color.clear)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(isOn ? bot.color.opacity(0.6) : Color.clear, lineWidth: 1)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Chat with \(bot.name)")
+        .accessibilityAddTraits(isOn ? .isSelected : [])
+    }
+
+    private func preview(_ message: ChatMessage?, bot: Bot) -> String {
+        guard let message, !message.text.isEmpty else { return bot.task }
+        return message.author == ChatMessage.meID ? "You: \(message.text)" : message.text
     }
 }
 
@@ -359,6 +480,8 @@ struct MessageView: View {
     /// Bot to use when the message has no author we know.
     let bot: Bot
     var onChip: (String) -> Void = { _ in }
+    @AppStorage(Prefs.chatTextSize) private var textSize = 15.0
+    @AppStorage(Prefs.showTimes) private var showTimes = true
 
     var body: some View {
         switch message.kind {
@@ -389,14 +512,16 @@ struct MessageView: View {
             Spacer(minLength: 50)
             VStack(alignment: .trailing, spacing: 3) {
                 Text(message.text)
-                    .font(.system(size: 15))
+                    .font(.system(size: textSize))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
                     .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(store.accent))
-                Text(message.time)
-                    .font(.system(size: 11))
-                    .foregroundStyle(Theme.muted)
+                if showTimes {
+                    Text(message.time)
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.muted)
+                }
             }
         }
     }
@@ -410,16 +535,18 @@ struct MessageView: View {
                     Text(who.name)
                         .font(.system(size: 13, weight: .bold))
                         .foregroundStyle(who.nameColor)
-                    Text(message.time)
-                        .font(.system(size: 11))
-                        .foregroundStyle(Theme.muted)
+                    if showTimes {
+                        Text(message.time)
+                            .font(.system(size: 11))
+                            .foregroundStyle(Theme.muted)
+                    }
                 }
                 Text(message.text)
-                    .font(.system(size: 15))
+                    .font(.system(size: textSize))
                     .foregroundStyle(Theme.text)
                 if let text2 = message.text2 {
                     Text(text2)
-                        .font(.system(size: 15))
+                        .font(.system(size: textSize))
                         .foregroundStyle(Theme.text)
                 }
                 if !message.chips.isEmpty {

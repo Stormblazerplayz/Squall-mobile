@@ -32,7 +32,12 @@ struct BoardView: View {
         }
     }
 
+    @Environment(\.horizontalSizeClass) private var sizeClass
     private let columns = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
+    /// iPad: as many columns as fit, so the board fills the screen.
+    private let wideColumns = [GridItem(.adaptive(minimum: 300), spacing: 12)]
+
+    private var isWide: Bool { sizeClass == .regular }
 
     var body: some View {
         ZStack {
@@ -59,7 +64,7 @@ struct BoardView: View {
                     .scrollIndicators(.hidden)
 
                     if section == .board {
-                        LazyVGrid(columns: columns, spacing: 10) {
+                        LazyVGrid(columns: isWide ? wideColumns : columns, spacing: isWide ? 12 : 10) {
                             ForEach(store.displayBots) { bot in
                                 BoardCard(bot: bot, showSteps: openSteps.contains(bot.id)) {
                                     if openSteps.contains(bot.id) {
@@ -85,7 +90,7 @@ struct BoardView: View {
                     }
                 }
                 .padding(16)
-                .readableColumn()
+                .readableColumn(isWide ? Theme.wideWidth : Theme.readableWidth)
             }
             .scrollIndicators(.hidden)
         }

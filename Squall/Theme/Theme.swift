@@ -41,6 +41,8 @@ enum Theme {
 
     /// Widest the main content gets on a big screen (iPad). Phones are narrower, so this never kicks in there.
     static let readableWidth: CGFloat = 900
+    /// Widest the grid screens (Team, Board, Routines) get on an iPad, so they fill the screen.
+    static let wideWidth: CGFloat = 1400
     /// Widest the bottom tab bar's buttons spread on a big screen.
     static let tabBarWidth: CGFloat = 700
     /// Widest the call screen gets on a big screen.
