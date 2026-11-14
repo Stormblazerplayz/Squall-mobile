@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct SettingsView: View {
     @EnvironmentObject private var store: SquallStore
@@ -12,6 +13,19 @@ struct SettingsView: View {
     @State private var resetDataArmed = false
     @State private var resetSettingsArmed = false
     @State private var showPairing = false
+    @State private var currentIcon: String?
+    @State private var changingIcon = false
+
+    /// Asset name (nil is the normal icon), name shown, and the small preview image.
+    private static let iconChoices: [(asset: String?, title: String, preview: String)] = [
+        (nil, "Classic", "IconPreviewDefault"),
+        ("StormCloud", "Storm Cloud", "IconPreviewStormCloud"),
+        ("ChiefsBolt", "Chief's Bolt", "IconPreviewChiefsBolt"),
+        ("SquallSwirl", "Squall Swirl", "IconPreviewSquallSwirl"),
+        ("BotCrew", "Bot Crew", "IconPreviewBotCrew"),
+        ("Orbit", "Orbit", "IconPreviewOrbit"),
+        ("PowerChip", "Power Chip", "IconPreviewPowerChip")
+    ]
 
     @AppStorage(Prefs.teamName) private var teamName = "Storm"
     @AppStorage(Prefs.chatTextSize) private var chatTextSize = 15.0
@@ -67,6 +81,7 @@ struct SettingsView: View {
             .environmentObject(store)
             .environmentObject(lock)
         }
+        .onAppear { currentIcon = UIApplication.shared.alternateIconName }
         .onChange(of: appLock) { _, isOn in
             if isOn && !AppLock.canLock {
                 appLock = false
@@ -349,9 +364,66 @@ struct SettingsView: View {
                 }
             }
             line
+            rowTitle("App icon", "How Squall looks on your Home Screen")
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 76), spacing: 10)], spacing: 12) {
+                ForEach(Self.iconChoices.indices, id: \.self) { index in
+                    iconButton(Self.iconChoices[index])
+                }
+            }
+            line
             SwitchRow(title: "Softer glow", subtitle: "Turns the colored background light down", isOn: $softGlow, tint: store.accent)
             line
             SwitchRow(title: "Vibrate on taps", subtitle: "A small buzz when you send or pick up a bot", isOn: $haptics, tint: store.accent)
+        }
+    }
+
+    private func iconButton(_ choice: (asset: String?, title: String, preview: String)) -> some View {
+        let isOn = currentIcon == choice.asset
+        return Button {
+            setIcon(choice.asset)
+        } label: {
+            VStack(spacing: 6) {
+                Image(choice.preview)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 60, height: 60)
+                    .clipShape(RoundedRectangle(cornerRadius: 13.4, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 15.5, style: .continuous)
+                            .stroke(isOn ? store.accent : Color.clear, lineWidth: 2.5)
+                            .padding(-4)
+                    )
+                Text(choice.title)
+                    .font(.system(size: 11.5, weight: isOn ? .bold : .medium))
+                    .foregroundStyle(isOn ? Theme.textBright : Theme.sub)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            .frame(maxWidth: .infinity, minHeight: 92)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(changingIcon)
+        .accessibilityLabel("\(choice.title) icon")
+        .accessibilityAddTraits(isOn ? .isSelected : [])
+    }
+
+    private func setIcon(_ asset: String?) {
+        let app = UIApplication.shared
+        guard asset != currentIcon else { return }
+        guard app.supportsAlternateIcons else {
+            store.showToast("This device can't change app icons.")
+            return
+        }
+        changingIcon = true
+        Task { @MainActor in
+            do {
+                try await app.setAlternateIconName(asset)
+                currentIcon = asset
+            } catch {
+                store.showToast("Couldn't change the icon. Try again.")
+            }
+            changingIcon = false
         }
     }
 
