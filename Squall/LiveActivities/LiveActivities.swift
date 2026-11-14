@@ -380,6 +380,9 @@ struct LockScreenButton: View {
             if on {
                 activities.stop(kind)
                 store.showToast("Taken off your Lock Screen.")
+            } else if !store.isConnected {
+                // Only live data from the computer goes on the Lock Screen.
+                store.showToast("Connect to your computer first.", action: .pair)
             } else if !activities.enabled {
                 if UIDevice.current.userInterfaceIdiom == .pad {
                     store.showToast("Lock Screen activities only show on iPhone.")

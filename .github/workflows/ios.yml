@@ -112,6 +112,36 @@ jobs:
             CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
             CODE_SIGNING_ALLOWED=NO
 
+      - name: Add the App Group to the app and its widgets
+        # The archive is built without signing, so the App Group (the folder the app and
+        # its Home Screen widgets share) is added here with a temporary ad-hoc signature.
+        # The export step below re-signs everything with the real certificate and keeps it.
+        run: |
+          set -euo pipefail
+          APP="$RUNNER_TEMP/Squall.xcarchive/Products/Applications/Squall.app"
+          EXT="$APP/PlugIns/SquallActivities.appex"
+          ENT="$RUNNER_TEMP/AppGroup.entitlements"
+          cat > "$ENT" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>com.apple.security.application-groups</key>
+            <array>
+              <string>group.${BUNDLE_ID}</string>
+            </array>
+          </dict>
+          </plist>
+          PLIST
+          plutil -lint "$ENT"
+          echo "APP_GROUP_ENTITLEMENTS=$ENT" >> "$GITHUB_ENV"
+          # Inside out: the extension first, then the app around it.
+          codesign --force --sign - --timestamp=none --entitlements "$ENT" "$EXT"
+          codesign --force --sign - --timestamp=none --entitlements "$ENT" "$APP"
+          codesign -d --entitlements - "$APP" 2>/dev/null | grep -q "group.${BUNDLE_ID}" \
+            || { echo "::error::The App Group didn't make it into Squall.app."; exit 1; }
+          echo "App Group group.${BUNDLE_ID} added to Squall.app and SquallActivities.appex."
+
       - name: Package an unsigned .ipa
         run: |
           set -euo pipefail
@@ -187,14 +217,26 @@ jobs:
           </plist>
           PLIST
           plutil -lint "$RUNNER_TEMP/ExportOptions.plist"
-          xcodebuild -exportArchive \
-            -archivePath "$RUNNER_TEMP/Squall.xcarchive" \
-            -exportPath "$RUNNER_TEMP/export" \
-            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$ASC_KEY_PATH" \
-            -authenticationKeyID "$ASC_KEY_ID" \
-            -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+          export_ipa() {
+            rm -rf "$RUNNER_TEMP/export"
+            xcodebuild -exportArchive \
+              -archivePath "$RUNNER_TEMP/Squall.xcarchive" \
+              -exportPath "$RUNNER_TEMP/export" \
+              -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+              -allowProvisioningUpdates \
+              -authenticationKeyPath "$ASC_KEY_PATH" \
+              -authenticationKeyID "$ASC_KEY_ID" \
+              -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+          }
+          if ! export_ipa 2>&1 | tee "$RUNNER_TEMP/export.log"; then
+            # Most likely the App ID doesn't have the App Group yet. Ship the build anyway,
+            # without the shared folder: the widgets then say "Open Squall" instead of the team.
+            echo "::warning title=Widgets can't share data yet::Signing with the App Group group.$BUNDLE_ID failed, so this build was signed without it. Turn on App Groups for $BUNDLE_ID and $BUNDLE_ID.activities at developer.apple.com (Identifiers), add group.$BUNDLE_ID to both, then run the build again."
+            APP="$RUNNER_TEMP/Squall.xcarchive/Products/Applications/Squall.app"
+            codesign --force --sign - --timestamp=none "$APP/PlugIns/SquallActivities.appex"
+            codesign --force --sign - --timestamp=none "$APP"
+            export_ipa
+          fi
           IPA_PATH=$(find "$RUNNER_TEMP/export" -maxdepth 1 -name '*.ipa' | head -n 1)
           if [ -z "$IPA_PATH" ]; then
             echo "::error::No .ipa was exported. If the log says there's no profile for $BUNDLE_ID.activities, add that App ID at developer.apple.com (Identifiers) or give the API key the Admin role."

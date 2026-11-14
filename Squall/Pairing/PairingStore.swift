@@ -140,6 +140,14 @@ final class PairingStore: ObservableObject {
         return try await client.state(computer, token: token)
     }
 
+    /// Same as `fetchState`, plus the raw reply and which computer sent it, for the offline copy.
+    func fetchStateWithData() async throws -> (snapshot: StateSnapshot, data: Data, computer: PairedComputer) {
+        guard let computer else { throw PairingError.cantReach }
+        guard let token = KeychainStore.read(account: Self.tokenAccount) else { throw PairingError.tokenRejected }
+        let reply = try await client.stateWithData(computer, token: token)
+        return (reply.snapshot, reply.data, computer)
+    }
+
     /// Sends something you did on the phone to the computer.
     @discardableResult
     func send(_ action: SyncAction) async throws -> SyncActionReply {

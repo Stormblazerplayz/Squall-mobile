@@ -1,8 +1,12 @@
+import Network
 import SwiftUI
+import WidgetKit
 
 /// Holds everything the app shows. All of it comes from Squall on the paired computer:
 /// the store asks for a fresh copy every few seconds while the app is open, and sends
 /// what you do (messages, Allow, Pause and so on) straight back. Nothing is made up here.
+/// The last real copy is kept on the phone (see SnapshotCache), so screens open fast
+/// and can still be read while the computer is away. Buttons wait for the computer.
 @MainActor
 final class SquallStore: ObservableObject {
     /// How the app is talking to the computer right now.
@@ -19,6 +23,14 @@ final class SquallStore: ObservableObject {
 
     // Connection
     @Published private(set) var link: Link = .unpaired
+    /// When the data on screen last came from the computer.
+    @Published private(set) var lastSynced: Date?
+    /// True when the screens show the saved copy because the computer isn't answering yet.
+    @Published private(set) var showingSaved = false
+    /// When the app will try the computer again, while it isn't answering.
+    @Published private(set) var retryAt: Date?
+    /// True while the app is asking the computer, after it stopped answering.
+    @Published private(set) var isRetrying = false
 
     // Team and chats, from the computer
     @Published private(set) var bots: [Bot] = []
@@ -47,7 +59,9 @@ final class SquallStore: ObservableObject {
     @Published var path: [Route] = []
     @Published var showNewTeammate = false
     @Published var handoffTarget: HandoffTarget?
-    @Published var showCall = false
+    @Published var showCall = false {
+        didSet { Feedback.quiet = showCall }
+    }
     @Published var showPairing = false
 
     // Pop-up message
@@ -74,6 +88,21 @@ final class SquallStore: ObservableObject {
     private var toastTask: Task<Void, Never>?
     private var settingsTask: Task<Void, Never>?
     private var activityObserver: NSObjectProtocol?
+    private var intentObserver: NSObjectProtocol?
+    private let pathMonitor = NWPathMonitor()
+    private var networkWasUp = true
+    /// What the phone knew before the last update, to notice new asks and finished jobs.
+    private var knownNeedsYou: Set<String>?
+    private var knownProblems: Set<String> = []
+    private var runningWork: Set<String> = []
+    /// The last copy saved for offline and the widgets.
+    private var lastSavedData: Data?
+    private var lastSavedAt: Date?
+    private var lastWidget: WidgetSnapshot?
+    private var lastWidgetAt: Date?
+    private var lastSyncedExact: Date?
+    /// Which computer the data in memory came from.
+    private var dataComputerKey: String?
 
     init() {
         let defaults = UserDefaults.standard
@@ -100,6 +129,26 @@ final class SquallStore: ObservableObject {
                 self?.handleActivityActions()
             }
         }
+        // Siri and Shortcuts asking for a screen, like "Call Chief".
+        intentObserver = NotificationCenter.default.addObserver(
+            forName: SquallIntentRequests.notification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.handleIntentRequests()
+            }
+        }
+        // Try the computer again as soon as Wi-Fi comes back.
+        pathMonitor.pathUpdateHandler = { [weak self] path in
+            let up = path.status == .satisfied
+            Task { @MainActor in
+                guard let self else { return }
+                if up && !self.networkWasUp { self.refreshNow() }
+                self.networkWasUp = up
+            }
+        }
+        pathMonitor.start(queue: DispatchQueue(label: "squall.network"))
     }
 
     // MARK: - Talking to the computer
@@ -110,20 +159,44 @@ final class SquallStore: ObservableObject {
     /// SquallApp restarts it whenever the paired computer changes.
     func runSync(with pairing: PairingStore) async {
         self.pairing = pairing
-        guard pairing.isPaired else {
+        guard pairing.isPaired, let computer = pairing.computer else {
             forgetEverything()
             link = .unpaired
             return
         }
+        let key = SnapshotCache.key(for: computer)
+        if key != dataComputerKey {
+            // A different computer: nothing from the old one may stay on screen.
+            clearData()
+            dataComputerKey = key
+        }
         lastVersion = nil
         failures = 0
+        knownNeedsYou = nil
         link = .connecting
+        if lastSynced != nil {
+            // Same computer as before (the task restarted): keep showing what's there.
+            showingSaved = true
+        } else if let saved = SnapshotCache.load(for: computer),
+                  let snapshot = try? JSONDecoder().decode(StateSnapshot.self, from: saved.data) {
+            // Show the last real copy from this computer right away, while asking for a fresh one.
+            apply(snapshot, live: false)
+            lastVersion = nil
+            lastSynced = saved.savedAt
+            lastSyncedExact = saved.savedAt
+            lastSavedData = saved.data
+            lastSavedAt = saved.savedAt
+            showingSaved = true
+        }
         while !Task.isCancelled {
             await refresh()
             guard !Task.isCancelled else { return }
-            // Every 3 seconds while connected, every 6 while the computer isn't answering.
-            let ticks = link == .connected ? 6 : 12
-            for _ in 0..<ticks {
+            // Every 3 seconds while connected. While the computer isn't answering,
+            // try again after 2, 4, 6, 8 and then every 10 seconds.
+            let seconds = link == .connected ? 3 : min(2 * max(failures, 1), 10)
+            let nextTry: Date? = link == .connected ? nil : Date().addingTimeInterval(Double(seconds))
+            if nextTry != retryAt { retryAt = nextTry }
+            for _ in 0..<(seconds * 2) {
                 if wakeUp || Task.isCancelled { break }
                 try? await Task.sleep(for: .milliseconds(500))
             }
@@ -138,25 +211,110 @@ final class SquallStore: ObservableObject {
 
     private func refresh() async {
         guard let pairing, pairing.isPaired else { return }
+        let wasOffline: Bool
+        if case .offline = link { wasOffline = true } else { wasOffline = false }
+        if wasOffline { isRetrying = true }
+        defer { if isRetrying { isRetrying = false } }
         do {
-            let snapshot = try await pairing.fetchState()
-            guard !Task.isCancelled, pairing.isPaired else { return }
+            let reply = try await pairing.fetchStateWithData()
+            guard !Task.isCancelled, pairing.isPaired, pairing.computer == reply.computer else { return }
             failures = 0
-            apply(snapshot)
-            if link != .connected { link = .connected }
+            apply(reply.snapshot, live: true)
+            let now = Date()
+            lastSyncedExact = now
+            // Published at most every 30 seconds, so screens don't redraw on every update.
+            if lastSynced == nil || showingSaved || now.timeIntervalSince(lastSynced ?? now) > 30 {
+                lastSynced = now
+            }
+            if retryAt != nil { retryAt = nil }
+            if showingSaved { showingSaved = false }
+            if link != .connected {
+                link = .connected
+                if wasOffline { Feedback.play(.connected) }
+            }
+            keepCopy(reply.data, for: reply.computer, at: now)
         } catch {
             guard !Task.isCancelled, pairing.isPaired else { return }
             failures += 1
             // One missed answer while connected is often just Wi-Fi blinking; two means it's gone.
             if link != .connected || failures >= 2 {
                 let reason = (error as? PairingError)?.message ?? PairingError.cantReach.message
+                let wasConnected = link == .connected
                 if link != .offline(reason) { link = .offline(reason) }
+                // Keep the last real data on screen, marked with when it came in.
+                if let exact = lastSyncedExact, lastSynced != exact { lastSynced = exact }
+                if lastSynced != nil, !showingSaved { showingSaved = true }
+                if wasConnected { Feedback.play(.disconnected) }
                 LiveActivities.shared.stopAll()
             }
         }
     }
 
-    private func apply(_ snapshot: StateSnapshot) {
+    /// Saves the computer's reply for offline use, and updates the widgets.
+    private func keepCopy(_ data: Data, for computer: PairedComputer, at date: Date) {
+        // Write when something changed, or once a minute so "Last synced" stays honest.
+        if data != lastSavedData || date.timeIntervalSince(lastSavedAt ?? .distantPast) > 60 {
+            lastSavedData = data
+            lastSavedAt = date
+            Task.detached(priority: .utility) {
+                SnapshotCache.save(data, for: computer, at: date)
+            }
+        }
+        updateWidgets(computerName: computer.name, syncedAt: date)
+    }
+
+    /// Writes the small summary the widgets draw, when it changed or every few minutes.
+    private func updateWidgets(computerName: String, syncedAt: Date) {
+        let order = bots.sorted { a, b in a.isChief && !b.isChief }
+        let members = order.map { bot in
+            WidgetSnapshot.Member(
+                id: bot.id,
+                name: bot.name,
+                hex: bot.hex,
+                status: Self.statusKey(bot.status),
+                statusLabel: bot.status.label,
+                task: bot.task
+            )
+        }
+        let waiting = inbox.filter { $0.kind.needsYou }
+        let first = waiting.first
+        let snapshot = WidgetSnapshot(
+            paired: true,
+            computerName: computerName,
+            syncedAt: syncedAt,
+            paused: pausedAll,
+            members: members,
+            needsYou: waiting.count,
+            unreadInbox: unreadInboxCount,
+            firstAsk: first?.title,
+            firstAskBot: first.flatMap { bot($0.botID)?.name }
+        )
+        var compare = snapshot
+        compare.syncedAt = lastWidget?.syncedAt ?? syncedAt
+        let changed = compare != lastWidget
+        let old = syncedAt.timeIntervalSince(lastWidgetAt ?? .distantPast) > 5 * 60
+        guard changed || old else { return }
+        lastWidget = snapshot
+        lastWidgetAt = syncedAt
+        if SquallShared.saveWidget(snapshot) {
+            WidgetCenter.shared.reloadTimelines(ofKind: SquallShared.widgetKind)
+        }
+    }
+
+    private static func statusKey(_ status: BotStatus) -> String {
+        switch status {
+        case .working: return "working"
+        case .idle: return "idle"
+        case .napping: return "napping"
+        case .waiting: return "waiting"
+        case .handed: return "handed"
+        case .paused: return "paused"
+        }
+    }
+
+    /// Puts a snapshot on screen. `live` is false for the saved copy, which doesn't
+    /// touch the Lock Screen or buzz for things that already happened.
+    private func apply(_ snapshot: StateSnapshot, live: Bool) {
         if let version = snapshot.version, version == lastVersion { return }
         lastVersion = snapshot.version
 
@@ -190,12 +348,57 @@ final class SquallStore: ObservableObject {
         }
         if let picking, bot(picking) == nil { self.picking = nil }
 
+        guard live else { return }
+        noticeChanges()
         LiveActivities.shared.sync(work: work, inbox: inbox, routines: routines, bots: bots, paused: pausedAll)
+    }
+
+    /// Buzzes when a bot starts waiting on you, a job finishes or something breaks.
+    /// Stays quiet on the first update, so opening the app doesn't buzz for old news.
+    private func noticeChanges() {
+        let needsYou = Set(inbox.filter { $0.kind.needsYou }.map(\.id))
+        let problems = Set(inbox.filter { $0.kind == .error }.map(\.id))
+        let running = Set(work.filter { $0.state.isRunning }.map(\.id))
+        if let known = knownNeedsYou {
+            let finished = work.contains { runningWork.contains($0.id) && $0.state == .done }
+            if !needsYou.subtracting(known).isEmpty {
+                Feedback.play(.needsYou)
+            } else if !problems.subtracting(knownProblems).isEmpty {
+                Feedback.play(.problem)
+            } else if finished {
+                Feedback.play(.jobDone)
+            }
+        }
+        knownNeedsYou = needsYou
+        knownProblems = problems
+        runningWork = running
     }
 
     /// Clears everything from the computer, for when it's unpaired.
     private func forgetEverything() {
+        clearData()
+        dataComputerKey = nil
+        SnapshotCache.clear()
+        // The widgets switch to "Not paired" instead of showing an old team.
+        if SquallShared.loadWidget()?.paired != false, SquallShared.saveWidget(.notPaired()) {
+            WidgetCenter.shared.reloadTimelines(ofKind: SquallShared.widgetKind)
+        }
+    }
+
+    /// Takes everything from the computer off the screens.
+    private func clearData() {
         lastVersion = nil
+        if lastSynced != nil { lastSynced = nil }
+        lastSyncedExact = nil
+        if showingSaved { showingSaved = false }
+        if retryAt != nil { retryAt = nil }
+        knownNeedsYou = nil
+        knownProblems = []
+        runningWork = []
+        lastSavedData = nil
+        lastSavedAt = nil
+        lastWidget = nil
+        lastWidgetAt = nil
         if !bots.isEmpty { bots = [] }
         if !messages.isEmpty { messages = [:] }
         if !groups.isEmpty { groups = [] }
@@ -218,7 +421,7 @@ final class SquallStore: ObservableObject {
     @discardableResult
     func perform(_ action: SyncAction, busyKey: String? = nil, quiet: Bool = false) async -> SyncActionReply? {
         guard let pairing, isConnected else {
-            if !quiet { showToast("Not connected to your computer.", action: .pair) }
+            if !quiet { _ = requireConnection() }
             return nil
         }
         let key = busyKey ?? action.type
@@ -249,6 +452,20 @@ final class SquallStore: ObservableObject {
 
     func isBusy(_ key: String) -> Bool {
         busyActions.contains(key)
+    }
+
+    /// True when there's something real to show: live data, or the saved copy from this computer.
+    var hasData: Bool {
+        isConnected || (showingSaved && lastSynced != nil)
+    }
+
+    /// For buttons that change something: says so and returns false when the computer isn't connected.
+    private func requireConnection() -> Bool {
+        guard isConnected else {
+            showToast(showingSaved ? "Your computer isn't answering. This is the last saved copy." : "Not connected to your computer.", action: .pair)
+            return false
+        }
+        return true
     }
 
     // MARK: - Live Activities and links
@@ -300,12 +517,26 @@ final class SquallStore: ObservableObject {
         case "board":
             path = []
             tab = .board
+        case "team":
+            path = []
+            tab = .team
         case "chat":
             openChat(Bot.chiefID)
         case "call":
             showCall = true
+        case "settings":
+            if path.last != .settings { path = [.settings] }
         default:
             break
+        }
+    }
+
+    /// Opens what Siri or a Shortcut asked for, like a call with Chief.
+    func handleIntentRequests() {
+        for route in SquallIntentRequests.drain() {
+            if let url = URL(string: "squall://\(route)") {
+                open(url)
+            }
         }
     }
 
@@ -415,7 +646,7 @@ final class SquallStore: ObservableObject {
 
     func openChat(_ id: String) {
         currentChatID = id
-        if bot(id)?.unread != nil {
+        if bot(id)?.unread != nil, isConnected {
             send(SyncAction(type: "chat.read", fields: ["chatId": .string(id)]))
         }
         picking = nil
@@ -428,10 +659,7 @@ final class SquallStore: ObservableObject {
         let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         let id = chatID ?? currentChatID
-        guard isConnected else {
-            showToast("Not connected to your computer.", action: .pair)
-            return
-        }
+        guard requireConnection() else { return }
         messages[id, default: []].append(ChatMessage(kind: .me, author: ChatMessage.meID, text: text, time: TimeText.now()))
         send(SyncAction(type: "chat.send", fields: ["chatId": .string(id), "text": .string(text)]))
     }
@@ -508,7 +736,7 @@ final class SquallStore: ObservableObject {
     private static let handoffKeys = ["take_over", "review", "split"]
 
     func startHandoff(_ id: String) {
-        guard id != Bot.chiefID, isConnected else { return }
+        guard id != Bot.chiefID, requireConnection() else { return }
         picking = nil
         handoffTarget = HandoffTarget(id: id)
     }
@@ -550,6 +778,7 @@ final class SquallStore: ObservableObject {
             if item?.kind == .ask {
                 LiveActivities.shared.approvalAnswered(itemID, allowed: answer == "allow")
             }
+            Feedback.play(answer == "deny" ? .denied : (answer == "allow" ? .approved : .sent))
             let name = item.flatMap { bot($0.botID)?.name } ?? "Your bot"
             switch answer {
             case "allow": showToast("Allowed. \(name) can go ahead.")
@@ -560,6 +789,7 @@ final class SquallStore: ObservableObject {
     }
 
     func clearInbox(_ id: String) {
+        guard requireConnection() else { return }
         if let index = inbox.firstIndex(where: { $0.id == id }) {
             inbox.remove(at: index)
         }
@@ -567,6 +797,7 @@ final class SquallStore: ObservableObject {
     }
 
     func markAllRead() {
+        guard requireConnection() else { return }
         for index in inbox.indices {
             inbox[index].unread = false
         }
@@ -574,6 +805,7 @@ final class SquallStore: ObservableObject {
     }
 
     func markRead(_ id: String) {
+        guard isConnected else { return }
         guard let index = inbox.firstIndex(where: { $0.id == id }), inbox[index].unread else { return }
         inbox[index].unread = false
         send(SyncAction(type: "inbox.read", fields: ["itemId": .string(id)]))
@@ -598,6 +830,7 @@ final class SquallStore: ObservableObject {
     }
 
     func setWorkPaused(_ workID: String, paused: Bool) {
+        guard requireConnection() else { return }
         if let index = work.firstIndex(where: { $0.id == workID }), work[index].state.isRunning {
             work[index].state = paused ? .paused : .working
         }
@@ -617,6 +850,7 @@ final class SquallStore: ObservableObject {
     // MARK: - Pause all
 
     func setPausedAll(_ paused: Bool) {
+        guard requireConnection() else { return }
         pausedAll = paused
         LiveActivities.shared.setTeamPaused(paused)
         send(SyncAction(type: "team.pause", fields: ["paused": .bool(paused)]), busyKey: "team.pause")
@@ -659,6 +893,7 @@ final class SquallStore: ObservableObject {
     }
 
     func setRoutine(_ id: String, isOn: Bool) {
+        guard requireConnection() else { return }
         if let index = routines.firstIndex(where: { $0.id == id }) {
             routines[index].isOn = isOn
         }
@@ -666,6 +901,7 @@ final class SquallStore: ObservableObject {
     }
 
     func deleteRoutine(_ id: String) {
+        guard requireConnection() else { return }
         routines.removeAll { $0.id == id }
         send(SyncAction(type: "routine.delete", fields: ["routineId": .string(id)]))
     }

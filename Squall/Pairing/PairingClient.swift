@@ -187,6 +187,11 @@ struct PairingClient {
 
     /// Gets everything the app shows. See "Live data" in docs/pairing.md.
     func state(_ computer: PairedComputer, token: String) async throws -> StateSnapshot {
+        try await stateWithData(computer, token: token).snapshot
+    }
+
+    /// Same as `state`, plus the raw reply so the app can keep a copy for when it's offline.
+    func stateWithData(_ computer: PairedComputer, token: String) async throws -> (snapshot: StateSnapshot, data: Data) {
         guard let url = Self.url(host: computer.host, port: computer.port, path: "/api/v1/state") else {
             throw PairingError.badAddress
         }
@@ -198,7 +203,7 @@ struct PairingClient {
         switch response.statusCode {
         case 200:
             do {
-                return try JSONDecoder().decode(StateSnapshot.self, from: data)
+                return (try JSONDecoder().decode(StateSnapshot.self, from: data), data)
             } catch {
                 throw PairingError.badReply
             }

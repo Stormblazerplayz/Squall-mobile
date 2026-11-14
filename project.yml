@@ -31,6 +31,8 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: $(SQUALL_BUNDLE_ID)
         INFOPLIST_FILE: Config/Info.plist
         GENERATE_INFOPLIST_FILE: NO
+        # The App Group shared with the widgets. The GitHub build adds it at signing time too.
+        CODE_SIGN_ENTITLEMENTS: Config/Squall.entitlements
         TARGETED_DEVICE_FAMILY: "1,2"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         # Extra icons you can pick in Settings > Look. Drawn by tools/render_icons.py.
@@ -39,7 +41,7 @@ targets:
         CODE_SIGN_STYLE: Automatic
         ENABLE_PREVIEWS: YES
     scheme: {}
-  # Live Activities on the Lock Screen and in the Dynamic Island.
+  # Live Activities on the Lock Screen and in the Dynamic Island, plus the team widget.
   SquallActivities:
     type: app-extension
     platform: iOS
@@ -52,6 +54,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: $(SQUALL_BUNDLE_ID).activities
         INFOPLIST_FILE: Config/ActivitiesInfo.plist
         GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_ENTITLEMENTS: Config/SquallActivities.entitlements
         TARGETED_DEVICE_FAMILY: "1,2"
         CODE_SIGN_STYLE: Automatic
         SKIP_INSTALL: YES

@@ -44,6 +44,8 @@ struct SquallApp: App {
             case .active:
                 // Catch up on anything pressed on the Lock Screen while away, and on the computer.
                 store.handleActivityActions()
+                // And anything Siri or a Shortcut asked for, like "Call Chief".
+                store.handleIntentRequests()
                 store.refreshNow()
                 // Only ask on the way back in, so cancelling Face ID doesn't loop.
                 if cameFromBackground {
