@@ -2,6 +2,8 @@
 
 The iPhone and iPad app for Squall, Storm's AI team, built from the Squall Mobile design concepts. It's a SwiftUI app (iOS 17+) that runs on iPhone in portrait and on iPad in any direction, including landscape, with the dark, glowy look from the concepts. Everything runs on pretend data for now, so you can tap through every screen before it's linked to Squall desktop.
 
+On first launch the app asks to pair with Squall on your computer (scan a QR code or type a 6-digit code), or you can skip and keep the pretend data. How pairing works, and a pretend desktop to test it with, are in [docs/pairing.md](docs/pairing.md).
+
 ## Screens
 
 Tabs along the bottom:

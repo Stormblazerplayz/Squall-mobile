@@ -2,7 +2,10 @@ import SwiftUI
 
 struct SettingsView: View {
     @EnvironmentObject private var store: SquallStore
+    @EnvironmentObject private var pairing: PairingStore
     @State private var clearArmed = false
+    @State private var unpairArmed = false
+    @State private var showPairing = false
 
     var body: some View {
         ZStack {
@@ -10,6 +13,8 @@ struct SettingsView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     profile
+                    SectionLabel(text: "Computer")
+                    computerSection
                     SectionLabel(text: "Chief")
                     chiefSection
                     SectionLabel(text: "Safety")
@@ -32,6 +37,101 @@ struct SettingsView: View {
                 .readableColumn()
             }
             .scrollIndicators(.hidden)
+        }
+        .sheet(isPresented: $showPairing) {
+            PairingView(place: .settings) {
+                showPairing = false
+            }
+            .environmentObject(pairing)
+            .environmentObject(store)
+        }
+    }
+
+    private var computerSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if let computer = pairing.computer {
+                let line = connectionLine(for: computer)
+                HStack(spacing: 12) {
+                    Image(systemName: "desktopcomputer")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(Theme.greenText)
+                        .frame(width: 40, height: 40)
+                        .background(Circle().fill(Theme.green.opacity(0.14)))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Paired with \(computer.name)")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(Theme.text)
+                        Text(line.text)
+                            .font(.system(size: 12.5))
+                            .foregroundStyle(line.color)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 0)
+                }
+                HStack(spacing: 8) {
+                    Button(pairing.connection == .checking ? "Checking..." : "Test connection") {
+                        Task { await pairing.checkConnection() }
+                    }
+                    .buttonStyle(GhostButtonStyle(height: 40, fontSize: 14, sidePadding: 10))
+                    .disabled(pairing.connection == .checking || pairing.busy)
+                    Button(unpairArmed ? "Tap again to unpair" : "Unpair") {
+                        if unpairArmed {
+                            unpairArmed = false
+                            Task { await pairing.unpair() }
+                        } else {
+                            unpairArmed = true
+                        }
+                    }
+                    .buttonStyle(GhostButtonStyle(
+                        height: 40,
+                        foreground: Theme.redText,
+                        border: Theme.red.opacity(unpairArmed ? 0.9 : 0.45),
+                        fill: Theme.red.opacity(unpairArmed ? 0.18 : 0.06),
+                        fontSize: 14,
+                        sidePadding: 10
+                    ))
+                    .disabled(pairing.busy)
+                }
+            } else {
+                HStack(spacing: 12) {
+                    Image(systemName: "desktopcomputer")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(Theme.sub)
+                        .frame(width: 40, height: 40)
+                        .background(Circle().fill(Theme.field))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Not paired")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(Theme.text)
+                        Text("Squall is showing pretend data. Pair to link it to your computer.")
+                            .font(.system(size: 12.5))
+                            .foregroundStyle(Theme.sub)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 0)
+                }
+                Button("Pair with computer") { showPairing = true }
+                    .buttonStyle(FilledButtonStyle(fill: store.accent, height: 42))
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassCard(radius: 18)
+        .onChange(of: pairing.computer) {
+            unpairArmed = false
+        }
+    }
+
+    private func connectionLine(for computer: PairedComputer) -> (text: String, color: Color) {
+        switch pairing.connection {
+        case .unknown:
+            return (computer.address, Theme.sub)
+        case .checking:
+            return ("Checking \(computer.address)...", Theme.sub)
+        case .online:
+            return ("Connected · \(computer.address)", Theme.greenText)
+        case .offline(let reason):
+            return (reason, Theme.redText)
         }
     }
 
