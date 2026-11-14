@@ -5,6 +5,7 @@ struct MissionControlView: View {
     @EnvironmentObject private var store: SquallStore
     @State private var query = ""
 
+    @Environment(\.horizontalSizeClass) private var sizeClass
     private let columns = [GridItem(.adaptive(minimum: 160), spacing: 10)]
 
     var body: some View {
@@ -30,7 +31,7 @@ struct MissionControlView: View {
                     handoffs
                 }
                 .padding(16)
-                .readableColumn()
+                .readableColumn(sizeClass == .regular ? 1100 : Theme.readableWidth)
             }
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)

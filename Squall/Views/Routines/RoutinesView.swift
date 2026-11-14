@@ -4,6 +4,10 @@ import SwiftUI
 struct RoutinesView: View {
     @EnvironmentObject private var store: SquallStore
 
+    @Environment(\.horizontalSizeClass) private var sizeClass
+
+    private var isWide: Bool { sizeClass == .regular }
+
     var body: some View {
         ZStack {
             GlowBackground()
@@ -28,13 +32,19 @@ struct RoutinesView: View {
                     if store.routines.isEmpty {
                         emptyState
                     } else {
-                        ForEach(store.routines) { routine in
-                            RoutineRow(routine: routine)
+                        // iPad: routines sit side by side in a grid that fills the screen.
+                        LazyVGrid(
+                            columns: [GridItem(.adaptive(minimum: isWide ? 360 : 280), spacing: 12)],
+                            spacing: 12
+                        ) {
+                            ForEach(store.routines) { routine in
+                                RoutineRow(routine: routine)
+                            }
                         }
                     }
                 }
                 .padding(16)
-                .readableColumn()
+                .readableColumn(isWide ? Theme.wideWidth : Theme.readableWidth)
             }
             .scrollIndicators(.hidden)
         }

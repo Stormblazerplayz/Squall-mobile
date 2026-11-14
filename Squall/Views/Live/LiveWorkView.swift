@@ -3,6 +3,7 @@ import SwiftUI
 /// Watch Barry fix the Farside build, step by step, like a live stream.
 struct LiveWorkView: View {
     @EnvironmentObject private var store: SquallStore
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @StateObject private var session = LiveSession()
     @State private var tab: LiveTab = .steps
     @State private var openStep: Int? = 3
@@ -19,20 +20,25 @@ struct LiveWorkView: View {
             VStack(spacing: 12) {
                 header
                 taskCard
-                PillSegments(
-                    options: [
-                        (label: "Steps \(LiveSession.steps.count)", value: LiveTab.steps),
-                        (label: "Terminal \(session.logs.count)", value: LiveTab.terminal),
-                        (label: "Files \(LiveSession.files.count)", value: LiveTab.files)
-                    ],
-                    selection: $tab
-                )
-                content
+                if sizeClass == .regular {
+                    // iPad: steps, terminal and files all at once.
+                    wideContent
+                } else {
+                    PillSegments(
+                        options: [
+                            (label: "Steps \(LiveSession.steps.count)", value: LiveTab.steps),
+                            (label: "Terminal \(session.logs.count)", value: LiveTab.terminal),
+                            (label: "Files \(LiveSession.files.count)", value: LiveTab.files)
+                        ],
+                        selection: $tab
+                    )
+                    content
+                }
                 bottomBar
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 8)
-            .readableColumn()
+            .readableColumn(sizeClass == .regular ? 1300 : Theme.readableWidth)
         }
         .onAppear {
             session.sync(with: store.pushDecision)
@@ -121,45 +127,84 @@ struct LiveWorkView: View {
     private var content: some View {
         switch tab {
         case .steps:
-            ScrollView {
-                VStack(spacing: 8) {
-                    ForEach(LiveSession.steps.indices, id: \.self) { index in
-                        stepRow(index)
-                    }
-                }
-            }
-            .scrollIndicators(.hidden)
+            stepsList
         case .terminal:
-            ScrollViewReader { proxy in
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 4) {
-                        ForEach(session.logs.indices, id: \.self) { index in
-                            let line = session.logs[index]
-                            Text(line.text)
-                                .font(Theme.mono(12))
-                                .foregroundStyle(line.kind.color)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .id(index)
-                        }
-                    }
-                    .padding(12)
-                }
-                .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.black.opacity(0.4)))
-                .onChange(of: session.logs.count) {
-                    withAnimation { proxy.scrollTo(session.logs.count - 1, anchor: .bottom) }
-                }
-                .onAppear { proxy.scrollTo(session.logs.count - 1, anchor: .bottom) }
-            }
+            terminalPanel
         case .files:
-            ScrollView {
-                VStack(spacing: 8) {
-                    ForEach(LiveSession.files.indices, id: \.self) { index in
-                        fileRow(LiveSession.files[index], edited: index == 0)
-                    }
+            filesList
+        }
+    }
+
+    /// iPad: steps on the left; terminal and files stacked on the right.
+    private var wideContent: some View {
+        HStack(alignment: .top, spacing: 14) {
+            panel("Steps \(LiveSession.steps.count)") {
+                stepsList
+            }
+            VStack(spacing: 14) {
+                panel("Terminal \(session.logs.count)") {
+                    terminalPanel
+                }
+                panel("Files \(LiveSession.files.count)") {
+                    filesList
+                }
+                .frame(height: 220)
+            }
+        }
+        .frame(maxHeight: .infinity)
+    }
+
+    private func panel<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SectionLabel(text: title)
+            content()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+
+    private var stepsList: some View {
+        ScrollView {
+            VStack(spacing: 8) {
+                ForEach(LiveSession.steps.indices, id: \.self) { index in
+                    stepRow(index)
                 }
             }
-            .scrollIndicators(.hidden)
         }
+        .scrollIndicators(.hidden)
+    }
+
+    private var terminalPanel: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(session.logs.indices, id: \.self) { index in
+                        let line = session.logs[index]
+                        Text(line.text)
+                            .font(Theme.mono(12))
+                            .foregroundStyle(line.kind.color)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .id(index)
+                    }
+                }
+                .padding(12)
+            }
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.black.opacity(0.4)))
+            .onChange(of: session.logs.count) {
+                withAnimation { proxy.scrollTo(session.logs.count - 1, anchor: .bottom) }
+            }
+            .onAppear { proxy.scrollTo(session.logs.count - 1, anchor: .bottom) }
+        }
+    }
+
+    private var filesList: some View {
+        ScrollView {
+            VStack(spacing: 8) {
+                ForEach(LiveSession.files.indices, id: \.self) { index in
+                    fileRow(LiveSession.files[index], edited: index == 0)
+                }
+            }
+        }
+        .scrollIndicators(.hidden)
     }
 
     private func stepRow(_ index: Int) -> some View {
