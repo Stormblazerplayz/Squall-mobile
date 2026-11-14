@@ -63,6 +63,41 @@ private struct PretendCallView: View {
             await run(phase)
         }
         .onAppear { pulse = true }
+        // The call shows on the Lock Screen and in the Dynamic Island while it's on.
+        .onChange(of: phase) { _, phase in
+            switch phase {
+            case .live:
+                LiveActivities.shared.startCall(pretend: true, caption: Self.captions[captionIndex])
+            case .ended:
+                LiveActivities.shared.endCall(seconds: seconds)
+            case .idle, .ringing:
+                break
+            }
+        }
+        .onChange(of: captionIndex) {
+            if phase == .live {
+                LiveActivities.shared.updateCall(caption: Self.captions[captionIndex], muted: muted)
+            }
+        }
+        .onChange(of: muted) {
+            if phase == .live {
+                LiveActivities.shared.updateCall(caption: Self.captions[captionIndex], muted: muted)
+            }
+        }
+        .onChange(of: store.activityCommand) { _, command in
+            guard let command, phase == .live || phase == .ringing else { return }
+            switch command.action {
+            case .muteCall: muted = true
+            case .unmuteCall: muted = false
+            case .endCall: phase = .ended
+            default: break
+            }
+        }
+        .onDisappear {
+            if phase == .live {
+                LiveActivities.shared.endCall(seconds: seconds)
+            }
+        }
     }
 
     // MARK: Pieces
@@ -288,10 +323,10 @@ private struct RealCallView: View {
     @EnvironmentObject private var store: SquallStore
     @EnvironmentObject private var pairing: PairingStore
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var call = VoiceCall()
     @State private var showCaptions = true
     @State private var pulse = false
+    @State private var activityOn = false
 
     var body: some View {
         ZStack {
@@ -316,12 +351,54 @@ private struct RealCallView: View {
                 store.logCall(lines.map { (fromMe: $0.fromMe, text: $0.text) }, seconds: seconds)
             }
         }
-        .onDisappear { call.end() }
-        .onChange(of: scenePhase) { _, phase in
-            // No background audio, so the call ends when you leave the app.
-            if phase == .background {
-                call.end(notice: "The call ended when you left Squall.")
+        .onDisappear {
+            call.end()
+            LiveActivities.shared.endCall(seconds: call.seconds)
+        }
+        // The call keeps going when you leave Squall or lock the phone (background audio),
+        // and shows on the Lock Screen and in the Dynamic Island with Mute and End.
+        .onChange(of: call.state) { _, state in
+            syncActivity(state)
+        }
+        .onChange(of: call.lines) {
+            if activityOn {
+                LiveActivities.shared.updateCall(caption: latestCaption, muted: call.muted)
             }
+        }
+        .onChange(of: call.muted) {
+            if activityOn {
+                LiveActivities.shared.updateCall(caption: latestCaption, muted: call.muted)
+            }
+        }
+        .onChange(of: store.activityCommand) { _, command in
+            guard let command, call.isLive else { return }
+            switch command.action {
+            case .muteCall: call.muted = true
+            case .unmuteCall: call.muted = false
+            case .endCall: call.end()
+            default: break
+            }
+        }
+    }
+
+    /// Chief's last line, or yours if Chief hasn't spoken yet.
+    private var latestCaption: String {
+        (call.lines.last(where: { !$0.fromMe }) ?? call.lines.last)?.text ?? ""
+    }
+
+    private func syncActivity(_ state: VoiceCall.State) {
+        switch state {
+        case .listening, .thinking, .speaking:
+            if !activityOn {
+                activityOn = LiveActivities.shared.startCall(pretend: false, caption: latestCaption)
+            }
+        case .ended, .failed:
+            if activityOn {
+                activityOn = false
+                LiveActivities.shared.endCall(seconds: call.seconds)
+            }
+        case .idle, .connecting:
+            break
         }
     }
 

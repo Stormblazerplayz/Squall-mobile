@@ -18,6 +18,20 @@ struct RoutinesView: View {
                             .font(.system(size: 28, weight: .bold))
                             .foregroundStyle(Theme.textBright)
                         Spacer()
+                        if let routine = store.routines.first(where: \.isOn) ?? store.routines.first {
+                            // Runs this routine now, counting up on the Lock Screen.
+                            LockScreenButton(kind: .routine, compact: true) {
+                                let bot = store.bot(routine.botID)
+                                return LiveActivities.shared.startRoutine(
+                                    botName: bot?.name ?? "Teammate",
+                                    letter: bot?.letter ?? "R",
+                                    hex: bot?.hex ?? 0x2FB39A,
+                                    task: routine.task,
+                                    when: routine.whenTitle,
+                                    nextRun: routine.nextRunText
+                                )
+                            }
+                        }
                         Button {
                             store.path.append(.newRoutine)
                         } label: {

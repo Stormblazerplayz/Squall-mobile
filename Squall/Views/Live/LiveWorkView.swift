@@ -62,6 +62,20 @@ struct LiveWorkView: View {
         .onChange(of: session.phase) {
             stopArmed = false
         }
+        // Pause on the Lock Screen pauses this screen too, and the other way round.
+        .onChange(of: session.paused) {
+            LiveActivities.shared.setBuildPaused(session.paused)
+        }
+        .onChange(of: store.activityCommand) { _, command in
+            guard let command else { return }
+            switch command.action {
+            case .pauseBuild where session.phase == .working,
+                 .resumeBuild where session.phase == .paused:
+                session.togglePause()
+            default:
+                break
+            }
+        }
     }
 
     // MARK: Header and task
@@ -87,6 +101,9 @@ struct LiveWorkView: View {
             .frame(height: 32)
             .background(Capsule().fill(Theme.field))
             .accessibilityLabel("Working for \(session.elapsed / 60) minutes")
+            LockScreenButton(kind: .build, compact: sizeClass != .regular) {
+                LiveActivities.shared.startBuild()
+            }
         }
         .padding(.top, 6)
     }

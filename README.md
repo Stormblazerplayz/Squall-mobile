@@ -22,8 +22,20 @@ Screens that slide in:
 - **Live work**: watch Barry fix the Farside build step by step, with Steps, Terminal and Files tabs, the push OK, Pause, To Chief and Stop.
 - **Group chat**: pick bots, name the group, let Chief lead, then chat with @mentions.
 - **Settings**: Chief napping, safety, the Claude Code update, accent color, notifications and Clear all chats.
-- **Call Chief**: a pretend voice call with live captions where Chief catches you up.
+- **Call Chief**: a real voice call with Chief on your computer once paired (live captions, Mute, End), or a pretend call with made-up captions until then.
 - **Mission control** (the grid button on Team): everyone at once, Pause all, wake Chief, what needs you, recent handoffs and a jump-to search.
+
+## Live Activities
+
+Five Live Activities show on the Lock Screen and in the Dynamic Island. Tap the **Lock Screen** button on a screen to start one, then lock your phone:
+
+- **Barry at work** (Live work): the build steps fill in, with Pause and Watch live.
+- **Chief needs your OK** (Inbox, on Barry's push): Allow or Deny right from the Lock Screen.
+- **A routine running** (Routines): counts up to 40, with Skip today.
+- **Call with Chief** (Call Chief): starts by itself when a call connects, with a timer, captions, Mute and End. Calls keep going when you leave the app or lock the phone.
+- **Whole team** (Mission control): four bots with bars, and Pause all.
+
+They use pretend data, and keep moving for about half a minute after you leave the app. Real updates will come from Squall on the computer later. If nothing shows up, turn on Live Activities for Squall in the iPhone's Settings app. The extension lives in `SquallActivities`, and the parts it shares with the app are in `Shared`.
 
 The Xcode project is made from `project.yml` by [XcodeGen](https://github.com/yonaskolb/XcodeGen), so you don't need a Mac. GitHub builds the app for you.
 
@@ -46,7 +58,7 @@ Each run's build number is the GitHub run number, so every upload is newer than 
 You need to do these steps yourself. Never paste keys into code or chat; they only go into GitHub secrets.
 
 1. **Join the Apple Developer Program** at developer.apple.com/programs ($99 a year). You have to be 18 or older to enroll, so a parent or guardian needs to sign up (they can add you to the team afterwards).
-2. **Register the app ID.** In developer.apple.com > Certificates, Identifiers & Profiles > Identifiers, add an App ID with the bundle ID `com.stormblazerplayz.squall`. If that ID is taken, pick another one and see "Using a different bundle ID" below.
+2. **Register the app IDs.** In developer.apple.com > Certificates, Identifiers & Profiles > Identifiers, add an App ID with the bundle ID `com.stormblazerplayz.squall`. If that ID is taken, pick another one and see "Using a different bundle ID" below. The Live Activities extension needs a second App ID, `com.stormblazerplayz.squall.activities` (your bundle ID plus `.activities`). The build makes it for you when the API key has the Admin role, but you can also add it here by hand. It needs no extra capabilities.
 3. **Create the app in App Store Connect.** At appstoreconnect.apple.com > Apps > **+** > New App: platform iOS, name Squall (or any free name), bundle ID from step 2, any SKU like `squall-001`.
 4. **Make an API key.** In App Store Connect > Users and Access > Integrations > App Store Connect API > Team Keys, generate a key with the **Admin** role (it needs Admin so GitHub can create the signing certificate for you). Download the `.p8` file. Apple only lets you download it once, so keep it somewhere safe.
 5. **Find your Team ID.** It's on developer.apple.com > Account > Membership details (10 letters and numbers).
@@ -71,7 +83,7 @@ Add a repository **variable** (not a secret) named `BUNDLE_ID` in Settings > Sec
 - **"TestFlight skipped: Apple secrets aren't set yet"**: add the missing secrets it names (step 6).
 - **"TestFlight skipped: Pull requests only check the build"**: that's expected. Merge, then push to `main` or use Run workflow.
 - **"doesn't look like a .p8 key"**: paste the whole `.p8` file again, with the BEGIN and END lines.
-- **Signing errors in "Sign and export the .ipa"**: check the API key has the Admin role and the Team ID is right.
+- **Signing errors in "Sign and export the .ipa"**: check the API key has the Admin role and the Team ID is right. If it says there's no profile for `com.stormblazerplayz.squall.activities`, add that App ID by hand (step 2).
 - **Upload errors about the bundle ID**: the app in App Store Connect must use the exact same bundle ID as the build.
 
 ## Building on a Mac (optional)
@@ -88,3 +100,6 @@ open Squall.xcodeproj
 - `Squall/Models`: bots, chat messages, routines, inbox items and app state.
 - `Squall/Store`: `SquallStore` (everything the app shows) and `SampleData` (the pretend data).
 - `Squall/Views`: one folder per screen.
+- `Squall/LiveActivities`: starts and updates the Live Activities, and the Lock Screen button.
+- `Shared`: Live Activity data and their Lock Screen buttons (App Intents), used by the app and the extension.
+- `SquallActivities`: the widget extension that draws the Live Activities.

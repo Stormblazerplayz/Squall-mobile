@@ -28,6 +28,14 @@ final class VoiceCall: ObservableObject {
     }
 
     @Published private(set) var state: State = .idle
+
+    /// True from connecting until the call ends.
+    var isLive: Bool {
+        switch state {
+        case .connecting, .listening, .thinking, .speaking: return true
+        case .idle, .ended, .failed: return false
+        }
+    }
     @Published private(set) var lines: [Line] = []
     /// What you're saying right now, before it's sent.
     @Published private(set) var partial = ""

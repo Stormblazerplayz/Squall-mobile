@@ -57,6 +57,10 @@ struct MissionControlView: View {
             .tint(Theme.yellow)
             .padding(14)
             .glassCard(radius: 16)
+            // The whole team on the Lock Screen, with Pause all.
+            LockScreenButton(kind: .team) {
+                LiveActivities.shared.startTeam(paused: store.pausedAll)
+            }
         }
     }
 

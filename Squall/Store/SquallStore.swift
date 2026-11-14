@@ -27,7 +27,10 @@ final class SquallStore: ObservableObject {
     // Routines, inbox and settings
     @Published var routines: [Routine] = SampleData.routines
     @Published var inbox: [InboxItem] = SampleData.inbox
-    @Published var pushDecision: PushDecision?
+    @Published var pushDecision: PushDecision? {
+        // Allow or Deny in the app also updates the Lock Screen.
+        didSet { if pushDecision != oldValue { LiveActivities.shared.approvalDecided(pushDecision) } }
+    }
     @Published var iconChoice: String?
     @Published var settings: AppSettings {
         didSet { saveSettings() }
@@ -38,13 +41,18 @@ final class SquallStore: ObservableObject {
     @Published var claudeCode: ClaudeCodeUpdate = .needed
     @Published var chiefAwake = false
     @Published var chiefJob: String?
-    @Published var pausedAll = false
+    @Published var pausedAll = false {
+        didSet { if pausedAll != oldValue { LiveActivities.shared.setTeamPaused(pausedAll) } }
+    }
+    /// The last Lock Screen button meant for a screen (Pause Barry, Mute, End call).
+    @Published var activityCommand: ActivityCommand?
 
     private static let accentKey = "squall.accentHex"
     private var toastTask: Task<Void, Never>?
     private var replyTask: Task<Void, Never>?
     private var replyTurns: [String: Int] = [:]
     private var inboxUndo: InboxSnapshot?
+    private var activityObserver: NSObjectProtocol?
 
     private struct InboxSnapshot {
         var items: [InboxItem]
@@ -67,6 +75,67 @@ final class SquallStore: ObservableObject {
            let last = defaults.string(forKey: Prefs.lastChat),
            SampleData.bots.contains(where: { $0.id == last }) {
             currentChatID = last
+        }
+        // Buttons pressed on the Lock Screen or in the Dynamic Island.
+        activityObserver = NotificationCenter.default.addObserver(
+            forName: SquallActivityBridge.notification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.handleActivityActions()
+            }
+        }
+        handleActivityActions()
+    }
+
+    // MARK: - Live Activities and links
+
+    /// Catches up on Lock Screen buttons pressed while the app was away.
+    func handleActivityActions() {
+        for action in SquallActivityBridge.drain() {
+            switch action {
+            case .allowPush:
+                allowPush()
+            case .denyPush:
+                denyPush()
+            case .pauseTeam:
+                pausedAll = true
+            case .resumeTeam:
+                pausedAll = false
+            case .skipRoutine:
+                showToast("Skipped today's routine.")
+            case .pauseBuild, .resumeBuild, .muteCall, .unmuteCall, .endCall:
+                activityCommand = ActivityCommand(action: action)
+            }
+        }
+        LiveActivities.shared.refresh()
+    }
+
+    /// Opens the screen a Live Activity link points at, like squall://live.
+    func open(_ url: URL) {
+        guard url.scheme == "squall" else { return }
+        picking = nil
+        switch url.host ?? "" {
+        case "live":
+            if path.last != .live { path = [.live] }
+        case "mission":
+            if path.last != .mission { path = [.mission] }
+        case "inbox":
+            path = []
+            tab = .inbox
+        case "routines":
+            path = []
+            tab = .routines
+        case "board":
+            path = []
+            tab = .board
+        case "chat":
+            openChat(Bot.chiefID)
+        case "call":
+            showCall = true
+        default:
+            break
         }
     }
 
@@ -587,4 +656,10 @@ final class SquallStore: ObservableObject {
             path.append(.live)
         }
     }
+}
+
+/// A Lock Screen button that one of the screens needs to act on.
+struct ActivityCommand: Equatable {
+    let id = UUID()
+    let action: SquallActivityAction
 }

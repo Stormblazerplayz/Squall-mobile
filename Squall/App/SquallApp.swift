@@ -26,6 +26,10 @@ struct SquallApp: App {
             .environmentObject(lock)
             .preferredColorScheme(.dark)
             .animation(.easeOut(duration: 0.3), value: pairing.setupDone)
+            // Links from Live Activities, like squall://live or squall://inbox.
+            .onOpenURL { url in
+                store.open(url)
+            }
         }
         .onChange(of: scenePhase, initial: true) { _, phase in
             switch phase {
@@ -33,6 +37,8 @@ struct SquallApp: App {
                 lock.appLeft()
                 cameFromBackground = true
             case .active:
+                // Catch up on anything pressed on the Lock Screen while away.
+                store.handleActivityActions()
                 // Only ask on the way back in, so cancelling Face ID doesn't loop.
                 if cameFromBackground {
                     cameFromBackground = false

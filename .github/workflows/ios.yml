@@ -98,6 +98,8 @@ jobs:
           # Built without signing. If the Apple secrets are set, the export step
           # below signs it with Apple's cloud-managed certificate using the API key,
           # so no certificate or provisioning profile is stored in this repo.
+          # SQUALL_BUNDLE_ID sets both bundle ids: the app gets $BUNDLE_ID and the
+          # Live Activities extension gets $BUNDLE_ID.activities.
           xcodebuild archive \
             -project Squall.xcodeproj \
             -scheme Squall \
@@ -106,7 +108,7 @@ jobs:
             -archivePath "$RUNNER_TEMP/Squall.xcarchive" \
             -derivedDataPath "$RUNNER_TEMP/DerivedData" \
             DEVELOPMENT_TEAM="${TEAM_ID:-}" \
-            PRODUCT_BUNDLE_IDENTIFIER="$BUNDLE_ID" \
+            SQUALL_BUNDLE_ID="$BUNDLE_ID" \
             CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
             CODE_SIGNING_ALLOWED=NO
 
@@ -118,6 +120,13 @@ jobs:
             echo "::error::Squall.app wasn't found in the archive."
             exit 1
           fi
+          EXT="$APP/PlugIns/SquallActivities.appex"
+          if [ ! -d "$EXT" ]; then
+            echo "::error::The Live Activities extension (SquallActivities.appex) is missing from Squall.app."
+            exit 1
+          fi
+          echo "App id: $(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")"
+          echo "Extension id: $(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$EXT/Info.plist")"
           mkdir -p "$RUNNER_TEMP/unsigned/Payload"
           cp -R "$APP" "$RUNNER_TEMP/unsigned/Payload/"
           (cd "$RUNNER_TEMP/unsigned" && zip -qry "Squall-unsigned.ipa" Payload)
@@ -152,6 +161,9 @@ jobs:
 
       - name: Sign and export the .ipa
         if: steps.signing.outputs.sign == 'true'
+        # Signs the app and its Live Activities extension. With -allowProvisioningUpdates
+        # and the API key, Xcode registers the extension's App ID ($BUNDLE_ID.activities)
+        # and makes App Store profiles for both, as long as the key has the Admin role.
         run: |
           set -o pipefail
           cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
@@ -185,7 +197,15 @@ jobs:
             -authenticationKeyIssuerID "$ASC_ISSUER_ID"
           IPA_PATH=$(find "$RUNNER_TEMP/export" -maxdepth 1 -name '*.ipa' | head -n 1)
           if [ -z "$IPA_PATH" ]; then
-            echo "::error::No .ipa was exported."
+            echo "::error::No .ipa was exported. If the log says there's no profile for $BUNDLE_ID.activities, add that App ID at developer.apple.com (Identifiers) or give the API key the Admin role."
+            exit 1
+          fi
+          # Make sure the Live Activities extension was signed too.
+          CHECK_DIR="$RUNNER_TEMP/ipa-check"
+          rm -rf "$CHECK_DIR" && mkdir -p "$CHECK_DIR"
+          unzip -q "$IPA_PATH" -d "$CHECK_DIR"
+          if ! codesign --verify --strict "$CHECK_DIR/Payload/Squall.app/PlugIns/SquallActivities.appex"; then
+            echo "::error::The Live Activities extension in the .ipa isn't signed."
             exit 1
           fi
           echo "IPA_PATH=$IPA_PATH" >> "$GITHUB_ENV"

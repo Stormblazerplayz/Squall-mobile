@@ -11,16 +11,24 @@ settings:
     MARKETING_VERSION: "0.1.0"
     CURRENT_PROJECT_VERSION: "1"
     SWIFT_VERSION: "5.0"
+    # The app's bundle id. The Live Activities extension adds ".activities" to it.
+    # The GitHub build can swap it with SQUALL_BUNDLE_ID=... (see .github/workflows/ios.yml).
+    SQUALL_BUNDLE_ID: com.stormblazerplayz.squall
 targets:
   Squall:
     type: application
     platform: iOS
     sources:
       - path: Squall
+      # Live Activity models and their buttons, shared with the extension.
+      - path: Shared
+    dependencies:
+      # Embedded in Squall.app/PlugIns so it ships with the app.
+      - target: SquallActivities
     settings:
       base:
         PRODUCT_NAME: Squall
-        PRODUCT_BUNDLE_IDENTIFIER: com.stormblazerplayz.squall
+        PRODUCT_BUNDLE_IDENTIFIER: $(SQUALL_BUNDLE_ID)
         INFOPLIST_FILE: Config/Info.plist
         GENERATE_INFOPLIST_FILE: NO
         TARGETED_DEVICE_FAMILY: "1,2"
@@ -31,3 +39,21 @@ targets:
         CODE_SIGN_STYLE: Automatic
         ENABLE_PREVIEWS: YES
     scheme: {}
+  # Live Activities on the Lock Screen and in the Dynamic Island.
+  SquallActivities:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: SquallActivities
+      - path: Shared
+    settings:
+      base:
+        PRODUCT_NAME: SquallActivities
+        PRODUCT_BUNDLE_IDENTIFIER: $(SQUALL_BUNDLE_ID).activities
+        INFOPLIST_FILE: Config/ActivitiesInfo.plist
+        GENERATE_INFOPLIST_FILE: NO
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGN_STYLE: Automatic
+        SKIP_INSTALL: YES
+        APPLICATION_EXTENSION_API_ONLY: YES
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks"

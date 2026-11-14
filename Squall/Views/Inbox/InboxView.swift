@@ -365,6 +365,10 @@ private struct InboxCard: View {
                 Button("Deny") { store.denyPush() }
                     .buttonStyle(GhostButtonStyle(height: 40))
             }
+            // Ask on the Lock Screen instead, with Allow and Deny right there.
+            LockScreenButton(kind: .approval) {
+                LiveActivities.shared.startApproval()
+            }
         case .choice(let options):
             VStack(spacing: 6) {
                 ForEach(options, id: \.self) { option in
