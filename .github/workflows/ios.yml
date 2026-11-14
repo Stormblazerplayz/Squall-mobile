@@ -281,6 +281,17 @@ jobs:
             echo "::error::The Live Activities extension in the .ipa isn't signed."
             exit 1
           fi
+          # Say how the widgets will get their data in this build.
+          SIGNED_EXT_ENTS=$(codesign -d --entitlements - "$CHECK_DIR/Payload/Squall.app/PlugIns/SquallActivities.appex" 2>/dev/null || true)
+          SIGNED_APP_ENTS=$(codesign -d --entitlements - "$CHECK_DIR/Payload/Squall.app" 2>/dev/null || true)
+          if grep -qF "${BUNDLE_ID}.shared" <<<"$SIGNED_EXT_ENTS" && grep -qF "${BUNDLE_ID}.shared" <<<"$SIGNED_APP_ENTS"; then
+            echo "Widgets: shared Keychain group is in the signed app and widgets."
+          else
+            echo "::warning title=Widgets can't get data::The signed build doesn't have the shared Keychain group, so the widgets will say Open Squall."
+          fi
+          if grep -qF "group.${BUNDLE_ID}" <<<"$SIGNED_APP_ENTS"; then
+            echo "Widgets: App Group is in the signed app too."
+          fi
           echo "IPA_PATH=$IPA_PATH" >> "$GITHUB_ENV"
           echo "Exported $IPA_PATH (build $BUILD_NUMBER)"
 
