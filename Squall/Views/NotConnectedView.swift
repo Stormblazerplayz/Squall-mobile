@@ -105,8 +105,17 @@ struct NotConnectedView: View {
             }
             .buttonStyle(FilledButtonStyle(fill: store.accent, height: 48))
             if case .offline = store.link {
-                Button("Try again") { store.refreshNow() }
+                Button(store.isRetrying ? "Trying again..." : "Try again") { store.refreshNow() }
                     .buttonStyle(GhostButtonStyle(height: 44))
+                    .disabled(store.isRetrying)
+                if let retry = store.retryAt, !store.isRetrying {
+                    TimelineView(.periodic(from: .now, by: 1)) { context in
+                        let seconds = max(Int(retry.timeIntervalSince(context.date).rounded(.up)), 0)
+                        Text(seconds > 0 ? "Squall tries again by itself in \(seconds)s." : "Trying again...")
+                            .font(.system(size: 12.5))
+                            .foregroundStyle(Theme.muted)
+                    }
+                }
             }
             if onClose == nil, store.path.last != .settings {
                 Button("Settings") { store.path.append(.settings) }

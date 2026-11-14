@@ -2,7 +2,11 @@
 
 The iPhone and iPad app for Squall, Storm's AI team, built from the Squall Mobile design concepts. It's a SwiftUI app (iOS 17+) that runs on iPhone in portrait and on iPad in any direction, including landscape, with the dark, glowy look from the concepts. There's no made-up data: everything it shows comes from Squall on your computer once they're paired.
 
-On first launch the app asks to pair with Squall on your computer (scan a QR code or type a 6-digit code). If you skip, or the computer stops answering, every screen shows **Not connected to your computer** with a **Pair** button. How pairing and live data work, and a test desktop to try it with, are in [docs/pairing.md](docs/pairing.md).
+On first launch the app asks to pair with Squall on your computer (scan a QR code or type a 6-digit code). If you skip, every screen shows **Not connected to your computer** with a **Pair** button.
+
+A line above the tabs shows the connection with a colored dot: green when it's live, yellow while connecting or trying again, red when the computer isn't answering (tap it to try again), gray when not paired. Squall tries again by itself after 2, 4, 6, 8 and then every 10 seconds, right away when Wi-Fi comes back, and whenever you open the app.
+
+The last real update from your computer is kept on the phone, so screens open right away and can still be read when the computer is off, with when it last synced. Buttons that change something wait for the computer. Unpair (Settings > Computer) removes that copy. How pairing and live data work, and a test desktop to try it with, are in [docs/pairing.md](docs/pairing.md).
 
 ## Screens
 
@@ -24,6 +28,24 @@ Screens that slide in:
 - **Settings**: the computer you're paired with, Chief napping, safety, the Claude Code version and update, accent color, app icon (Chief's Bolt is the normal one; Classic and five more can be picked), notifications and Clear all chats.
 - **Call Chief**: a real voice call with Chief on your computer (live captions, Mute, End). It only works while the computer is connected.
 - **Mission control** (the grid button on Team): everyone at once, Pause all, wake Chief, what needs you, recent handoffs and a jump-to search.
+
+## Siri and Shortcuts
+
+Say these to Siri, or find them in the Shortcuts app:
+
+- **"Call Chief in Squall"**: opens a voice call with Chief.
+- **"What's my team doing in Squall"**: Siri says what Chief and the team are up to and what needs you. If the computer isn't answering, it says how old the saved copy is.
+- **"Approve Chief's request in Squall"**: Siri reads what Chief wants to do and asks before allowing it. It needs your iPhone unlocked.
+
+## Widgets
+
+Add the **Squall team** widget to the Home Screen (small or medium) or the Lock Screen. It shows what needs you, who's working and when it last synced. Tap it to open the Inbox or Team. With no data it says so, and after Unpair it says "Not paired".
+
+The app hands the widget its data through a shared Keychain group (`<team>.<bundle id>.shared`), which needs no setup. If you also turn on **App Groups** for both App IDs at developer.apple.com and add `group.<bundle id>`, the GitHub build signs with that too and uses it first.
+
+## Sounds and buzzes
+
+A small buzz and sound when you allow something, a bot needs you, a job finishes or something breaks. Turn them off in Settings > Look (Vibrate, Small sounds). Sounds follow the silent switch.
 
 ## Live Activities
 
@@ -98,10 +120,11 @@ open Squall.xcodeproj
 
 - `Squall/Theme`: colors and shared pieces (glowing bot spheres, cards, buttons, status pills).
 - `Squall/Models`: bots, chat messages, routines, inbox items and app state.
-- `Squall/Store`: `SquallStore`, which holds everything the app shows and sends what you do to the computer.
+- `Squall/Store`: `SquallStore`, which holds everything the app shows and sends what you do to the computer, and `SnapshotCache`, the saved copy for offline.
+- `Squall/Intents`: Siri and Shortcuts.
 - `Squall/Sync`: the live data format from the computer (see docs/pairing.md).
 - `Squall/Pairing`: pairing, the connection to the computer and the Keychain token.
 - `Squall/Views`: one folder per screen.
 - `Squall/LiveActivities`: starts and updates the Live Activities, and the Lock Screen button.
-- `Shared`: Live Activity data and their Lock Screen buttons (App Intents), used by the app and the extension.
-- `SquallActivities`: the widget extension that draws the Live Activities.
+- `Shared`: Live Activity data, their Lock Screen buttons (App Intents) and the widget's data, used by the app and the extension.
+- `SquallActivities`: the widget extension that draws the Live Activities and the team widget.

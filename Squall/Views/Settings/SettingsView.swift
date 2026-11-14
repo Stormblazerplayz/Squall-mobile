@@ -31,6 +31,7 @@ struct SettingsView: View {
     @AppStorage(Prefs.showTimes) private var showTimes = true
     @AppStorage(Prefs.sendOnReturn) private var sendOnReturn = false
     @AppStorage(Prefs.haptics) private var haptics = true
+    @AppStorage(Prefs.sounds) private var sounds = true
     @AppStorage(Prefs.softGlow) private var softGlow = false
     @AppStorage(Prefs.openChat) private var openChat: Prefs.OpenChat = .chief
     @AppStorage(Prefs.defaultRole) private var defaultRole = "Generalist"
@@ -162,7 +163,9 @@ struct SettingsView: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer(minLength: 0)
+                    ConnectionDot(size: 10)
                 }
+                computerDetails(computer)
                 HStack(spacing: 8) {
                     Button(pairing.connection == .checking ? "Checking..." : "Test connection") {
                         Task {
@@ -172,10 +175,13 @@ struct SettingsView: View {
                     }
                     .buttonStyle(GhostButtonStyle(height: 40, fontSize: 14, sidePadding: 10))
                     .disabled(pairing.connection == .checking || pairing.busy)
-                    Button(unpairArmed ? "Tap again to unpair" : "Unpair") {
+                    Button(unpairArmed ? "Tap again to unpair" : "Unpair this phone") {
                         if unpairArmed {
                             unpairArmed = false
-                            Task { await pairing.unpair() }
+                            Task {
+                                await pairing.unpair()
+                                store.showToast("Unpaired. The saved copy is gone from this phone.")
+                            }
                         } else {
                             unpairArmed = true
                         }
@@ -189,6 +195,12 @@ struct SettingsView: View {
                         sidePadding: 10
                     ))
                     .disabled(pairing.busy)
+                }
+                if unpairArmed {
+                    Text("Unpairing makes both sides forget each other, and removes the saved copy and the widgets' data from this phone.")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             } else {
                 HStack(spacing: 12) {
@@ -218,6 +230,47 @@ struct SettingsView: View {
         .onChange(of: pairing.computer) {
             unpairArmed = false
         }
+    }
+
+    /// Name, address, when it was paired and when data last came in.
+    private func computerDetails(_ computer: PairedComputer) -> some View {
+        VStack(spacing: 0) {
+            detailRow("Computer", computer.name)
+            detailRow("Address", computer.address)
+            detailRow("Paired", computer.pairedAt.formatted(date: .abbreviated, time: .shortened))
+            TimelineView(.periodic(from: .now, by: 30)) { context in
+                detailRow("Last synced", store.lastSynced.map { SyncAge.text($0, now: context.date) } ?? "Not yet")
+            }
+            detailRow("Status", statusText)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 4)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Theme.field))
+    }
+
+    private var statusText: String {
+        switch store.link {
+        case .connected: return "Live"
+        case .connecting: return "Connecting"
+        case .offline: return store.showingSaved ? "Not answering · showing saved copy" : "Not answering"
+        case .unpaired: return "Not paired"
+        }
+    }
+
+    private func detailRow(_ title: String, _ value: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text(title)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(Theme.sub)
+            Spacer(minLength: 8)
+            Text(value)
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.text)
+                .multilineTextAlignment(.trailing)
+                .lineLimit(2)
+                .textSelection(.enabled)
+        }
+        .frame(minHeight: 30)
     }
 
     private func connectionLine(for computer: PairedComputer) -> (text: String, color: Color) {
@@ -382,7 +435,9 @@ struct SettingsView: View {
             line
             SwitchRow(title: "Softer glow", subtitle: "Turns the colored background light down", isOn: $softGlow, tint: store.accent)
             line
-            SwitchRow(title: "Vibrate on taps", subtitle: "A small buzz when you send or pick up a bot", isOn: $haptics, tint: store.accent)
+            SwitchRow(title: "Vibrate", subtitle: "A small buzz when you send, allow something, a bot needs you or a job finishes", isOn: $haptics, tint: store.accent)
+            line
+            SwitchRow(title: "Small sounds", subtitle: "A quick tink for OKs and finished jobs. Follows the silent switch.", isOn: $sounds, tint: store.accent)
         }
     }
 

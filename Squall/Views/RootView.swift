@@ -59,7 +59,8 @@ struct RootView: View {
 
     @ViewBuilder
     private var tabContent: some View {
-        if store.isConnected {
+        if store.hasData {
+            // Live data, or the last real copy from this computer while it's away.
             connectedTab
         } else {
             // Nothing to show until the computer sends the team.
@@ -100,10 +101,10 @@ struct RootView: View {
         }
     }
 
-    /// The screen when the computer is connected, or the "Not connected" screen.
+    /// The screen when there's real data from the computer, or the "Not connected" screen.
     @ViewBuilder
     private func connected<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
-        if store.isConnected {
+        if store.hasData {
             content()
         } else {
             NotConnectedView()
@@ -128,14 +129,17 @@ struct SquallTabBar: View {
     @EnvironmentObject private var store: SquallStore
 
     var body: some View {
-        HStack(spacing: 0) {
-            ForEach(AppTab.allCases) { tab in
-                tabButton(tab)
+        VStack(spacing: 2) {
+            ConnectionStrip()
+            HStack(spacing: 0) {
+                ForEach(AppTab.allCases) { tab in
+                    tabButton(tab)
+                }
             }
         }
         .readableColumn(Theme.tabBarWidth)
         .padding(.horizontal, 8)
-        .padding(.top, 8)
+        .padding(.top, 4)
         .padding(.bottom, 4)
         .background(
             Theme.background.opacity(0.94)
@@ -159,7 +163,7 @@ struct SquallTabBar: View {
                 Image(systemName: tab.icon)
                     .font(.system(size: 18, weight: .semibold))
                     .overlay(alignment: .topTrailing) {
-                        if tab == .inbox, store.isConnected, store.unreadInboxCount > 0 {
+                        if tab == .inbox, store.hasData, store.unreadInboxCount > 0 {
                             Text("\(store.unreadInboxCount)")
                                 .font(.system(size: 10, weight: .bold))
                                 .foregroundStyle(.white)

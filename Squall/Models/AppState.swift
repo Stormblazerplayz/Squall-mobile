@@ -138,6 +138,7 @@ enum Prefs {
     static let showTimes = "squall.showTimes"
     static let sendOnReturn = "squall.sendOnReturn"
     static let haptics = "squall.haptics"
+    static let sounds = "squall.sounds"
     static let softGlow = "squall.softGlow"
     static let openChat = "squall.openChat"
     static let lastChat = "squall.lastChat"
@@ -147,7 +148,7 @@ enum Prefs {
     static let settings = "squall.settings"
 
     /// Every @AppStorage key, so "Reset settings" can clear them.
-    static let all = [teamName, chatTextSize, showTyping, showTimes, sendOnReturn, haptics,
+    static let all = [teamName, chatTextSize, showTyping, showTimes, sendOnReturn, haptics, sounds,
                       softGlow, openChat, lastChat, defaultRole, appLock, hideInSwitcher, settings]
 
     /// The name you go by, from Settings. Falls back to Storm.
