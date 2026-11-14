@@ -1,7 +1,7 @@
 name: iOS build
 
 # Every run (pull requests, pushes to main and "Run workflow"):
-#   1. builds the app for real iPhones (this is also the "does the code compile" check)
+#   1. builds the app for real iPhones and iPads (this is also the "does the code compile" check)
 #   2. saves an unsigned .ipa as a workflow artifact
 # Only on pushes to main or "Run workflow", and only once the Apple secrets are added:
 #   3. signs the build with your App Store Connect API key

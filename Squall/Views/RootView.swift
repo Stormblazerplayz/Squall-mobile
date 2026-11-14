@@ -95,6 +95,7 @@ struct SquallTabBar: View {
                 tabButton(tab)
             }
         }
+        .readableColumn(Theme.tabBarWidth)
         .padding(.horizontal, 8)
         .padding(.top, 8)
         .padding(.bottom, 4)

@@ -39,6 +39,13 @@ enum Theme {
         ("Pink", 0xB23A7A)
     ]
 
+    /// Widest the main content gets on a big screen (iPad). Phones are narrower, so this never kicks in there.
+    static let readableWidth: CGFloat = 900
+    /// Widest the bottom tab bar's buttons spread on a big screen.
+    static let tabBarWidth: CGFloat = 700
+    /// Widest the call screen gets on a big screen.
+    static let callWidth: CGFloat = 640
+
     static func mono(_ size: CGFloat = 12.5) -> Font {
         .system(size: size, weight: .medium, design: .monospaced)
     }

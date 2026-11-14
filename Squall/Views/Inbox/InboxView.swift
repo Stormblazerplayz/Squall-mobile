@@ -16,6 +16,7 @@ struct InboxView: View {
                     sections
                 }
                 .padding(16)
+                .readableColumn()
             }
             .scrollIndicators(.hidden)
         }

@@ -52,6 +52,7 @@ struct RoutineEditorView: View {
                     preview
                 }
                 .padding(16)
+                .readableColumn()
             }
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)
@@ -60,6 +61,7 @@ struct RoutineEditorView: View {
             Button(saveLabel) { save() }
                 .buttonStyle(FilledButtonStyle(fill: canSave ? store.accent : Color.white.opacity(0.12)))
                 .disabled(!canSave)
+                .readableColumn()
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
                 .background(Theme.background.opacity(0.95))
