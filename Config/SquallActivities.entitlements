@@ -7,5 +7,10 @@
 	<array>
 		<string>group.$(SQUALL_BUNDLE_ID)</string>
 	</array>
+	<!-- The widgets only read the shared group. Must match SquallKeychainGroup in Info.plist. -->
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)$(SQUALL_BUNDLE_ID).shared</string>
+	</array>
 </dict>
 </plist>

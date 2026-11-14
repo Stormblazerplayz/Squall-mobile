@@ -112,35 +112,52 @@ jobs:
             CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
             CODE_SIGNING_ALLOWED=NO
 
-      - name: Add the App Group to the app and its widgets
-        # The archive is built without signing, so the App Group (the folder the app and
-        # its Home Screen widgets share) is added here with a temporary ad-hoc signature.
-        # The export step below re-signs everything with the real certificate and keeps it.
+      - name: Add the shared data entitlements to the app and its widgets
+        # The archive is built without signing, so what the app and its Home Screen widgets
+        # share is added here with a temporary ad-hoc signature. The export step below
+        # re-signs everything with the real certificate and keeps it. Two ways to share:
+        #  - the App Group group.$BUNDLE_ID (needs App Groups turned on at developer.apple.com)
+        #  - the Keychain group $TEAM_ID.$BUNDLE_ID.shared (works with no setup)
+        # Three sets are written, from most to least, so the export can fall back.
         run: |
           set -euo pipefail
           APP="$RUNNER_TEMP/Squall.xcarchive/Products/Applications/Squall.app"
           EXT="$APP/PlugIns/SquallActivities.appex"
-          ENT="$RUNNER_TEMP/AppGroup.entitlements"
-          cat > "$ENT" <<PLIST
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>com.apple.security.application-groups</key>
-            <array>
-              <string>group.${BUNDLE_ID}</string>
-            </array>
-          </dict>
-          </plist>
-          PLIST
-          plutil -lint "$ENT"
-          echo "APP_GROUP_ENTITLEMENTS=$ENT" >> "$GITHUB_ENV"
+          ENT_DIR="$RUNNER_TEMP/entitlements"
+          rm -rf "$ENT_DIR" && mkdir -p "$ENT_DIR"
+          GROUP_XML="<key>com.apple.security.application-groups</key><array><string>group.${BUNDLE_ID}</string></array>"
+          APP_KEYCHAIN_XML=""
+          EXT_KEYCHAIN_XML=""
+          if [ -n "${TEAM_ID:-}" ]; then
+            # The app's own group first, so its pairing token stays private to the app.
+            APP_KEYCHAIN_XML="<key>keychain-access-groups</key><array><string>${TEAM_ID}.${BUNDLE_ID}</string><string>${TEAM_ID}.${BUNDLE_ID}.shared</string></array>"
+            EXT_KEYCHAIN_XML="<key>keychain-access-groups</key><array><string>${TEAM_ID}.${BUNDLE_ID}.shared</string></array>"
+          fi
+          write_ent() {
+            printf '%s\n' '<?xml version="1.0" encoding="UTF-8"?>' \
+              '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' \
+              "<plist version=\"1.0\"><dict>$2</dict></plist>" > "$ENT_DIR/$1"
+            plutil -lint "$ENT_DIR/$1"
+          }
+          write_ent full-app.plist "${GROUP_XML}${APP_KEYCHAIN_XML}"
+          write_ent full-ext.plist "${GROUP_XML}${EXT_KEYCHAIN_XML}"
+          write_ent keychain-app.plist "${APP_KEYCHAIN_XML}"
+          write_ent keychain-ext.plist "${EXT_KEYCHAIN_XML}"
+          echo "ENT_DIR=$ENT_DIR" >> "$GITHUB_ENV"
           # Inside out: the extension first, then the app around it.
-          codesign --force --sign - --timestamp=none --entitlements "$ENT" "$EXT"
-          codesign --force --sign - --timestamp=none --entitlements "$ENT" "$APP"
-          codesign -d --entitlements - "$APP" 2>/dev/null | grep -q "group.${BUNDLE_ID}" \
+          codesign --force --sign - --timestamp=none --entitlements "$ENT_DIR/full-ext.plist" "$EXT"
+          codesign --force --sign - --timestamp=none --entitlements "$ENT_DIR/full-app.plist" "$APP"
+          APP_ENTS=$(codesign -d --entitlements - "$APP" 2>/dev/null || true)
+          EXT_ENTS=$(codesign -d --entitlements - "$EXT" 2>/dev/null || true)
+          grep -qF "group.${BUNDLE_ID}" <<<"$APP_ENTS" \
             || { echo "::error::The App Group didn't make it into Squall.app."; exit 1; }
-          echo "App Group group.${BUNDLE_ID} added to Squall.app and SquallActivities.appex."
+          if [ -n "${TEAM_ID:-}" ]; then
+            grep -qF "${BUNDLE_ID}.shared" <<<"$EXT_ENTS" \
+              || { echo "::error::The shared Keychain group didn't make it into the widgets."; exit 1; }
+            echo "App Group and shared Keychain group added to Squall.app and SquallActivities.appex."
+          else
+            echo "App Group added. No team id, so the shared Keychain group was skipped (this build isn't signed anyway)."
+          fi
 
       - name: Package an unsigned .ipa
         run: |
@@ -228,14 +245,28 @@ jobs:
               -authenticationKeyID "$ASC_KEY_ID" \
               -authenticationKeyIssuerID "$ASC_ISSUER_ID"
           }
-          if ! export_ipa 2>&1 | tee "$RUNNER_TEMP/export.log"; then
-            # Most likely the App ID doesn't have the App Group yet. Ship the build anyway,
-            # without the shared folder: the widgets then say "Open Squall" instead of the team.
-            echo "::warning title=Widgets can't share data yet::Signing with the App Group group.$BUNDLE_ID failed, so this build was signed without it. Turn on App Groups for $BUNDLE_ID and $BUNDLE_ID.activities at developer.apple.com (Identifiers), add group.$BUNDLE_ID to both, then run the build again."
+          resign() {
             APP="$RUNNER_TEMP/Squall.xcarchive/Products/Applications/Squall.app"
-            codesign --force --sign - --timestamp=none "$APP/PlugIns/SquallActivities.appex"
-            codesign --force --sign - --timestamp=none "$APP"
-            export_ipa
+            if [ -n "${1:-}" ]; then
+              codesign --force --sign - --timestamp=none --entitlements "$ENT_DIR/$1-ext.plist" "$APP/PlugIns/SquallActivities.appex"
+              codesign --force --sign - --timestamp=none --entitlements "$ENT_DIR/$1-app.plist" "$APP"
+            else
+              codesign --force --sign - --timestamp=none "$APP/PlugIns/SquallActivities.appex"
+              codesign --force --sign - --timestamp=none "$APP"
+            fi
+          }
+          if export_ipa 2>&1 | tee "$RUNNER_TEMP/export.log"; then
+            echo "Signed with the App Group and the shared Keychain group."
+          else
+            # Most likely the App ID doesn't have App Groups turned on. The widgets still get
+            # their data through the shared Keychain group, which needs no setup.
+            echo "::notice title=Signed without the App Group::App Groups aren't turned on for $BUNDLE_ID at developer.apple.com, so this build shares widget data through the Keychain instead. Nothing to fix."
+            resign keychain
+            if ! export_ipa 2>&1 | tee "$RUNNER_TEMP/export-keychain.log"; then
+              echo "::warning title=Widgets can't get data::Signing with the shared Keychain group failed too, so this build was signed without it and the widgets will say Open Squall. See export-keychain.log above."
+              resign
+              export_ipa
+            fi
           fi
           IPA_PATH=$(find "$RUNNER_TEMP/export" -maxdepth 1 -name '*.ipa' | head -n 1)
           if [ -z "$IPA_PATH" ]; then

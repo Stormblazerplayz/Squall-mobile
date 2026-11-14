@@ -41,6 +41,8 @@ Say these to Siri, or find them in the Shortcuts app:
 
 Add the **Squall team** widget to the Home Screen (small or medium) or the Lock Screen. It shows what needs you, who's working and when it last synced. Tap it to open the Inbox or Team. With no data it says so, and after Unpair it says "Not paired".
 
+The app hands the widget its data through a shared Keychain group (`<team>.<bundle id>.shared`), which needs no setup. If you also turn on **App Groups** for both App IDs at developer.apple.com and add `group.<bundle id>`, the GitHub build signs with that too and uses it first.
+
 ## Sounds and buzzes
 
 A small buzz and sound when you allow something, a bot needs you, a job finishes or something breaks. Turn them off in Settings > Look (Vibrate, Small sounds). Sounds follow the silent switch.
