@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Draws Squall's six alternate app icons as 1024 px PNGs.
+"""Draws Squall's app icons as 1024 px PNGs: Chief's Bolt (the normal icon) and five extras.
 
 The shapes and colors come from the "App icon ideas" concepts. Run it from the
 repo root to rebuild the icon sets in Squall/Resources/Assets.xcassets:
@@ -363,14 +363,15 @@ def power_chip():
     return p.result()
 
 
-# Asset name, picker name, drawing function. The order here is the order in the picker.
+# Icon set name, preview name, picker name, drawing function. The order here is the order in the picker.
+# Chief's Bolt is the normal icon, so it's drawn into AppIcon. "Classic" (the first icon) isn't drawn here.
 ICONS = [
-    ("StormCloud", "Storm Cloud", storm_cloud),
-    ("ChiefsBolt", "Chief's Bolt", chiefs_bolt),
-    ("SquallSwirl", "Squall Swirl", squall_swirl),
-    ("BotCrew", "Bot Crew", bot_crew),
-    ("Orbit", "Orbit", orbit),
-    ("PowerChip", "Power Chip", power_chip),
+    ("AppIcon", "ChiefsBolt", "Chief's Bolt", chiefs_bolt),
+    ("StormCloud", "StormCloud", "Storm Cloud", storm_cloud),
+    ("SquallSwirl", "SquallSwirl", "Squall Swirl", squall_swirl),
+    ("BotCrew", "BotCrew", "Bot Crew", bot_crew),
+    ("Orbit", "Orbit", "Orbit", orbit),
+    ("PowerChip", "PowerChip", "Power Chip", power_chip),
 ]
 
 INFO = {"author": "xcode", "version": 1}
@@ -394,14 +395,14 @@ def write_preview(name, image):
 
 
 def main():
-    for name, title, draw in ICONS:
+    for name, preview, title, draw in ICONS:
         image = draw()
         write_icon_set(name, image)
-        write_preview(name, image)
+        write_preview(preview, image)
         print(f"Drew {title} -> {name}.appiconset")
-    current = Image.open(ASSETS / "AppIcon.appiconset" / "AppIcon.png")
-    write_preview("Default", current)
-    print("Made a preview of the current icon")
+    classic = Image.open(ASSETS / "Classic.appiconset" / "Classic.png")
+    write_preview("Classic", classic)
+    print("Made a preview of the Classic icon")
 
 
 if __name__ == "__main__":

@@ -41,14 +41,14 @@ enum Route: Hashable {
 
 enum ToastAction: Equatable {
     case viewChief
-    case undoInbox
     case watchLive
+    case pair
 
     var label: String {
         switch self {
         case .viewChief: return "View"
-        case .undoInbox: return "Undo"
         case .watchLive: return "Watch"
+        case .pair: return "Pair"
         }
     }
 }
@@ -59,25 +59,11 @@ struct ToastMessage: Identifiable, Equatable {
     var action: ToastAction? = nil
 }
 
-/// Barry's request to push the Farside build fix. Shared by Inbox, Live work, the call and Mission control.
-enum PushDecision: Equatable {
-    case allowed
-    case denied
-}
-
-enum ClaudeCodeUpdate: Equatable {
-    case needed
-    case updating(Double)
-    case upToDate
-
-    static let oldVersion = "2.1.159"
-    static let newVersion = "2.1.280"
-}
-
 struct HandoffTarget: Identifiable, Equatable {
     let id: String
 }
 
+/// Chief and safety settings. Saved on this device and sent to the computer.
 struct AppSettings: Equatable, Codable {
     enum CheckInterval: String, CaseIterable, Codable {
         case fifteen

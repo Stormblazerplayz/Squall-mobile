@@ -183,6 +183,62 @@ struct PairingClient {
         _ = try? await send(request)
     }
 
+    // MARK: Live data
+
+    /// Gets everything the app shows. See "Live data" in docs/pairing.md.
+    func state(_ computer: PairedComputer, token: String) async throws -> StateSnapshot {
+        guard let url = Self.url(host: computer.host, port: computer.port, path: "/api/v1/state") else {
+            throw PairingError.badAddress
+        }
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        let (data, response) = try await send(request)
+        switch response.statusCode {
+        case 200:
+            do {
+                return try JSONDecoder().decode(StateSnapshot.self, from: data)
+            } catch {
+                throw PairingError.badReply
+            }
+        case 401, 403:
+            throw PairingError.tokenRejected
+        case 404, 501:
+            throw PairingError.liveDataNotSupported
+        default:
+            throw PairingError.badReply
+        }
+    }
+
+    /// Sends something you did on the phone, like a chat message or Allow.
+    func action(_ computer: PairedComputer, token: String, action: SyncAction) async throws -> SyncActionReply {
+        guard let url = Self.url(host: computer.host, port: computer.port, path: "/api/v1/action") else {
+            throw PairingError.badAddress
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.httpBody = try JSONEncoder().encode(action.body)
+        let (data, response) = try await send(request)
+        let reply = try? JSONDecoder().decode(SyncActionReply.self, from: data)
+        switch response.statusCode {
+        case 200, 201, 202, 204:
+            if reply?.ok == false {
+                throw SyncActionError(message: reply?.error ?? "Your computer couldn't do that.")
+            }
+            return reply ?? SyncActionReply(ok: true, id: nil, error: nil)
+        case 401, 403:
+            throw PairingError.tokenRejected
+        case 404, 501:
+            throw SyncActionError(message: "Squall on your computer can't do that yet. Update it, then try again.")
+        default:
+            throw SyncActionError(message: reply?.error ?? "Your computer couldn't do that. Try again.")
+        }
+    }
+
     private func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         let result: (Data, URLResponse)
         do {

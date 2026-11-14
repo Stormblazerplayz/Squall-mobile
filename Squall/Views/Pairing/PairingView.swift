@@ -306,7 +306,7 @@ struct PairingView: View {
             Text(computer.address)
                 .font(Theme.mono(13))
                 .foregroundStyle(Theme.sub)
-            Text("Your team still shows pretend data until Squall on your computer starts sending live updates.")
+            Text("Your team will show up in a moment.")
                 .font(.system(size: 12.5))
                 .foregroundStyle(Theme.muted)
                 .multilineTextAlignment(.center)
@@ -328,7 +328,7 @@ struct PairingView: View {
                 Button("Skip for now") { onDone() }
                     .buttonStyle(GhostButtonStyle(height: 46))
                     .disabled(pairing.busy)
-                Text("You can look around with pretend data and pair later in Settings.")
+                Text("You can pair later. Squall shows your team once it's paired.")
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.muted)
                     .multilineTextAlignment(.center)

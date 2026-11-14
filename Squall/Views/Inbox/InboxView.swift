@@ -323,8 +323,8 @@ private struct InboxCard: View {
                     .foregroundStyle(Theme.muted)
             }
             actions
-            if showDetails, item.kind == .error {
-                Text(SampleData.chiefError)
+            if showDetails, item.kind == .error, let details = item.details, !details.isEmpty {
+                Text(details)
                     .font(Theme.mono(11.5))
                     .foregroundStyle(Theme.redText)
                     .padding(10)
@@ -357,34 +357,43 @@ private struct InboxCard: View {
 
     @ViewBuilder
     private var actions: some View {
+        let busy = store.isBusy("inbox.\(item.id)")
         switch item.kind {
         case .ask:
             HStack(spacing: 8) {
-                Button("Allow") { store.allowPush() }
+                Button("Allow") { store.answer(item.id, with: "allow") }
                     .buttonStyle(FilledButtonStyle(fill: Theme.green.opacity(0.85), foreground: Theme.darkInk, height: 40))
-                Button("Deny") { store.denyPush() }
+                Button("Deny") { store.answer(item.id, with: "deny") }
                     .buttonStyle(GhostButtonStyle(height: 40))
             }
+            .disabled(busy)
             // Ask on the Lock Screen instead, with Allow and Deny right there.
             LockScreenButton(kind: .approval) {
-                LiveActivities.shared.startApproval()
+                LiveActivities.shared.startApproval(item, bot: store.bot(item.botID))
             }
         case .choice(let options):
             VStack(spacing: 6) {
                 ForEach(options, id: \.self) { option in
-                    Button(option) { store.pickIcon(option) }
+                    Button(option) { store.answer(item.id, with: option) }
                         .buttonStyle(GhostButtonStyle(height: 40))
                 }
             }
+            .disabled(busy)
         case .error:
             HStack(spacing: 8) {
-                Button(updateLabel) { store.runUpdate() }
-                    .buttonStyle(FilledButtonStyle(fill: Theme.gold, foreground: Theme.darkInk, height: 40))
-                    .disabled(store.claudeCode != .needed)
-                Button(showDetails ? "Hide" : "Details", action: toggleDetails)
-                    .buttonStyle(GhostButtonStyle(height: 40, expand: false))
+                if store.chiefNeedsUpdate {
+                    Button(store.isUpdatingClaudeCode ? "Updating…" : "Update Claude Code") { store.runUpdate() }
+                        .buttonStyle(FilledButtonStyle(fill: Theme.gold, foreground: Theme.darkInk, height: 40))
+                        .disabled(store.isUpdatingClaudeCode)
+                }
+                if let details = item.details, !details.isEmpty {
+                    Button(showDetails ? "Hide" : "Details", action: toggleDetails)
+                        .buttonStyle(GhostButtonStyle(height: 40, expand: !store.chiefNeedsUpdate))
+                }
+                Button("Clear") { store.clearInbox(item.id) }
+                    .buttonStyle(GhostButtonStyle(height: 40, expand: false, foreground: Theme.sub, fontSize: 14))
             }
-            if case .updating(let progress) = store.claudeCode {
+            if let progress = store.claudeCode?.updating {
                 ProgressView(value: progress).tint(Theme.goldBright)
             }
         case .done(let openLabel):
@@ -397,16 +406,15 @@ private struct InboxCard: View {
         }
     }
 
-    private var updateLabel: String {
-        if case .updating = store.claudeCode { return "Updating…" }
-        return "Update Claude Code"
-    }
-
     private func open() {
         store.markRead(item.id)
         switch item.opens {
         case .live:
-            store.path.append(.live)
+            if let workID = item.workID {
+                store.watch(workID)
+            } else {
+                store.path.append(.live)
+            }
         case .chat:
             store.openChat(item.botID)
         }

@@ -9,7 +9,8 @@ struct ChatMessage: Identifiable, Equatable {
         case system
     }
 
-    let id = UUID()
+    /// From the computer, so the same message keeps the same id between updates.
+    var id: String = UUID().uuidString
     var kind: Kind
     /// Bot id that wrote it, or "me".
     var author: String

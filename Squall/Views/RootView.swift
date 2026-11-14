@@ -46,10 +46,29 @@ struct RootView: View {
                 .environmentObject(lock)
                 .environmentObject(pairing)
         }
+        .sheet(isPresented: $store.showPairing) {
+            PairingView(place: .settings) {
+                store.showPairing = false
+            }
+            .lockCover()
+            .environmentObject(pairing)
+            .environmentObject(store)
+            .environmentObject(lock)
+        }
     }
 
     @ViewBuilder
     private var tabContent: some View {
+        if store.isConnected {
+            connectedTab
+        } else {
+            // Nothing to show until the computer sends the team.
+            NotConnectedView()
+        }
+    }
+
+    @ViewBuilder
+    private var connectedTab: some View {
         switch store.tab {
         case .team:
             TeamView()
@@ -70,14 +89,24 @@ struct RootView: View {
         case .settings:
             SettingsView().navigationTitle("Settings").pushedScreen()
         case .live:
-            LiveWorkView().navigationTitle("Live work").pushedScreen()
+            connected { LiveWorkView() }.navigationTitle("Live work").pushedScreen()
         case .group:
             // The group screen sets its own title (it changes to the group's name).
-            GroupChatView().pushedScreen()
+            connected { GroupChatView() }.pushedScreen()
         case .newRoutine:
-            RoutineEditorView().navigationTitle("New routine").pushedScreen()
+            connected { RoutineEditorView() }.navigationTitle("New routine").pushedScreen()
         case .mission:
-            MissionControlView().navigationTitle("Mission control").pushedScreen()
+            connected { MissionControlView() }.navigationTitle("Mission control").pushedScreen()
+        }
+    }
+
+    /// The screen when the computer is connected, or the "Not connected" screen.
+    @ViewBuilder
+    private func connected<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        if store.isConnected {
+            content()
+        } else {
+            NotConnectedView()
         }
     }
 }
@@ -130,7 +159,7 @@ struct SquallTabBar: View {
                 Image(systemName: tab.icon)
                     .font(.system(size: 18, weight: .semibold))
                     .overlay(alignment: .topTrailing) {
-                        if tab == .inbox, store.unreadInboxCount > 0 {
+                        if tab == .inbox, store.isConnected, store.unreadInboxCount > 0 {
                             Text("\(store.unreadInboxCount)")
                                 .font(.system(size: 10, weight: .bold))
                                 .foregroundStyle(.white)

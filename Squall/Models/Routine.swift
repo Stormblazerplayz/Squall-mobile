@@ -29,7 +29,14 @@ struct Routine: Identifiable, Equatable {
     static let dayShort = ["M", "T", "W", "T", "F", "S", "S"]
     static let dayFull = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
-    let id = UUID()
+    /// How far a routine that's running right now has got.
+    struct Run: Equatable {
+        var done: Int
+        var total: Int
+        var label: String
+    }
+
+    var id: String = UUID().uuidString
     var botID: String
     var task: String
     var repeatMode: Repeat
@@ -41,6 +48,8 @@ struct Routine: Identifiable, Equatable {
     var pingWhenDone: Bool = true
     var askBeforePush: Bool = true
     var skipIfBusy: Bool = false
+    /// Set while the routine is running on the computer.
+    var run: Run? = nil
 
     var whenText: String {
         Routine.whenText(mode: repeatMode, days: days, minutes: minutes)

@@ -10,9 +10,6 @@ struct ChatView: View {
     @AppStorage(Prefs.sendOnReturn) private var sendOnReturn = false
     @AppStorage(Prefs.haptics) private var haptics = true
     @State private var showLiveLog = false
-    @State private var workTimer = true
-    @State private var judge = false
-    @State private var showContext = false
     @FocusState private var inputFocused: Bool
 
     var body: some View {
@@ -76,12 +73,6 @@ struct ChatView: View {
                             proxy.scrollTo("bottom", anchor: .bottom)
                         }
                     }
-                    if showContext {
-                        contextCard(bot)
-                            .padding(.horizontal, 16)
-                            .padding(.bottom, 6)
-                    }
-                    chipBar
                     inputBar(bot)
                 }
                 .readableColumn(isWide ? .infinity : Theme.readableWidth)
@@ -89,7 +80,6 @@ struct ChatView: View {
         }
         .animation(.easeOut(duration: 0.2), value: showLiveLog)
         .sensoryFeedback(.impact(weight: .light), trigger: sentCount) { _, _ in haptics }
-        .animation(.easeOut(duration: 0.2), value: showContext)
     }
 
     private func emptyState(_ bot: Bot) -> some View {
@@ -105,46 +95,6 @@ struct ChatView: View {
         }
         .padding(.vertical, 40)
         .frame(maxWidth: .infinity)
-    }
-
-    private var chipBar: some View {
-        ScrollView(.horizontal) {
-            HStack(spacing: 8) {
-                Button("Work timer: \(workTimer ? "on" : "off")") { workTimer.toggle() }
-                    .buttonStyle(ChipButtonStyle(isOn: workTimer, tint: store.accent, minHeight: 32))
-                Button("Context") { showContext.toggle() }
-                    .buttonStyle(ChipButtonStyle(isOn: showContext, tint: store.accent, minHeight: 32))
-                Button("Agents: By role") {
-                    store.showToast("Agents are picked by their role.")
-                }
-                .buttonStyle(ChipButtonStyle(tint: store.accent, minHeight: 32))
-                Button("Judge: \(judge ? "on" : "off")") { judge.toggle() }
-                    .buttonStyle(ChipButtonStyle(isOn: judge, tint: store.accent, minHeight: 32))
-                Button("Usage: not connected") {
-                    store.showToast("Usage tracking isn't connected yet.")
-                }
-                .buttonStyle(ChipButtonStyle(tint: store.accent, minHeight: 32))
-            }
-            .padding(.horizontal, 16)
-        }
-        .scrollIndicators(.hidden)
-        .padding(.vertical, 6)
-    }
-
-    private func contextCard(_ bot: Bot) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("What \(bot.name) knows right now")
-                .font(.system(size: 12.5, weight: .bold))
-                .foregroundStyle(Theme.label)
-            Text("Role: \(bot.role)")
-            Text("Job: \(bot.task)")
-            Text("Messages in this chat: \(store.messages(for: bot.id).count)")
-        }
-        .font(.system(size: 13))
-        .foregroundStyle(Theme.text)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
-        .glassCard(radius: 14)
     }
 
     private func inputBar(_ bot: Bot) -> some View {
@@ -166,9 +116,6 @@ struct ChatView: View {
                 .padding(.horizontal, 14)
                 .padding(.vertical, 11)
                 .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Theme.field))
-            roundButton("mic.fill", label: "Voice") {
-                store.showToast("Voice typing is coming soon.")
-            }
             roundButton("phone.fill", label: "Call Chief") {
                 store.showCall = true
             }
@@ -245,8 +192,8 @@ private struct ChatHeader: View {
             }
             Spacer(minLength: 4)
             Button {
-                if bot.id == "barry" {
-                    store.path.append(.live)
+                if let job = store.work(for: bot.id) {
+                    store.watch(job.id)
                 } else {
                     showLiveLog.toggle()
                 }
@@ -261,7 +208,7 @@ private struct ChatHeader: View {
                 .background(Capsule().fill(Theme.field))
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(bot.id == "barry" ? "Watch Barry work live" : "Show live work")
+            .accessibilityLabel(store.work(for: bot.id) != nil ? "Watch \(bot.name) work live" : "Show live work")
             Button {
                 confirmClear = true
             } label: {
@@ -619,11 +566,11 @@ private struct ErrorBubble: View {
                     .foregroundStyle(Theme.muted)
             }
             HStack(spacing: 8) {
-                Button(store.retrying ? "Retrying…" : "Try again") {
+                Button(store.isBusy("chief.retry") ? "Retrying…" : "Try again") {
                     store.retryChief()
                 }
                 .buttonStyle(GhostButtonStyle(height: 36, expand: false, foreground: Theme.redText, border: Theme.red.opacity(0.5)))
-                .disabled(store.retrying)
+                .disabled(store.isBusy("chief.retry"))
                 if store.chiefNeedsUpdate {
                     Button("Update Claude Code") {
                         store.path.append(.settings)

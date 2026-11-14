@@ -1,18 +1,46 @@
 import SwiftUI
 
-/// Holds everything the app shows. All data is pretend data from `SampleData`.
+/// Holds everything the app shows. All of it comes from Squall on the paired computer:
+/// the store asks for a fresh copy every few seconds while the app is open, and sends
+/// what you do (messages, Allow, Pause and so on) straight back. Nothing is made up here.
 @MainActor
 final class SquallStore: ObservableObject {
-    // Team and chats
-    @Published var bots: [Bot] = SampleData.bots
-    @Published var messages: [String: [ChatMessage]] = SampleData.messages
-    @Published var typingBotID: String?
-    @Published var handed: Set<String> = []
+    /// How the app is talking to the computer right now.
+    enum Link: Equatable {
+        /// No computer paired yet.
+        case unpaired
+        /// Paired, waiting for the first answer.
+        case connecting
+        /// Paired and getting live data.
+        case connected
+        /// Paired but the computer isn't answering. The text says why.
+        case offline(String)
+    }
+
+    // Connection
+    @Published private(set) var link: Link = .unpaired
+
+    // Team and chats, from the computer
+    @Published private(set) var bots: [Bot] = []
+    @Published private(set) var messages: [String: [ChatMessage]] = [:]
+    @Published private(set) var groups: [BotGroup] = []
+    @Published private(set) var typingBotID: String?
+    @Published private(set) var inbox: [InboxItem] = []
+    @Published private(set) var routines: [Routine] = []
+    @Published private(set) var work: [LiveWork] = []
+    @Published private(set) var handoffs: [Handoff] = []
+    @Published private(set) var pausedAll = false
+    @Published private(set) var claudeCode: ClaudeCodeInfo?
+    /// Actions on their way to the computer, so buttons can wait.
+    @Published private(set) var busyActions: Set<String> = []
+
+    // Local screen state
     @Published var picking: String?
     @Published var currentChatID: String = Bot.chiefID {
         didSet { UserDefaults.standard.set(currentChatID, forKey: Prefs.lastChat) }
     }
-    @Published var retrying = false
+    /// The job open on the Live work screen.
+    @Published var liveWorkID: String?
 
     // Navigation
     @Published var tab: AppTab = .team
@@ -20,45 +48,32 @@ final class SquallStore: ObservableObject {
     @Published var showNewTeammate = false
     @Published var handoffTarget: HandoffTarget?
     @Published var showCall = false
+    @Published var showPairing = false
 
     // Pop-up message
     @Published var toast: ToastMessage?
 
-    // Routines, inbox and settings
-    @Published var routines: [Routine] = SampleData.routines
-    @Published var inbox: [InboxItem] = SampleData.inbox
-    @Published var pushDecision: PushDecision? {
-        // Allow or Deny in the app also updates the Lock Screen.
-        didSet { if pushDecision != oldValue { LiveActivities.shared.approvalDecided(pushDecision) } }
-    }
-    @Published var iconChoice: String?
+    // Settings
     @Published var settings: AppSettings {
-        didSet { saveSettings() }
+        didSet {
+            saveSettings()
+            if settings != oldValue { sendSettingsSoon() }
+        }
     }
     @Published var accentHex: UInt32 {
         didSet { UserDefaults.standard.set(Int(accentHex), forKey: Self.accentKey) }
     }
-    @Published var claudeCode: ClaudeCodeUpdate = .needed
-    @Published var chiefAwake = false
-    @Published var chiefJob: String?
-    @Published var pausedAll = false {
-        didSet { if pausedAll != oldValue { LiveActivities.shared.setTeamPaused(pausedAll) } }
-    }
-    /// The last Lock Screen button meant for a screen (Pause Barry, Mute, End call).
+    /// The last Lock Screen button meant for a screen (Mute, End call).
     @Published var activityCommand: ActivityCommand?
 
     private static let accentKey = "squall.accentHex"
+    private weak var pairing: PairingStore?
+    private var lastVersion: String?
+    private var failures = 0
+    private var wakeUp = false
     private var toastTask: Task<Void, Never>?
-    private var replyTask: Task<Void, Never>?
-    private var replyTurns: [String: Int] = [:]
-    private var inboxUndo: InboxSnapshot?
+    private var settingsTask: Task<Void, Never>?
     private var activityObserver: NSObjectProtocol?
-
-    private struct InboxSnapshot {
-        var items: [InboxItem]
-        var pushDecision: PushDecision?
-        var iconChoice: String?
-    }
 
     init() {
         let defaults = UserDefaults.standard
@@ -70,10 +85,9 @@ final class SquallStore: ObservableObject {
         } else {
             settings = AppSettings()
         }
-        // "Open Chat on": Chief, or whoever you talked to last.
+        // "Open Chat on": Chief, or whoever you talked to last (checked once the team loads).
         if defaults.string(forKey: Prefs.openChat) == Prefs.OpenChat.last.rawValue,
-           let last = defaults.string(forKey: Prefs.lastChat),
-           SampleData.bots.contains(where: { $0.id == last }) {
+           let last = defaults.string(forKey: Prefs.lastChat), !last.isEmpty {
             currentChatID = last
         }
         // Buttons pressed on the Lock Screen or in the Dynamic Island.
@@ -86,30 +100,185 @@ final class SquallStore: ObservableObject {
                 self?.handleActivityActions()
             }
         }
-        handleActivityActions()
+    }
+
+    // MARK: - Talking to the computer
+
+    var isConnected: Bool { link == .connected }
+
+    /// Keeps the app up to date with the computer until this task is cancelled.
+    /// SquallApp restarts it whenever the paired computer changes.
+    func runSync(with pairing: PairingStore) async {
+        self.pairing = pairing
+        guard pairing.isPaired else {
+            forgetEverything()
+            link = .unpaired
+            return
+        }
+        lastVersion = nil
+        failures = 0
+        link = .connecting
+        while !Task.isCancelled {
+            await refresh()
+            guard !Task.isCancelled else { return }
+            // Every 3 seconds while connected, every 6 while the computer isn't answering.
+            let ticks = link == .connected ? 6 : 12
+            for _ in 0..<ticks {
+                if wakeUp || Task.isCancelled { break }
+                try? await Task.sleep(for: .milliseconds(500))
+            }
+            wakeUp = false
+        }
+    }
+
+    /// Asks for fresh data now instead of waiting, like when the app comes back.
+    func refreshNow() {
+        wakeUp = true
+    }
+
+    private func refresh() async {
+        guard let pairing, pairing.isPaired else { return }
+        do {
+            let snapshot = try await pairing.fetchState()
+            guard !Task.isCancelled, pairing.isPaired else { return }
+            failures = 0
+            apply(snapshot)
+            if link != .connected { link = .connected }
+        } catch {
+            guard !Task.isCancelled, pairing.isPaired else { return }
+            failures += 1
+            // One missed answer while connected is often just Wi-Fi blinking; two means it's gone.
+            if link != .connected || failures >= 2 {
+                let reason = (error as? PairingError)?.message ?? PairingError.cantReach.message
+                if link != .offline(reason) { link = .offline(reason) }
+                LiveActivities.shared.stopAll()
+            }
+        }
+    }
+
+    private func apply(_ snapshot: StateSnapshot) {
+        if let version = snapshot.version, version == lastVersion { return }
+        lastVersion = snapshot.version
+
+        let newBots = snapshot.bots.map(\.model)
+        var newMessages: [String: [ChatMessage]] = [:]
+        for (chatID, list) in snapshot.chats {
+            newMessages[chatID] = list.enumerated().map { $0.element.model(chatID: chatID, index: $0.offset) }
+        }
+        let newGroups = snapshot.groups.map(\.model)
+        let newInbox = snapshot.inbox.map(\.model)
+        let newRoutines = snapshot.routines.map(\.model)
+        let newWork = snapshot.work.map(\.model)
+        let newHandoffs = snapshot.handoffs.enumerated().map { $0.element.model(index: $0.offset) }
+        let newTyping = (snapshot.typing?.isEmpty ?? true) ? nil : snapshot.typing
+        let newCode = snapshot.claudeCode?.model
+
+        // Only touch what changed, so screens don't redraw every few seconds.
+        if bots != newBots { bots = newBots }
+        if messages != newMessages { messages = newMessages }
+        if groups != newGroups { groups = newGroups }
+        if inbox != newInbox { inbox = newInbox }
+        if routines != newRoutines { routines = newRoutines }
+        if work != newWork { work = newWork }
+        if handoffs != newHandoffs { handoffs = newHandoffs }
+        if typingBotID != newTyping { typingBotID = newTyping }
+        if pausedAll != snapshot.paused { pausedAll = snapshot.paused }
+        if claudeCode != newCode { claudeCode = newCode }
+
+        if !newBots.isEmpty, bot(currentChatID) == nil, groups.first(where: { $0.id == currentChatID }) == nil {
+            currentChatID = Bot.chiefID
+        }
+        if let picking, bot(picking) == nil { self.picking = nil }
+
+        LiveActivities.shared.sync(work: work, inbox: inbox, routines: routines, bots: bots, paused: pausedAll)
+    }
+
+    /// Clears everything from the computer, for when it's unpaired.
+    private func forgetEverything() {
+        lastVersion = nil
+        if !bots.isEmpty { bots = [] }
+        if !messages.isEmpty { messages = [:] }
+        if !groups.isEmpty { groups = [] }
+        if !inbox.isEmpty { inbox = [] }
+        if !routines.isEmpty { routines = [] }
+        if !work.isEmpty { work = [] }
+        if !handoffs.isEmpty { handoffs = [] }
+        typingBotID = nil
+        pausedAll = false
+        claudeCode = nil
+        picking = nil
+        liveWorkID = nil
+        handoffTarget = nil
+        showNewTeammate = false
+        LiveActivities.shared.stopAll()
+    }
+
+    /// Sends an action, then gets fresh data so the screens show what really happened.
+    /// Returns the computer's reply, or nil when it didn't work (a toast says why).
+    @discardableResult
+    func perform(_ action: SyncAction, busyKey: String? = nil, quiet: Bool = false) async -> SyncActionReply? {
+        guard let pairing, isConnected else {
+            if !quiet { showToast("Not connected to your computer.", action: .pair) }
+            return nil
+        }
+        let key = busyKey ?? action.type
+        busyActions.insert(key)
+        defer { busyActions.remove(key) }
+        do {
+            let reply = try await pairing.send(action)
+            lastVersion = nil
+            await refresh()
+            return reply
+        } catch {
+            if !quiet {
+                let message = (error as? SyncActionError)?.message
+                    ?? (error as? PairingError)?.message
+                    ?? "Couldn't reach your computer. Try again."
+                showToast(message)
+            }
+            lastVersion = nil
+            await refresh()
+            return nil
+        }
+    }
+
+    /// Fire-and-forget version of `perform`, for buttons.
+    func send(_ action: SyncAction, busyKey: String? = nil) {
+        Task { await perform(action, busyKey: busyKey) }
+    }
+
+    func isBusy(_ key: String) -> Bool {
+        busyActions.contains(key)
     }
 
     // MARK: - Live Activities and links
 
     /// Catches up on Lock Screen buttons pressed while the app was away.
     func handleActivityActions() {
+        let activities = LiveActivities.shared
         for action in SquallActivityBridge.drain() {
             switch action {
-            case .allowPush:
-                allowPush()
-            case .denyPush:
-                denyPush()
+            case .allowPush, .denyPush:
+                if let itemID = activities.approvalItemID {
+                    answer(itemID, with: action == .allowPush ? "allow" : "deny")
+                }
             case .pauseTeam:
-                pausedAll = true
+                setPausedAll(true)
             case .resumeTeam:
-                pausedAll = false
+                setPausedAll(false)
             case .skipRoutine:
-                showToast("Skipped today's routine.")
-            case .pauseBuild, .resumeBuild, .muteCall, .unmuteCall, .endCall:
+                if let routineID = activities.routineID {
+                    send(SyncAction(type: "routine.skip", fields: ["routineId": .string(routineID)]))
+                }
+            case .pauseBuild, .resumeBuild:
+                if let workID = activities.buildWorkID {
+                    setWorkPaused(workID, paused: action == .pauseBuild)
+                }
+            case .muteCall, .unmuteCall, .endCall:
                 activityCommand = ActivityCommand(action: action)
             }
         }
-        LiveActivities.shared.refresh()
+        activities.refresh()
     }
 
     /// Opens the screen a Live Activity link points at, like squall://live.
@@ -118,6 +287,7 @@ final class SquallStore: ObservableObject {
         picking = nil
         switch url.host ?? "" {
         case "live":
+            if liveWorkID == nil { liveWorkID = LiveActivities.shared.buildWorkID }
             if path.last != .live { path = [.live] }
         case "mission":
             if path.last != .mission { path = [.mission] }
@@ -139,18 +309,31 @@ final class SquallStore: ObservableObject {
         }
     }
 
+    // MARK: - Settings
+
     private func saveSettings() {
         if let data = try? JSONEncoder().encode(settings) {
             UserDefaults.standard.set(data, forKey: Prefs.settings)
         }
     }
 
-    // MARK: - Settings: data tools
+    /// Sends the Chief and safety settings to the computer, a moment after the last change.
+    private func sendSettingsSoon() {
+        settingsTask?.cancel()
+        settingsTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(0.8))
+            guard !Task.isCancelled, let self, self.isConnected else { return }
+            await self.perform(
+                SyncAction(type: "settings.save", fields: ["settings": JSONValue.from(self.settings)]),
+                quiet: true
+            )
+        }
+    }
 
     /// Every chat as plain text, for the Export button.
     var chatExport: String {
         var lines = ["Squall chats", "Exported \(Date().formatted(date: .abbreviated, time: .shortened))", ""]
-        for bot in displayBots {
+        for bot in bots {
             let list = messages(for: bot.id)
             guard !list.isEmpty else { continue }
             lines.append("== \(bot.name) (\(bot.role)) ==")
@@ -173,44 +356,6 @@ final class SquallStore: ObservableObject {
         return lines.joined(separator: "\n")
     }
 
-    /// Saves a real voice call into the chat with Chief.
-    func logCall(_ lines: [(fromMe: Bool, text: String)], seconds: Int) {
-        guard !lines.isEmpty else { return }
-        let time = TimeText.now()
-        append(ChatMessage(kind: .system, author: Bot.chiefID, text: "Voice call with Chief · \(TimeText.stopwatch(seconds))", time: time), to: Bot.chiefID)
-        for line in lines {
-            append(ChatMessage(
-                kind: line.fromMe ? .me : .bot,
-                author: line.fromMe ? ChatMessage.meID : Bot.chiefID,
-                text: line.text,
-                time: time
-            ), to: Bot.chiefID)
-        }
-    }
-
-    /// Puts all the pretend data back the way it was on first launch. Settings stay.
-    func resetPretendData() {
-        replyTask?.cancel()
-        bots = SampleData.bots
-        messages = SampleData.messages
-        typingBotID = nil
-        handed = []
-        picking = nil
-        retrying = false
-        currentChatID = Bot.chiefID
-        routines = SampleData.routines
-        inbox = SampleData.inbox
-        pushDecision = nil
-        iconChoice = nil
-        claudeCode = .needed
-        chiefAwake = false
-        chiefJob = nil
-        pausedAll = false
-        replyTurns = [:]
-        inboxUndo = nil
-        showToast("Pretend data is back to how it started.")
-    }
-
     /// Puts every setting back to its default. Chats and bots stay.
     func resetSettings() {
         let defaults = UserDefaults.standard
@@ -226,67 +371,20 @@ final class SquallStore: ObservableObject {
 
     // MARK: - Bots
 
-    /// Bots with their live status worked out from everything that has happened.
-    var displayBots: [Bot] {
-        bots.map(applyOverrides)
-    }
+    /// The team as the computer reports it.
+    var displayBots: [Bot] { bots }
 
+    /// Chief from the computer. Before the team loads, a plain stand-in so screens can draw.
     var chief: Bot {
-        bot(Bot.chiefID) ?? SampleData.bots[0]
+        bot(Bot.chiefID) ?? Bot(id: Bot.chiefID, name: "Chief", hex: Theme.goldHex, role: "Team lead", status: .idle, task: "")
     }
 
     var teammates: [Bot] {
-        displayBots.filter { !$0.isChief }
+        bots.filter { !$0.isChief }
     }
 
     func bot(_ id: String) -> Bot? {
-        guard let raw = bots.first(where: { $0.id == id }) else { return nil }
-        return applyOverrides(raw)
-    }
-
-    private func applyOverrides(_ raw: Bot) -> Bot {
-        var bot = raw
-        if bot.isChief {
-            if let job = chiefJob {
-                bot.status = .working
-                bot.task = job
-            } else if chiefAwake {
-                bot.status = .idle
-                bot.task = "Awake and looking for work"
-            }
-        }
-        if bot.id == "barry" {
-            switch pushDecision {
-            case .allowed:
-                bot.status = .working
-                bot.task = "Pushing fix/ci-setup and opening a pull request"
-                bot.progress = 0.9
-                bot.log = Array(bot.log.dropLast()) + ["$ git push -u origin fix/ci-setup", "branch pushed"]
-            case .denied:
-                bot.status = .idle
-                bot.task = "Free. Kept the Farside fix on your computer."
-                bot.progress = 0
-            case nil:
-                break
-            }
-        }
-        if bot.id == "fox", let iconChoice {
-            bot.status = .working
-            bot.task = "Drawing the app icon: \(iconChoice)"
-            bot.progress = 0.2
-        }
-        if handed.contains(bot.id) {
-            bot.status = .handed
-            bot.task = "Handed to Chief"
-        }
-        if typingBotID == bot.id, bot.status == .idle || bot.status == .napping {
-            bot.status = .working
-            bot.task = "Writing a reply..."
-        }
-        if pausedAll, bot.status == .working {
-            bot.status = .paused
-        }
-        return bot
+        bots.first(where: { $0.id == id })
     }
 
     var workingCount: Int {
@@ -315,110 +413,51 @@ final class SquallStore: ObservableObject {
         messages[id] ?? []
     }
 
-    var chiefNeedsUpdate: Bool {
-        claudeCode != .upToDate
-    }
-
     func openChat(_ id: String) {
         currentChatID = id
-        if let index = bots.firstIndex(where: { $0.id == id }) {
-            bots[index].unread = nil
+        if bot(id)?.unread != nil {
+            send(SyncAction(type: "chat.read", fields: ["chatId": .string(id)]))
         }
         picking = nil
         path = []
         tab = .chat
     }
 
-    func send(_ raw: String) {
+    /// Sends a message to a bot or a group. It shows right away, then the computer's copy replaces it.
+    func send(_ raw: String, to chatID: String? = nil) {
         let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
-        let id = currentChatID
-        append(ChatMessage(kind: .me, author: ChatMessage.meID, text: text, time: TimeText.now()), to: id)
-
-        if id == Bot.chiefID, chiefNeedsUpdate {
-            bumpChiefError()
+        let id = chatID ?? currentChatID
+        guard isConnected else {
+            showToast("Not connected to your computer.", action: .pair)
             return
         }
-
-        typingBotID = id
-        replyTask?.cancel()
-        replyTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(1.6))
-            guard !Task.isCancelled else { return }
-            self?.finishReply(to: text, botID: id)
-        }
+        messages[id, default: []].append(ChatMessage(kind: .me, author: ChatMessage.meID, text: text, time: TimeText.now()))
+        send(SyncAction(type: "chat.send", fields: ["chatId": .string(id), "text": .string(text)]))
     }
 
-    private func finishReply(to text: String, botID: String) {
-        guard let bot = bot(botID) else { return }
-        let turn = replyTurns[botID, default: 0]
-        replyTurns[botID] = turn + 1
-        let reply = SampleData.reply(for: bot, to: text, turn: turn)
-        append(ChatMessage(kind: .bot, author: botID, text: reply, time: TimeText.now()), to: botID)
-        typingBotID = nil
+    func clearChat(_ id: String) {
+        send(SyncAction(type: "chat.clear", fields: ["chatId": .string(id)]))
     }
 
-    private func append(_ message: ChatMessage, to id: String) {
-        messages[id, default: []].append(message)
-    }
-
-    /// Chief can't work until Claude Code is updated, so the error just stacks up.
-    private func bumpChiefError() {
-        var list = messages[Bot.chiefID] ?? []
-        if let index = list.lastIndex(where: {
-            if case .error = $0.kind { return true }
-            return false
-        }), index == list.count - 2, case let .error(count) = list[index].kind {
-            // Keep the error grouped right under the newest message.
-            let error = list.remove(at: index)
-            var bumped = error
-            bumped.kind = .error(count: count + 1)
-            bumped.time = TimeText.now()
-            list.append(bumped)
-        } else {
-            list.append(ChatMessage(kind: .error(count: 1), author: Bot.chiefID, text: SampleData.chiefError, time: TimeText.now()))
-        }
-        messages[Bot.chiefID] = list
-    }
-
-    func retryChief() {
-        guard !retrying else { return }
-        retrying = true
-        Task { [weak self] in
-            try? await Task.sleep(for: .seconds(1.8))
-            guard let self else { return }
-            self.retrying = false
-            if self.chiefNeedsUpdate {
-                self.bumpChiefErrorInPlace()
-            } else {
-                self.append(ChatMessage(kind: .bot, author: Bot.chiefID, text: "That worked. I'm back and checking on the team.", time: TimeText.now()), to: Bot.chiefID)
+    func clearAllChats() {
+        Task {
+            if await perform(SyncAction(type: "chat.clearAll")) != nil {
+                showToast("All chats cleared. Your bots kept their memory.")
             }
         }
     }
 
-    private func bumpChiefErrorInPlace() {
-        guard var list = messages[Bot.chiefID],
-              let index = list.lastIndex(where: {
-                  if case .error = $0.kind { return true }
-                  return false
-              }),
-              case let .error(count) = list[index].kind else { return }
-        list[index].kind = .error(count: count + 1)
-        messages[Bot.chiefID] = list
+    /// Tries the last thing Chief failed at again.
+    func retryChief() {
+        send(SyncAction(type: "chief.retry"), busyKey: "chief.retry")
     }
 
-    func clearChat(_ id: String) {
-        messages[id] = []
-        if typingBotID == id { typingBotID = nil }
+    var chiefNeedsUpdate: Bool {
+        claudeCode?.needsUpdate ?? false
     }
 
-    func clearAllChats() {
-        messages = [:]
-        typingBotID = nil
-        showToast("All chats cleared. Your bots kept their memory.")
-    }
-
-    // MARK: - New teammate and handoff
+    // MARK: - New teammate, groups and handoff
 
     static let randomNames = ["Nova", "Echo", "Pixel", "Bolt", "Rune", "Comet", "Mako", "Juno", "Vex", "Orion"]
     static let roles = ["Generalist", "Coder", "Researcher", "Writer", "Designer", "Tester", "Scout"]
@@ -431,28 +470,45 @@ final class SquallStore: ObservableObject {
     func bringToLife(name rawName: String, role rawRole: String, hex: UInt32, desc: String) {
         let name = rawName.trimmingCharacters(in: .whitespaces).isEmpty ? "Nova" : rawName.trimmingCharacters(in: .whitespaces)
         let role = rawRole.trimmingCharacters(in: .whitespaces).isEmpty ? "Generalist" : rawRole.trimmingCharacters(in: .whitespaces)
-        let job = desc.trimmingCharacters(in: .whitespaces).isEmpty ? Self.defaultTeammateJob : desc
-        let id = "\(name.lowercased())-\(UUID().uuidString.prefix(6))"
-        bots.append(Bot(id: id, name: name, hex: hex, role: role, status: .idle, task: "New. \(job)"))
-        messages[id] = [
-            ChatMessage(
-                kind: .bot,
-                author: id,
-                text: "Hey \(Prefs.displayName), I'm \(name), your new \(role.lowercased()).",
-                text2: "What should my job be? Give me a focus, or tell me to stay flexible and take whatever Chief hands me.",
-                chips: ["Research a project idea", "Review code for bugs", "Draft docs or write-ups"],
-                time: TimeText.now()
-            )
-        ]
-        showNewTeammate = false
-        openChat(id)
-        showToast("\(name) joined the team")
+        let job = desc.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? Self.defaultTeammateJob : desc.trimmingCharacters(in: .whitespacesAndNewlines)
+        let action = SyncAction(type: "bot.create", fields: [
+            "name": .string(name),
+            "role": .string(role),
+            "color": .string(String(format: "#%06X", hex)),
+            "job": .string(job)
+        ])
+        Task {
+            guard let reply = await perform(action) else { return }
+            showNewTeammate = false
+            if let id = reply.id, bot(id) != nil {
+                openChat(id)
+            }
+            showToast("\(name) joined the team")
+        }
+    }
+
+    /// Makes a group chat on the computer. Returns the group's chat id.
+    func createGroup(name: String, members: [String], chiefLeads: Bool) async -> String? {
+        let action = SyncAction(type: "group.create", fields: [
+            "name": .string(name),
+            "members": .array(members.map { .string($0) }),
+            "chiefLeads": .bool(chiefLeads)
+        ])
+        guard let reply = await perform(action) else { return nil }
+        if let id = reply.id, !id.isEmpty { return id }
+        showToast("Your computer made the group but didn't say which one it is.")
+        return nil
+    }
+
+    func group(_ id: String) -> BotGroup? {
+        groups.first(where: { $0.id == id })
     }
 
     static let handoffJobs = ["Take over its current work", "Review what it has done so far", "Split it up across the team"]
+    private static let handoffKeys = ["take_over", "review", "split"]
 
     func startHandoff(_ id: String) {
-        guard id != Bot.chiefID else { return }
+        guard id != Bot.chiefID, isConnected else { return }
         picking = nil
         handoffTarget = HandoffTarget(id: id)
     }
@@ -462,27 +518,19 @@ final class SquallStore: ObservableObject {
             handoffTarget = nil
             return
         }
-        let jobText = Self.handoffJobs[min(max(job, 0), Self.handoffJobs.count - 1)]
-        let cleanNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
-        append(
-            ChatMessage(
-                kind: .handoff(fromName: source.name, fromHex: source.hex, note: cleanNote),
-                author: Bot.chiefID,
-                text: jobText + ".",
-                time: TimeText.now()
-            ),
-            to: Bot.chiefID
-        )
-        handed.insert(botID)
-        switch job {
-        case 1: chiefJob = "Reviewing \(source.name)'s work"
-        case 2: chiefJob = "Splitting \(source.name)'s work across the team"
-        default: chiefJob = "Picking up \(source.name)'s work"
+        let index = min(max(job, 0), Self.handoffKeys.count - 1)
+        let action = SyncAction(type: "handoff", fields: [
+            "botId": .string(botID),
+            "job": .string(Self.handoffKeys[index]),
+            "note": .string(note.trimmingCharacters(in: .whitespacesAndNewlines))
+        ])
+        Task {
+            guard await perform(action) != nil else { return }
+            handoffTarget = nil
+            picking = nil
+            tab = .team
+            showToast("Handed \(source.name)'s work to Chief", action: .viewChief)
         }
-        handoffTarget = nil
-        picking = nil
-        tab = .team
-        showToast("Handed \(source.name)'s work to Chief", action: .viewChief)
     }
 
     // MARK: - Inbox
@@ -491,129 +539,135 @@ final class SquallStore: ObservableObject {
         inbox.filter(\.unread).count
     }
 
-    private func snapshotInbox() {
-        inboxUndo = InboxSnapshot(items: inbox, pushDecision: pushDecision, iconChoice: iconChoice)
-    }
-
-    private func replaceInbox(_ id: String, with item: InboxItem) {
-        if let index = inbox.firstIndex(where: { $0.id == id }) {
-            inbox[index] = item
+    /// Answers a question or an OK: "allow", "deny", or one of the item's options.
+    func answer(_ itemID: String, with answer: String) {
+        let item = inbox.first(where: { $0.id == itemID })
+        Task {
+            guard await perform(
+                SyncAction(type: "inbox.answer", fields: ["itemId": .string(itemID), "answer": .string(answer)]),
+                busyKey: "inbox.\(itemID)"
+            ) != nil else { return }
+            if item?.kind == .ask {
+                LiveActivities.shared.approvalAnswered(itemID, allowed: answer == "allow")
+            }
+            let name = item.flatMap { bot($0.botID)?.name } ?? "Your bot"
+            switch answer {
+            case "allow": showToast("Allowed. \(name) can go ahead.")
+            case "deny": showToast("Okay. \(name) won't do it.")
+            default: showToast("Sent to \(name): \(answer)")
+            }
         }
     }
 
-    func allowPush() {
-        guard pushDecision == nil else { return }
-        snapshotInbox()
-        pushDecision = .allowed
-        replaceInbox("push", with: InboxItem(
-            id: "push", kind: .done(openLabel: "Watch Barry"), botID: "barry",
-            title: "You allowed Barry's push",
-            body: "Barry pushed fix/ci-setup and is opening a pull request for you.",
-            time: "now", unread: false, fresh: true, opens: .live
-        ))
-        append(ChatMessage(kind: .bot, author: "barry", text: "Thanks! Pushing fix/ci-setup now. I'll open a draft pull request for you.", time: TimeText.now()), to: "barry")
-        showToast("Allowed. Barry is pushing the fix.", action: .undoInbox)
-    }
-
-    func denyPush() {
-        guard pushDecision == nil else { return }
-        snapshotInbox()
-        pushDecision = .denied
-        replaceInbox("push", with: InboxItem(
-            id: "push", kind: .done(openLabel: "Message Barry"), botID: "barry",
-            title: "You said no to Barry's push",
-            body: "Barry kept the fix on your computer and will not push it.",
-            time: "now", unread: false, fresh: true
-        ))
-        append(ChatMessage(kind: .bot, author: "barry", text: "No problem. The fix stays on your computer. Tell me if you change your mind.", time: TimeText.now()), to: "barry")
-        showToast("Okay. Barry won't push it.", action: .undoInbox)
-    }
-
-    func pickIcon(_ choice: String) {
-        guard iconChoice == nil else { return }
-        snapshotInbox()
-        iconChoice = choice
-        replaceInbox("icon", with: InboxItem(
-            id: "icon", kind: .done(openLabel: "Watch Fox"), botID: "fox",
-            title: "You picked \"\(choice)\"",
-            body: "Fox is drawing the icon in that style now.",
-            time: "now", unread: false, fresh: true
-        ))
-        showToast("Fox is on it: \(choice)", action: .undoInbox)
-    }
-
     func clearInbox(_ id: String) {
-        snapshotInbox()
-        inbox.removeAll { $0.id == id }
-        showToast("Cleared", action: .undoInbox)
+        if let index = inbox.firstIndex(where: { $0.id == id }) {
+            inbox.remove(at: index)
+        }
+        send(SyncAction(type: "inbox.clear", fields: ["itemId": .string(id)]))
     }
 
     func markAllRead() {
         for index in inbox.indices {
             inbox[index].unread = false
         }
+        send(SyncAction(type: "inbox.readAll"))
     }
 
     func markRead(_ id: String) {
-        if let index = inbox.firstIndex(where: { $0.id == id }) {
-            inbox[index].unread = false
-        }
+        guard let index = inbox.firstIndex(where: { $0.id == id }), inbox[index].unread else { return }
+        inbox[index].unread = false
+        send(SyncAction(type: "inbox.read", fields: ["itemId": .string(id)]))
     }
 
-    func undoInbox() {
-        guard let snapshot = inboxUndo else { return }
-        inbox = snapshot.items
-        pushDecision = snapshot.pushDecision
-        iconChoice = snapshot.iconChoice
-        inboxUndo = nil
-        showToast("Undone")
+    // MARK: - Live work
+
+    /// The job on the Live work screen: the one you opened, or the first one running.
+    var currentWork: LiveWork? {
+        if let liveWorkID, let picked = work.first(where: { $0.id == liveWorkID }) { return picked }
+        return work.first(where: { $0.state.isRunning }) ?? work.first
+    }
+
+    func work(for botID: String) -> LiveWork? {
+        work.first(where: { $0.botID == botID && $0.state.isRunning }) ?? work.first(where: { $0.botID == botID })
+    }
+
+    func watch(_ workID: String) {
+        liveWorkID = workID
+        picking = nil
+        if path.last != .live { path.append(.live) }
+    }
+
+    func setWorkPaused(_ workID: String, paused: Bool) {
+        if let index = work.firstIndex(where: { $0.id == workID }), work[index].state.isRunning {
+            work[index].state = paused ? .paused : .working
+        }
+        send(SyncAction(type: "work.pause", fields: ["workId": .string(workID), "paused": .bool(paused)]), busyKey: "work.\(workID)")
+    }
+
+    func stopWork(_ workID: String) {
+        send(SyncAction(type: "work.stop", fields: ["workId": .string(workID)]), busyKey: "work.\(workID)")
+    }
+
+    func sendNote(_ text: String, to workID: String) {
+        let clean = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !clean.isEmpty else { return }
+        send(SyncAction(type: "work.note", fields: ["workId": .string(workID), "text": .string(clean)]))
+    }
+
+    // MARK: - Pause all
+
+    func setPausedAll(_ paused: Bool) {
+        pausedAll = paused
+        LiveActivities.shared.setTeamPaused(paused)
+        send(SyncAction(type: "team.pause", fields: ["paused": .bool(paused)]), busyKey: "team.pause")
     }
 
     // MARK: - Claude Code update
 
     func runUpdate() {
-        guard claudeCode == .needed else { return }
-        claudeCode = .updating(0)
-        Task { [weak self] in
-            for step in 1...10 {
-                try? await Task.sleep(for: .milliseconds(220))
-                self?.claudeCode = .updating(Double(step) / 10)
-            }
-            self?.finishUpdate()
-        }
+        send(SyncAction(type: "claudeCode.update"), busyKey: "claudeCode.update")
     }
 
-    private func finishUpdate() {
-        claudeCode = .upToDate
-        chiefAwake = true
-        replaceInbox("err", with: InboxItem(
-            id: "err", kind: .done(openLabel: "Open Chief"), botID: Bot.chiefID,
-            title: "Claude Code updated",
-            body: "Now on \(ClaudeCodeUpdate.newVersion). Chief is awake and checking for work.",
-            time: "now", unread: false, fresh: true
-        ))
-        append(ChatMessage(kind: .bot, author: Bot.chiefID, text: "Thanks for updating! I'm on \(ClaudeCodeUpdate.newVersion) now and checking for work.", time: TimeText.now()), to: Bot.chiefID)
-        showToast("Updated. Chief woke up and is looking for work.", action: .viewChief)
+    var isUpdatingClaudeCode: Bool {
+        claudeCode?.updating != nil || isBusy("claudeCode.update")
     }
 
     // MARK: - Routines
 
     func saveRoutine(_ routine: Routine) {
-        routines.append(routine)
         let name = bot(routine.botID)?.name ?? "Your bot"
-        if !path.isEmpty { path.removeLast() }
-        tab = .routines
-        showToast("Saved. \(name) will wake up \(routine.whenText).")
-    }
-
-    func setRoutine(_ id: UUID, isOn: Bool) {
-        if let index = routines.firstIndex(where: { $0.id == id }) {
-            routines[index].isOn = isOn
+        let action = SyncAction(type: "routine.save", fields: [
+            "routine": .object([
+                "id": .string(routine.id),
+                "botId": .string(routine.botID),
+                "task": .string(routine.task),
+                "repeat": .string(routine.repeatMode.rawValue),
+                "days": .array(routine.days.map { .bool($0) }),
+                "minutes": .int(routine.minutes),
+                "isOn": .bool(routine.isOn),
+                "pingWhenDone": .bool(routine.pingWhenDone),
+                "askBeforePush": .bool(routine.askBeforePush),
+                "skipIfBusy": .bool(routine.skipIfBusy)
+            ])
+        ])
+        Task {
+            guard await perform(action, busyKey: "routine.save") != nil else { return }
+            if path.last == .newRoutine { path.removeLast() }
+            tab = .routines
+            showToast("Saved. \(name) will wake up \(routine.whenText).")
         }
     }
 
-    func deleteRoutine(_ id: UUID) {
+    func setRoutine(_ id: String, isOn: Bool) {
+        if let index = routines.firstIndex(where: { $0.id == id }) {
+            routines[index].isOn = isOn
+        }
+        send(SyncAction(type: "routine.toggle", fields: ["routineId": .string(id), "isOn": .bool(isOn)]))
+    }
+
+    func deleteRoutine(_ id: String) {
         routines.removeAll { $0.id == id }
+        send(SyncAction(type: "routine.delete", fields: ["routineId": .string(id)]))
     }
 
     // MARK: - Chief
@@ -623,14 +677,19 @@ final class SquallStore: ObservableObject {
             showToast("Chief needs a Claude Code update first.")
             return
         }
-        chiefAwake = true
-        showToast("Chief is awake and looking for work.")
+        Task {
+            if await perform(SyncAction(type: "chief.wake")) != nil {
+                showToast("Chief is awake and looking for work.")
+            }
+        }
     }
 
     func letChiefNap() {
-        chiefAwake = false
-        chiefJob = nil
-        showToast("Chief is napping again.")
+        Task {
+            if await perform(SyncAction(type: "chief.nap")) != nil {
+                showToast("Chief is napping again.")
+            }
+        }
     }
 
     // MARK: - Toast
@@ -650,10 +709,10 @@ final class SquallStore: ObservableObject {
         switch action {
         case .viewChief:
             openChat(Bot.chiefID)
-        case .undoInbox:
-            undoInbox()
         case .watchLive:
-            path.append(.live)
+            if path.last != .live { path.append(.live) }
+        case .pair:
+            showPairing = true
         }
     }
 }

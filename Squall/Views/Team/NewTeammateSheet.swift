@@ -53,10 +53,11 @@ struct NewTeammateSheet: View {
                 HStack(spacing: 10) {
                     Button("Cancel") { dismiss() }
                         .buttonStyle(GhostButtonStyle())
-                    Button("Bring to life") {
+                    Button(store.isBusy("bot.create") ? "Adding…" : "Bring to life") {
                         store.bringToLife(name: name, role: role, hex: hex, desc: desc)
                     }
                     .buttonStyle(FilledButtonStyle(fill: store.accent))
+                    .disabled(store.isBusy("bot.create") || !store.isConnected)
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)

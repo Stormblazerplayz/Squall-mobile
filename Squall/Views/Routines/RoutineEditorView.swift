@@ -4,8 +4,8 @@ import SwiftUI
 struct RoutineEditorView: View {
     @EnvironmentObject private var store: SquallStore
 
-    @State private var botID = "barry"
-    @State private var task = "Check the Farside build. If it fails, find out why and tell me."
+    @State private var botID = ""
+    @State private var task = ""
     @State private var repeatMode: Routine.Repeat = .daily
     @State private var days = Array(repeating: true, count: 7)
     @State private var minutes = 9 * 60
@@ -13,7 +13,7 @@ struct RoutineEditorView: View {
     @State private var askBeforePush = true
     @State private var skipIfBusy = false
 
-    private let ideas = ["Check the Farside build", "Tidy my notes", "Look for bugs in Nimbus", "Write a daily recap"]
+    private let ideas = ["Check my build", "Tidy my notes", "Look for bugs", "Write a daily recap"]
 
     var body: some View {
         ZStack {
@@ -71,15 +71,23 @@ struct RoutineEditorView: View {
                 days = preset
             }
         }
+        .onAppear {
+            if store.bot(botID) == nil {
+                botID = store.teammates.first?.id ?? Bot.chiefID
+            }
+        }
     }
 
     private var bot: Bot? { store.bot(botID) }
     private var botName: String { bot?.name ?? "your bot" }
     private var cleanTask: String { task.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var hasDay: Bool { days.contains(true) }
-    private var canSave: Bool { hasDay && !cleanTask.isEmpty }
+    private var isSaving: Bool { store.isBusy("routine.save") }
+    private var canSave: Bool { hasDay && !cleanTask.isEmpty && bot != nil && !isSaving }
 
     private var saveLabel: String {
+        if isSaving { return "Saving…" }
+        if bot == nil { return "Pick who wakes up first" }
         if !hasDay { return "Pick a day first" }
         if cleanTask.isEmpty { return "Add a job first" }
         return "Save routine"
@@ -88,7 +96,7 @@ struct RoutineEditorView: View {
     private var whoPicker: some View {
         ScrollView(.horizontal) {
             HStack(spacing: 12) {
-                ForEach(store.teammates) { teammate in
+                ForEach(store.teammates.isEmpty ? [store.chief] : store.teammates) { teammate in
                     let isOn = teammate.id == botID
                     Button {
                         botID = teammate.id

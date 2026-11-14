@@ -99,9 +99,18 @@ struct TeamView: View {
                     .padding(.vertical, 4)
                     .background(Capsule().fill(Theme.field))
             }
-            Text("Long-press a bot, then drop it on Chief to hand off its work.")
-                .font(.system(size: 12.5))
-                .foregroundStyle(Theme.muted)
+            if store.teammates.isEmpty {
+                Text("No teammates yet. Tap Teammate to add one.")
+                    .font(.system(size: 13.5))
+                    .foregroundStyle(Theme.sub)
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .glassCard(radius: 16)
+            } else {
+                Text("Long-press a bot, then drop it on Chief to hand off its work.")
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(Theme.muted)
+            }
             if isWide {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 300), spacing: 10)], spacing: 10) {
                     ForEach(store.teammates) { bot in
@@ -223,16 +232,28 @@ private struct ChiefCard: View {
     private var stepsText: some View {
         VStack(alignment: .leading, spacing: 6) {
             if store.chiefNeedsUpdate {
-                Label("Stopped: Claude Code \(ClaudeCodeUpdate.oldVersion) is too old", systemImage: "exclamationmark.triangle.fill")
+                let version = store.claudeCode?.version ?? ""
+                Label(version.isEmpty ? "Stopped: Claude Code is too old" : "Stopped: Claude Code \(version) is too old", systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(Theme.redText)
-                Button("Update to \(ClaudeCodeUpdate.newVersion)") {
+                Button(store.claudeCode?.latest.map { "Update to \($0)" } ?? "Update Claude Code") {
                     store.path.append(.settings)
                 }
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(Theme.goldText)
-            } else if let job = store.chiefJob {
-                Label(job, systemImage: "arrow.triangle.branch")
-                    .foregroundStyle(Theme.text)
+            } else if let job = store.work(for: Bot.chiefID), job.state.isRunning {
+                Button {
+                    store.watch(job.id)
+                } label: {
+                    Label(job.now.isEmpty ? job.title : "\(job.title): \(job.now)", systemImage: "arrow.triangle.branch")
+                        .foregroundStyle(Theme.text)
+                        .multilineTextAlignment(.leading)
+                }
+                .buttonStyle(.plain)
+            } else if !store.chief.steps.isEmpty {
+                ForEach(store.chief.steps.indices, id: \.self) { index in
+                    Label(store.chief.steps[index], systemImage: "arrow.triangle.branch")
+                        .foregroundStyle(Theme.text)
+                }
             } else {
                 Label("Nothing in progress right now.", systemImage: "moon.zzz")
                     .foregroundStyle(Theme.sub)

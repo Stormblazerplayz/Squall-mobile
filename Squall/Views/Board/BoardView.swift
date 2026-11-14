@@ -3,34 +3,7 @@ import SwiftUI
 /// Every bot as a card, with what it's doing right now.
 struct BoardView: View {
     @EnvironmentObject private var store: SquallStore
-    @State private var section: Section = .board
     @State private var openSteps: Set<String> = []
-
-    enum Section: String, CaseIterable, Identifiable {
-        case board, starx, sessions, vault, todo
-
-        var id: String { rawValue }
-
-        var label: String {
-            switch self {
-            case .board: return "Board"
-            case .starx: return "Starx"
-            case .sessions: return "Sessions (0)"
-            case .vault: return "Vault"
-            case .todo: return "To do"
-            }
-        }
-
-        var emptyText: String {
-            switch self {
-            case .board: return ""
-            case .starx: return "Nothing to show from Starx yet."
-            case .sessions: return "No sessions running."
-            case .vault: return "Nothing saved in the Vault yet."
-            case .todo: return "Nothing on the to do list."
-            }
-        }
-    }
 
     @Environment(\.horizontalSizeClass) private var sizeClass
     private let columns = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
@@ -53,17 +26,15 @@ struct BoardView: View {
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(Theme.sub)
                     }
-                    ScrollView(.horizontal) {
-                        HStack(spacing: 8) {
-                            ForEach(Section.allCases) { item in
-                                Button(item.label) { section = item }
-                                    .buttonStyle(ChipButtonStyle(isOn: section == item, tint: store.accent))
-                            }
+                    if store.displayBots.isEmpty {
+                        ContentUnavailableView {
+                            Label("No bots yet", systemImage: "person.3")
+                        } description: {
+                            Text("Your team from the computer shows up here.")
                         }
-                    }
-                    .scrollIndicators(.hidden)
-
-                    if section == .board {
+                        .foregroundStyle(Theme.sub)
+                        .padding(.top, 40)
+                    } else {
                         LazyVGrid(columns: isWide ? wideColumns : columns, spacing: isWide ? 12 : 10) {
                             ForEach(store.displayBots) { bot in
                                 BoardCard(bot: bot, showSteps: openSteps.contains(bot.id)) {
@@ -79,14 +50,6 @@ struct BoardView: View {
                             .font(.system(size: 12))
                             .foregroundStyle(Theme.muted)
                             .frame(maxWidth: .infinity)
-                    } else {
-                        ContentUnavailableView {
-                            Label(section.label, systemImage: "tray")
-                        } description: {
-                            Text(section.emptyText)
-                        }
-                        .foregroundStyle(Theme.sub)
-                        .padding(.top, 40)
                     }
                 }
                 .padding(16)
@@ -156,8 +119,8 @@ private struct BoardCard: View {
                 Button(showSteps ? "Hide" : "Steps", action: toggleSteps)
                     .buttonStyle(GhostButtonStyle(height: 34, fontSize: 13, sidePadding: 6))
             }
-            if bot.id == "barry" {
-                Button("Watch live") { store.path.append(.live) }
+            if let job = store.work(for: bot.id), job.state.isRunning {
+                Button("Watch live") { store.watch(job.id) }
                     .buttonStyle(FilledButtonStyle(fill: bot.color, height: 34))
             }
         }
