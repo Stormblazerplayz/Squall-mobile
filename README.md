@@ -1,6 +1,6 @@
 # Squall mobile
 
-The iPhone app for Squall, Storm's AI team, built from the Squall Mobile design concepts. It's a SwiftUI app (iOS 17+) with the dark, glowy look from the concepts. Everything runs on pretend data for now, so you can tap through every screen before it's linked to Squall desktop.
+The iPhone and iPad app for Squall, Storm's AI team, built from the Squall Mobile design concepts. It's a SwiftUI app (iOS 17+) that runs on iPhone in portrait and on iPad in any direction, including landscape, with the dark, glowy look from the concepts. Everything runs on pretend data for now, so you can tap through every screen before it's linked to Squall desktop.
 
 ## Screens
 
@@ -29,8 +29,8 @@ The Xcode project is made from `project.yml` by [XcodeGen](https://github.com/yo
 
 The workflow is `.github/workflows/ios.yml`. One job runs every time:
 
-1. **Builds the app for iPhone.** This is also the check that the code compiles. No Apple account needed.
-2. **Saves an unsigned `.ipa`** on the run (Artifacts > `Squall-unsigned-<number>`). It's unsigned, so an iPhone won't install it as is. It's there so you can see the build worked.
+1. **Builds the app for iPhone and iPad.** This is also the check that the code compiles. No Apple account needed.
+2. **Saves an unsigned `.ipa`** on the run (Artifacts > `Squall-unsigned-<number>`). It's unsigned, so an iPhone or iPad won't install it as is. It's there so you can see the build worked.
 3. **Signs it and uploads it to TestFlight**, but only when the Apple secrets below are set, and only on a push to `main` or when you press **Run workflow**. Pull requests never upload.
 
 If the secrets aren't set, step 3 is skipped with a "TestFlight skipped" note and the run still passes.
@@ -58,7 +58,7 @@ You need to do these steps yourself. Never paste keys into code or chat; they on
    | `APPLE_TEAM_ID` | Your Team ID from step 5 |
 
 7. **Merge the pull request into `main`.** GitHub only shows the Run workflow button for workflows that are on `main`, and every push to `main` uploads a new build.
-8. **Run it.** Actions tab > **iOS build** > **Run workflow** (or just push to `main`). When it finishes, Apple takes a few minutes to process the build, then it shows up in App Store Connect > your app > TestFlight. Add yourself as an internal tester and install it with the TestFlight app on your iPhone.
+8. **Run it.** Actions tab > **iOS build** > **Run workflow** (or just push to `main`). When it finishes, Apple takes a few minutes to process the build, then it shows up in App Store Connect > your app > TestFlight. Add yourself as an internal tester and install it with the TestFlight app on your iPhone or iPad.
 
 ### Using a different bundle ID
 

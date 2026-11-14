@@ -29,6 +29,7 @@ struct SettingsView: View {
                         .padding(.top, 6)
                 }
                 .padding(16)
+                .readableColumn()
             }
             .scrollIndicators(.hidden)
         }

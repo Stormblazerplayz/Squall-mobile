@@ -357,3 +357,13 @@ struct DarkField: View {
             .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Color.white.opacity(0.1), lineWidth: 1))
     }
 }
+
+extension View {
+    /// Keeps content a comfortable width and centered on a wide screen like an iPad in landscape.
+    /// On a phone the screen is already narrower than `maxWidth`, so nothing changes.
+    func readableColumn(_ maxWidth: CGFloat = Theme.readableWidth) -> some View {
+        self
+            .frame(maxWidth: maxWidth)
+            .frame(maxWidth: .infinity)
+    }
+}

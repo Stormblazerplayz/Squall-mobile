@@ -30,11 +30,14 @@ struct GroupChatView: View {
     var body: some View {
         ZStack {
             GlowBackground()
-            if started {
-                chat
-            } else {
-                picker
+            Group {
+                if started {
+                    chat
+                } else {
+                    picker
+                }
             }
+            .readableColumn()
         }
         .navigationTitle(started ? groupName : "New group")
     }

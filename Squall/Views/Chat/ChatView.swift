@@ -65,6 +65,7 @@ struct ChatView: View {
                 chipBar
                 inputBar(bot)
             }
+            .readableColumn()
         }
         .animation(.easeOut(duration: 0.2), value: showLiveLog)
         .animation(.easeOut(duration: 0.2), value: showContext)

@@ -85,6 +85,7 @@ struct BoardView: View {
                     }
                 }
                 .padding(16)
+                .readableColumn()
             }
             .scrollIndicators(.hidden)
         }

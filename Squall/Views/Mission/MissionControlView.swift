@@ -30,6 +30,7 @@ struct MissionControlView: View {
                     handoffs
                 }
                 .padding(16)
+                .readableColumn()
             }
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)

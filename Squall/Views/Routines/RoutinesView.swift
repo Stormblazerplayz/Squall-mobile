@@ -34,6 +34,7 @@ struct RoutinesView: View {
                     }
                 }
                 .padding(16)
+                .readableColumn()
             }
             .scrollIndicators(.hidden)
         }

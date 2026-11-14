@@ -29,14 +29,20 @@ struct CallChiefView: View {
     var body: some View {
         ZStack {
             GlowBackground(topHex: Theme.goldHex, bottomHex: 0x7C5CF6)
-            VStack(spacing: 18) {
-                topBar
-                Spacer(minLength: 0)
-                center
-                Spacer(minLength: 0)
-                bottom
+            GeometryReader { geo in
+                // An iPad in landscape is wide but short, so Chief's ball shrinks a bit there.
+                let compact = geo.size.height < 760 && geo.size.width > geo.size.height
+                VStack(spacing: 18) {
+                    topBar
+                    Spacer(minLength: 0)
+                    center(compact: compact)
+                    Spacer(minLength: 0)
+                    bottom
+                }
+                .padding(20)
+                .readableColumn(Theme.callWidth)
+                .frame(width: geo.size.width, height: geo.size.height)
             }
-            .padding(20)
         }
         .task(id: phase) { @MainActor in
             await run(phase)
@@ -78,18 +84,18 @@ struct CallChiefView: View {
     }
 
     @ViewBuilder
-    private var center: some View {
-        VStack(spacing: 14) {
+    private func center(compact: Bool) -> some View {
+        VStack(spacing: compact ? 10 : 14) {
             ZStack {
                 if phase == .ringing || phase == .live {
                     Circle()
                         .stroke(Theme.gold.opacity(0.35), lineWidth: 2)
-                        .frame(width: 210, height: 210)
+                        .frame(width: compact ? 150 : 210, height: compact ? 150 : 210)
                         .scaleEffect(pulse ? 1.12 : 0.92)
                         .opacity(pulse ? 0.2 : 0.8)
                         .animation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true), value: pulse)
                 }
-                Sphere(bot: store.chief, size: 160, glow: phase == .live ? 0.85 : 0.5)
+                Sphere(bot: store.chief, size: compact ? 110 : 160, glow: phase == .live ? 0.85 : 0.5)
             }
             .onTapGesture {
                 if phase == .idle { phase = .ringing }
