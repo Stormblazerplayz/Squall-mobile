@@ -135,7 +135,7 @@ private struct CallButtons: View {
 
 private enum CallText {
     static func sub(_ a: CallActivityAttributes) -> String {
-        "\(a.botName) · " + (a.pretend ? "Pretend call" : "Squall call")
+        "\(a.botName) · Squall call"
     }
 
     static func title(_ a: CallActivityAttributes, _ s: CallActivityAttributes.ContentState) -> String {

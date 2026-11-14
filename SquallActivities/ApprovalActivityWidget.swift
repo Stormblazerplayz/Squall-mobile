@@ -35,7 +35,9 @@ struct ApprovalActivityWidget: Widget {
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     VStack(spacing: 8) {
-                        CommandChip(command: a.command)
+                        if !a.command.isEmpty {
+                            CommandChip(command: a.command)
+                        }
                         ApprovalButtons(decision: s.decision)
                     }
                     .padding(.horizontal, 4)
@@ -85,7 +87,9 @@ private struct ApprovalLockScreen: View {
                 .foregroundStyle(Palette.text.opacity(0.9))
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
-            CommandChip(command: attributes.command)
+            if !attributes.command.isEmpty {
+                CommandChip(command: attributes.command)
+            }
             ApprovalButtons(decision: state.decision)
         }
     }
@@ -161,8 +165,8 @@ private enum ApprovalText {
     static func result(_ decision: ApprovalActivityAttributes.Decision) -> String {
         switch decision {
         case .waiting: return ""
-        case .allowed: return "You allowed it. Barry is pushing the fix to a new branch."
-        case .denied: return "You said no. The fix stays on your computer."
+        case .allowed: return "You allowed it."
+        case .denied: return "You said no."
         }
     }
 }

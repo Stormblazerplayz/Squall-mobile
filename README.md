@@ -1,17 +1,17 @@
 # Squall mobile
 
-The iPhone and iPad app for Squall, Storm's AI team, built from the Squall Mobile design concepts. It's a SwiftUI app (iOS 17+) that runs on iPhone in portrait and on iPad in any direction, including landscape, with the dark, glowy look from the concepts. Everything runs on pretend data for now, so you can tap through every screen before it's linked to Squall desktop.
+The iPhone and iPad app for Squall, Storm's AI team, built from the Squall Mobile design concepts. It's a SwiftUI app (iOS 17+) that runs on iPhone in portrait and on iPad in any direction, including landscape, with the dark, glowy look from the concepts. There's no made-up data: everything it shows comes from Squall on your computer once they're paired.
 
-On first launch the app asks to pair with Squall on your computer (scan a QR code or type a 6-digit code), or you can skip and keep the pretend data. How pairing works, and a pretend desktop to test it with, are in [docs/pairing.md](docs/pairing.md).
+On first launch the app asks to pair with Squall on your computer (scan a QR code or type a 6-digit code). If you skip, or the computer stops answering, every screen shows **Not connected to your computer** with a **Pair** button. How pairing and live data work, and a test desktop to try it with, are in [docs/pairing.md](docs/pairing.md).
 
 ## Screens
 
 Tabs along the bottom:
 
 - **Team**: Chief's card (message Chief, see its steps), quick actions (new teammate, new group, routines) and the team list with unread badges. Long-press a bot, then tap the glowing Chief card to hand its work to Chief.
-- **Chat**: one-on-one chat with any bot. Bots reply, Chief shows its grouped "needs an update" error with Try again, there's a strip to jump between bots, reply chips, the Live switch and a call button.
-- **Inbox**: things that need you (Barry's push request, Fox's icon question), problems (Chief's update error) and finished work. Allow, Deny, pick, Clear, Undo, and filters.
-- **Board**: every bot as a card with Chat, Steps and hand-off, plus Starx, Sessions, Vault and To do tabs. Barry's card has Watch live.
+- **Chat**: one-on-one chat with any bot, with replies from your computer, Chief's errors with Try again, a strip to jump between bots, reply chips, the Live switch and a call button.
+- **Inbox**: things that need you (OKs and questions from your bots), problems and finished work. Allow, Deny, pick, Clear, and filters.
+- **Board**: every bot as a card with Chat, Steps and hand-off. A bot with a job running has Watch live.
 - **Routines**: routines that wake a bot on a schedule, with on/off switches. Long-press one to delete it.
 
 Screens that slide in:
@@ -19,23 +19,23 @@ Screens that slide in:
 - **New teammate** (sheet): role, name with a dice button, color, what they do, then Bring to life.
 - **Hand off to Chief** (sheet): pick what Chief should do and add a note.
 - **Routine editor**: who wakes up, what they do, when (days and time), rules, preview and next run.
-- **Live work**: watch Barry fix the Farside build step by step, with Steps, Terminal and Files tabs, the push OK, Pause, To Chief and Stop.
-- **Group chat**: pick bots, name the group, let Chief lead, then chat with @mentions.
-- **Settings**: Chief napping, safety, the Claude Code update, accent color, notifications and Clear all chats.
-- **Call Chief**: a real voice call with Chief on your computer once paired (live captions, Mute, End), or a pretend call with made-up captions until then.
+- **Live work**: watch a bot's job step by step, with Steps, Terminal and Files tabs, its OK question, a note box, Pause, To Chief and Stop.
+- **Group chat**: open one of your groups, or pick bots, name a new group, let Chief lead, then chat with @mentions.
+- **Settings**: the computer you're paired with, Chief napping, safety, the Claude Code version and update, accent color, app icon (Chief's Bolt is the normal one; Classic and five more can be picked), notifications and Clear all chats.
+- **Call Chief**: a real voice call with Chief on your computer (live captions, Mute, End). It only works while the computer is connected.
 - **Mission control** (the grid button on Team): everyone at once, Pause all, wake Chief, what needs you, recent handoffs and a jump-to search.
 
 ## Live Activities
 
 Five Live Activities show on the Lock Screen and in the Dynamic Island. Tap the **Lock Screen** button on a screen to start one, then lock your phone:
 
-- **Barry at work** (Live work): the build steps fill in, with Pause and Watch live.
-- **Chief needs your OK** (Inbox, on Barry's push): Allow or Deny right from the Lock Screen.
-- **A routine running** (Routines): counts up to 40, with Skip today.
+- **A bot at work** (Live work): the job's steps fill in, with Pause and Watch live.
+- **Chief needs your OK** (Inbox, on an ask): Allow or Deny right from the Lock Screen.
+- **A routine running** (Routines, while one runs): counts up, with Skip today.
 - **Call with Chief** (Call Chief): starts by itself when a call connects, with a timer, captions, Mute and End. Calls keep going when you leave the app or lock the phone.
 - **Whole team** (Mission control): four bots with bars, and Pause all.
 
-They use pretend data, and keep moving for about half a minute after you leave the app. Real updates will come from Squall on the computer later. If nothing shows up, turn on Live Activities for Squall in the iPhone's Settings app. The extension lives in `SquallActivities`, and the parts it shares with the app are in `Shared`.
+They only start from real data from your computer, update while the app gets new data, and end when the job is gone or the computer stops answering. If nothing shows up, turn on Live Activities for Squall in the iPhone's Settings app. The extension lives in `SquallActivities`, and the parts it shares with the app are in `Shared`.
 
 The Xcode project is made from `project.yml` by [XcodeGen](https://github.com/yonaskolb/XcodeGen), so you don't need a Mac. GitHub builds the app for you.
 
@@ -98,7 +98,9 @@ open Squall.xcodeproj
 
 - `Squall/Theme`: colors and shared pieces (glowing bot spheres, cards, buttons, status pills).
 - `Squall/Models`: bots, chat messages, routines, inbox items and app state.
-- `Squall/Store`: `SquallStore` (everything the app shows) and `SampleData` (the pretend data).
+- `Squall/Store`: `SquallStore`, which holds everything the app shows and sends what you do to the computer.
+- `Squall/Sync`: the live data format from the computer (see docs/pairing.md).
+- `Squall/Pairing`: pairing, the connection to the computer and the Keychain token.
 - `Squall/Views`: one folder per screen.
 - `Squall/LiveActivities`: starts and updates the Live Activities, and the Lock Screen button.
 - `Shared`: Live Activity data and their Lock Screen buttons (App Intents), used by the app and the extension.

@@ -6,9 +6,9 @@ import SwiftUI
 // Each Live Activity has its own attributes type, so each one gets its own
 // Lock Screen and Dynamic Island layout in the extension.
 
-// MARK: - Barry at work
+// MARK: - A bot at work
 
-/// A bot working through a job step by step (Barry fixing the Farside build).
+/// A bot working through a job step by step, from the paired computer.
 struct BuildActivityAttributes: ActivityAttributes {
     struct ContentState: Codable, Hashable {
         /// Index of the step being worked on (the last step means done).
@@ -25,7 +25,7 @@ struct BuildActivityAttributes: ActivityAttributes {
     var steps: [String]
 }
 
-// MARK: - Chief needs your OK
+// MARK: - A bot needs your OK
 
 /// A bot asking for permission, shown with Allow and Deny buttons.
 struct ApprovalActivityAttributes: ActivityAttributes {
@@ -46,7 +46,7 @@ struct ApprovalActivityAttributes: ActivityAttributes {
 
 // MARK: - A routine running
 
-/// A routine counting through its work (Chip tidying notes).
+/// A routine counting through its work, from the paired computer.
 struct RoutineActivityAttributes: ActivityAttributes {
     struct ContentState: Codable, Hashable {
         var done: Int
@@ -78,7 +78,6 @@ struct CallActivityAttributes: ActivityAttributes {
     }
 
     var botName: String
-    var pretend: Bool
 }
 
 // MARK: - Whole team

@@ -131,6 +131,23 @@ final class PairingStore: ObservableObject {
         await voiceClient.voiceEnd(computer, token: token, callId: callId, seconds: seconds)
     }
 
+    // MARK: Live data
+
+    /// Everything the app shows, straight from the computer.
+    func fetchState() async throws -> StateSnapshot {
+        guard let computer else { throw PairingError.cantReach }
+        guard let token = KeychainStore.read(account: Self.tokenAccount) else { throw PairingError.tokenRejected }
+        return try await client.state(computer, token: token)
+    }
+
+    /// Sends something you did on the phone to the computer.
+    @discardableResult
+    func send(_ action: SyncAction) async throws -> SyncActionReply {
+        guard let computer else { throw PairingError.cantReach }
+        guard let token = KeychainStore.read(account: Self.tokenAccount) else { throw PairingError.tokenRejected }
+        return try await client.action(computer, token: token, action: action)
+    }
+
     /// Forgets the computer on this phone, and asks the computer to forget this phone too.
     func unpair() async {
         guard let computer, !busy else { return }

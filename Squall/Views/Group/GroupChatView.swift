@@ -4,28 +4,14 @@ import SwiftUI
 struct GroupChatView: View {
     @EnvironmentObject private var store: SquallStore
 
-    @State private var started = false
+    /// The group chat on the computer, once it's made or picked.
+    @State private var groupID: String?
     @State private var groupName = "Build crew"
-    @State private var members: [String] = ["barry", "fox", "chip"]
+    @State private var members: [String] = []
     @State private var chiefLeads = true
-
-    @State private var messages: [ChatMessage] = []
     @State private var draft = ""
-    @State private var typing: String?
-    @State private var queue: [String] = []
-    @State private var used: [String: Int] = [:]
-    @State private var replyRun = 0
 
-    static let lines: [String: [String]] = [
-        "barry": ["On it. I'll start with the code and post what I find.", "Pushed nothing yet. I will ask you before I do."],
-        "fox": ["I can sketch three ideas and pin them here.", "Art is my part. Give me a style and I will go."],
-        "chip": ["I'll keep notes so nothing gets lost.", "Saved that to your notes under this group."],
-        "laptop": ["I can test it on Windows and tell you what breaks.", "Running it now. Results soon."],
-        "obsidian": ["I will write the docs once the plan is set.", "Docs draft is started."],
-        "starx": ["I can research how other games did this.", "Found a few good examples. Want a summary?"],
-        "coolyoda": ["Review the code I will, when ready it is.", "Spotted two bugs, I have."],
-        "sss": ["I'll take whatever is left over.", "Free now. Hand me something."]
-    ]
+    private var started: Bool { groupID != nil }
 
     var body: some View {
         ZStack {
@@ -46,11 +32,32 @@ struct GroupChatView: View {
         members.compactMap { store.bot($0) }
     }
 
+    private var messages: [ChatMessage] {
+        guard let groupID else { return [] }
+        return store.messages(for: groupID)
+    }
+
+    private var typing: String? {
+        guard let id = store.typingBotID, id == Bot.chiefID || members.contains(id) else { return nil }
+        return id
+    }
+
+    private var creating: Bool { store.isBusy("group.create") }
+
     // MARK: Pick members
 
     private var picker: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                if !store.groups.isEmpty {
+                    SectionLabel(text: "Your groups")
+                    VStack(spacing: 8) {
+                        ForEach(store.groups) { group in
+                            existingGroupRow(group)
+                        }
+                    }
+                    SectionLabel(text: "Make a new one")
+                }
                 orbit
                 SectionLabel(text: "Group name")
                 DarkField(placeholder: "Group name", text: $groupName)
@@ -74,9 +81,9 @@ struct GroupChatView: View {
         }
         .scrollIndicators(.hidden)
         .safeAreaInset(edge: .bottom) {
-            Button("Create group with \(members.count) members") { start() }
-                .buttonStyle(FilledButtonStyle(fill: members.count >= 2 ? store.accent : Color.white.opacity(0.12)))
-                .disabled(members.count < 2)
+            Button(creating ? "Making the group…" : "Create group with \(members.count) members") { start() }
+                .buttonStyle(FilledButtonStyle(fill: members.count >= 2 && !creating ? store.accent : Color.white.opacity(0.12)))
+                .disabled(members.count < 2 || creating)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
                 .background(Theme.background.opacity(0.95))
@@ -143,18 +150,49 @@ struct GroupChatView: View {
         .accessibilityAddTraits(isOn ? .isSelected : [])
     }
 
-    private func start() {
-        guard members.count >= 2 else { return }
-        if groupName.trimmingCharacters(in: .whitespaces).isEmpty { groupName = "Build crew" }
-        let names = memberBots.map(\.name)
-        var first = [
-            ChatMessage(kind: .system, author: "system", text: "You made \(groupName) with \(names.joined(separator: ", "))", time: TimeText.now())
-        ]
-        if chiefLeads {
-            first.append(ChatMessage(kind: .bot, author: Bot.chiefID, text: "Hi team. \(names.joined(separator: ", ")) are here. Tell us the goal and I will split it up.", time: TimeText.now()))
+    private func existingGroupRow(_ group: BotGroup) -> some View {
+        Button {
+            open(group)
+        } label: {
+            HStack(spacing: 10) {
+                HStack(spacing: -10) {
+                    ForEach(group.members.prefix(4).compactMap { store.bot($0) }) { bot in
+                        Sphere(bot: bot, size: 28)
+                            .overlay(Circle().stroke(Theme.background, lineWidth: 2))
+                    }
+                }
+                Text(group.name)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Theme.textBright)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Theme.muted)
+            }
+            .padding(12)
+            .glassCard(radius: 16)
+            .contentShape(Rectangle())
         }
-        messages = first
-        withAnimation { started = true }
+        .buttonStyle(.plain)
+    }
+
+    private func open(_ group: BotGroup) {
+        groupName = group.name
+        members = group.members
+        chiefLeads = group.chiefLeads
+        withAnimation { groupID = group.id }
+    }
+
+    private func start() {
+        guard members.count >= 2, !creating else { return }
+        if groupName.trimmingCharacters(in: .whitespaces).isEmpty { groupName = "Build crew" }
+        let name = groupName.trimmingCharacters(in: .whitespaces)
+        Task {
+            guard let id = await store.createGroup(name: name, members: members, chiefLeads: chiefLeads) else { return }
+            groupName = name
+            withAnimation { groupID = id }
+        }
     }
 
     // MARK: Chat
@@ -271,50 +309,8 @@ struct GroupChatView: View {
 
     private func send(_ raw: String) {
         let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
-        messages.append(ChatMessage(kind: .me, author: ChatMessage.meID, text: text, time: TimeText.now()))
+        guard !text.isEmpty, let groupID else { return }
+        store.send(text, to: groupID)
         draft = ""
-
-        let lower = text.lowercased()
-        var who = memberBots.filter { lower.contains("@" + $0.name.lowercased()) }.map(\.id)
-        if who.isEmpty || lower.contains("@everyone") {
-            who = (chiefLeads ? [Bot.chiefID] : []) + Array(members.prefix(2))
-        }
-        typing = who.first
-        queue = Array(who.dropFirst())
-        replyRun += 1
-        let run = replyRun
-        Task { @MainActor in
-            await runReplies(run)
-        }
-    }
-
-    /// Bots answer one after another. A newer message starts a new run and this one stops.
-    private func runReplies(_ run: Int) async {
-        while let id = typing {
-            try? await Task.sleep(for: .seconds(1.3))
-            guard replyRun == run, typing == id else { return }
-            messages.append(ChatMessage(kind: .bot, author: id, text: reply(for: id), time: TimeText.now()))
-            if queue.isEmpty {
-                typing = nil
-            } else {
-                typing = queue.removeFirst()
-            }
-        }
-    }
-
-    private func reply(for id: String) -> String {
-        let turn = used[id, default: 0]
-        used[id] = turn + 1
-        if id == Bot.chiefID {
-            let others = memberBots.prefix(2).map(\.name).joined(separator: " and ")
-            let options = [
-                "Here is the plan. \(others) start now, and I will check their work before it reaches you.",
-                "Got it. I will post a summary here when everyone is done."
-            ]
-            return options[turn % options.count]
-        }
-        let options = Self.lines[id] ?? ["On it."]
-        return options[turn % options.count]
     }
 }

@@ -3,7 +3,7 @@ import AppIntents
 import SwiftUI
 import WidgetKit
 
-/// A routine running: Chip counts through its work, then shows when it runs next.
+/// A routine running: a bot counts through its work, then shows when it runs next.
 struct RoutineActivityWidget: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: RoutineActivityAttributes.self) { context in

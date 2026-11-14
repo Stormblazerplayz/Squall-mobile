@@ -1,12 +1,13 @@
 import SwiftUI
 
-/// Watch Barry fix the Farside build, step by step, like a live stream.
+/// Watch a bot work, step by step, like a live stream.
+/// Everything on this screen comes from Squall on the paired computer.
 struct LiveWorkView: View {
     @EnvironmentObject private var store: SquallStore
     @Environment(\.horizontalSizeClass) private var sizeClass
-    @StateObject private var session = LiveSession()
     @State private var tab: LiveTab = .steps
-    @State private var openStep: Int? = 3
+    /// The step you opened. nil follows the step being worked on; -1 closes them all.
+    @State private var openStep: Int?
     @State private var note = ""
     @State private var stopArmed = false
 
@@ -16,154 +17,237 @@ struct LiveWorkView: View {
 
     var body: some View {
         ZStack {
-            GlowBackground(topHex: 0x3B87D6)
-            VStack(spacing: 12) {
-                header
-                taskCard
-                if sizeClass == .regular {
-                    // iPad: steps, terminal and files all at once.
-                    wideContent
-                } else {
-                    PillSegments(
-                        options: [
-                            (label: "Steps \(LiveSession.steps.count)", value: LiveTab.steps),
-                            (label: "Terminal \(session.logs.count)", value: LiveTab.terminal),
-                            (label: "Files \(LiveSession.files.count)", value: LiveTab.files)
-                        ],
-                        selection: $tab
-                    )
-                    content
+            GlowBackground(topHex: tint)
+            if let work = store.currentWork {
+                VStack(spacing: 12) {
+                    header(work)
+                    taskCard(work)
+                    if sizeClass == .regular {
+                        // iPad: steps, terminal and files all at once.
+                        wideContent(work)
+                    } else {
+                        PillSegments(
+                            options: [
+                                (label: "Steps \(work.steps.count)", value: LiveTab.steps),
+                                (label: "Terminal \(work.terminal.count)", value: LiveTab.terminal),
+                                (label: "Files \(work.files.count)", value: LiveTab.files)
+                            ],
+                            selection: $tab
+                        )
+                        content(work)
+                    }
+                    bottomBar(work)
                 }
-                bottomBar
-            }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 8)
-            .readableColumn(sizeClass == .regular ? 1300 : Theme.readableWidth)
-        }
-        .onAppear {
-            session.sync(with: store.pushDecision)
-            if store.handed.contains("barry") { session.handToChief() }
-        }
-        .task { @MainActor in
-            // One tick a second while this screen is open.
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(1))
-                if session.tick() {
-                    store.showToast("Barry finished. Pull request is ready.")
-                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 8)
+                .readableColumn(sizeClass == .regular ? 1300 : Theme.readableWidth)
+            } else {
+                emptyState
             }
         }
-        .onChange(of: store.pushDecision) {
-            session.sync(with: store.pushDecision)
-        }
-        .onChange(of: store.handed) {
-            if store.handed.contains("barry") { session.handToChief() }
-        }
-        .onChange(of: session.phase) {
+        .onChange(of: store.currentWork?.state) {
             stopArmed = false
         }
-        // Pause on the Lock Screen pauses this screen too, and the other way round.
-        .onChange(of: session.paused) {
-            LiveActivities.shared.setBuildPaused(session.paused)
+        .onChange(of: store.currentWork?.id) {
+            openStep = nil
+            stopArmed = false
         }
-        .onChange(of: store.activityCommand) { _, command in
-            guard let command else { return }
-            switch command.action {
-            case .pauseBuild where session.phase == .working,
-                 .resumeBuild where session.phase == .paused:
-                session.togglePause()
-            default:
-                break
+    }
+
+    private var tint: UInt32 {
+        guard let work = store.currentWork, let bot = store.bot(work.botID) else { return 0x3B87D6 }
+        return bot.hex
+    }
+
+    // MARK: Nothing running
+
+    private var emptyState: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "dot.radiowaves.left.and.right")
+                .font(.system(size: 34, weight: .semibold))
+                .foregroundStyle(Theme.sub)
+                .frame(width: 84, height: 84)
+                .background(Circle().fill(Theme.field))
+                .accessibilityHidden(true)
+            Text("Nothing running right now")
+                .font(.system(size: 20, weight: .bold))
+                .foregroundStyle(Theme.textBright)
+            Text("When a bot starts a job on your computer, you can watch it here.")
+                .font(.system(size: 14))
+                .foregroundStyle(Theme.sub)
+                .multilineTextAlignment(.center)
+            Button("Back to the team") {
+                if !store.path.isEmpty { store.path.removeLast() }
+                store.tab = .team
             }
+            .buttonStyle(GhostButtonStyle(height: 44, expand: false))
+            .padding(.top, 4)
         }
+        .padding(24)
+        .readableColumn(460)
     }
 
     // MARK: Header and task
 
-    private var header: some View {
-        HStack(spacing: 10) {
-            Sphere(hex: 0x3B87D6, letter: "B", size: 40)
+    private func header(_ work: LiveWork) -> some View {
+        let bot = store.bot(work.botID)
+        let name = bot?.name ?? "Your bot"
+        return HStack(spacing: 10) {
+            Sphere(hex: bot?.hex ?? 0x3B87D6, letter: bot?.letter ?? String(name.prefix(1)).uppercased(), size: 40)
             VStack(alignment: .leading, spacing: 2) {
-                Text("Barry")
+                Text(name)
                     .font(.system(size: 17, weight: .bold))
                     .foregroundStyle(Theme.textBright)
-                StatusPill(status: session.phase.status, text: session.phase.label)
+                    .lineLimit(1)
+                StatusPill(status: work.state.status, text: work.state.label)
             }
             Spacer()
-            HStack(spacing: 6) {
-                Circle().fill(session.phase == .working ? Theme.redSoft : Theme.muted).frame(width: 8, height: 8)
-                Text(TimeText.stopwatch(session.elapsed))
-                    .font(Theme.mono(14))
-                    .foregroundStyle(Theme.text)
-                    .monospacedDigit()
+            if let startedAt = work.startedAt, work.state.isRunning {
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    let seconds = max(Int(context.date.timeIntervalSince(startedAt)), 0)
+                    HStack(spacing: 6) {
+                        Circle()
+                            .fill(work.state == .working ? Theme.redSoft : Theme.muted)
+                            .frame(width: 8, height: 8)
+                        Text(TimeText.stopwatch(seconds))
+                            .font(Theme.mono(14))
+                            .foregroundStyle(Theme.text)
+                            .monospacedDigit()
+                    }
+                    .padding(.horizontal, 10)
+                    .frame(height: 32)
+                    .background(Capsule().fill(Theme.field))
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("Working for \(seconds / 60) minutes")
+                }
             }
-            .padding(.horizontal, 10)
-            .frame(height: 32)
-            .background(Capsule().fill(Theme.field))
-            .accessibilityLabel("Working for \(session.elapsed / 60) minutes")
-            LockScreenButton(kind: .build, compact: sizeClass != .regular) {
-                LiveActivities.shared.startBuild()
+            if work.state.isRunning, !work.steps.isEmpty {
+                LockScreenButton(kind: .build, compact: sizeClass != .regular) {
+                    LiveActivities.shared.startBuild(work, bot: bot)
+                }
             }
         }
         .padding(.top, 6)
     }
 
-    private var taskCard: some View {
+    private func taskCard(_ work: LiveWork) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("TASK FROM CHIEF")
+                Text(work.from.isEmpty ? "TASK" : "TASK FROM \(work.from.uppercased())")
                     .font(.system(size: 11, weight: .bold))
                     .tracking(0.9)
                     .foregroundStyle(Theme.goldText)
+                    .lineLimit(1)
                 Spacer()
-                Text("Step \(min(session.at + 1, LiveSession.steps.count)) of \(LiveSession.steps.count)")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Theme.sub)
+                if !work.steps.isEmpty {
+                    Text("Step \(min(work.currentStep + 1, work.steps.count)) of \(work.steps.count)")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Theme.sub)
+                }
             }
-            Text("Fix the Farside build")
+            Text(work.title)
                 .font(.system(size: 18, weight: .bold))
                 .foregroundStyle(Theme.textBright)
-            ProgressView(value: session.progress)
-                .tint(Color(hex: 0x3B87D6))
-            Text(session.nowLine)
-                .font(.system(size: 13))
-                .foregroundStyle(Theme.sub)
-            if session.phase == .done {
-                Label("Done. The pull request is ready for you.", systemImage: "checkmark.circle.fill")
+            ProgressView(value: work.progress)
+                .tint(Color(hex: tint))
+            if !work.now.isEmpty {
+                Text(work.now)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.sub)
+            }
+            switch work.state {
+            case .done:
+                Label("Done.", systemImage: "checkmark.circle.fill")
                     .font(.system(size: 13.5, weight: .semibold))
                     .foregroundStyle(Theme.greenText)
+            case .stopped:
+                Label("Stopped.", systemImage: "stop.circle.fill")
+                    .font(.system(size: 13.5, weight: .semibold))
+                    .foregroundStyle(Theme.redText)
+            default:
+                EmptyView()
             }
+            askCard(work)
         }
         .padding(14)
-        .glassCard(radius: 18, tint: 0x3B87D6, strength: 0.14)
+        .glassCard(radius: 18, tint: tint, strength: 0.14)
+    }
+
+    /// Shows the Inbox question this job is waiting on, with its answer buttons.
+    @ViewBuilder
+    private func askCard(_ work: LiveWork) -> some View {
+        if let askID = work.askID, let item = store.inbox.first(where: { $0.id == askID }) {
+            let busy = store.isBusy("inbox.\(askID)")
+            VStack(alignment: .leading, spacing: 10) {
+                Text(item.title)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Theme.textBright)
+                if !item.body.isEmpty {
+                    Text(item.body)
+                        .font(.system(size: 13.5))
+                        .foregroundStyle(Theme.text)
+                }
+                if let command = item.command, !command.isEmpty {
+                    Text(command)
+                        .font(Theme.mono(12))
+                        .foregroundStyle(Theme.commandText)
+                        .padding(8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(RoundedRectangle(cornerRadius: 8).fill(Color.black.opacity(0.35)))
+                }
+                switch item.kind {
+                case .ask:
+                    HStack(spacing: 8) {
+                        Button("Allow") { store.answer(askID, with: "allow") }
+                            .buttonStyle(FilledButtonStyle(fill: Theme.green.opacity(0.85), foreground: Theme.darkInk, height: 40))
+                        Button("Deny") { store.answer(askID, with: "deny") }
+                            .buttonStyle(GhostButtonStyle(height: 40))
+                    }
+                    .disabled(busy)
+                case .choice(let options):
+                    HStack(spacing: 8) {
+                        ForEach(options, id: \.self) { option in
+                            Button(option) { store.answer(askID, with: option) }
+                                .buttonStyle(GhostButtonStyle(height: 40, fontSize: 13))
+                        }
+                    }
+                    .disabled(busy)
+                default:
+                    EmptyView()
+                }
+            }
+            .padding(12)
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Theme.gold.opacity(0.12)))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Theme.goldBright.opacity(0.4), lineWidth: 1))
+        }
     }
 
     // MARK: Tabs
 
     @ViewBuilder
-    private var content: some View {
+    private func content(_ work: LiveWork) -> some View {
         switch tab {
         case .steps:
-            stepsList
+            stepsList(work)
         case .terminal:
-            terminalPanel
+            terminalPanel(work)
         case .files:
-            filesList
+            filesList(work)
         }
     }
 
     /// iPad: steps on the left; terminal and files stacked on the right.
-    private var wideContent: some View {
+    private func wideContent(_ work: LiveWork) -> some View {
         HStack(alignment: .top, spacing: 14) {
-            panel("Steps \(LiveSession.steps.count)") {
-                stepsList
+            panel("Steps \(work.steps.count)") {
+                stepsList(work)
             }
             VStack(spacing: 14) {
-                panel("Terminal \(session.logs.count)") {
-                    terminalPanel
+                panel("Terminal \(work.terminal.count)") {
+                    terminalPanel(work)
                 }
-                panel("Files \(LiveSession.files.count)") {
-                    filesList
+                panel("Files \(work.files.count)") {
+                    filesList(work)
                 }
                 .frame(height: 220)
             }
@@ -179,66 +263,91 @@ struct LiveWorkView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
-    private var stepsList: some View {
-        ScrollView {
-            VStack(spacing: 8) {
-                ForEach(LiveSession.steps.indices, id: \.self) { index in
-                    stepRow(index)
-                }
-            }
+    private func emptyPanel(_ text: String) -> some View {
+        VStack {
+            Text(text)
+                .font(.system(size: 13.5))
+                .foregroundStyle(Theme.muted)
+                .frame(maxWidth: .infinity, minHeight: 80)
+                .glassCard(radius: 14)
+            Spacer(minLength: 0)
         }
-        .scrollIndicators(.hidden)
     }
 
-    private var terminalPanel: some View {
-        ScrollViewReader { proxy in
+    @ViewBuilder
+    private func stepsList(_ work: LiveWork) -> some View {
+        if work.steps.isEmpty {
+            emptyPanel("No steps yet.")
+        } else {
             ScrollView {
-                VStack(alignment: .leading, spacing: 4) {
-                    ForEach(session.logs.indices, id: \.self) { index in
-                        let line = session.logs[index]
-                        Text(line.text)
-                            .font(Theme.mono(12))
-                            .foregroundStyle(line.kind.color)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .id(index)
+                VStack(spacing: 8) {
+                    ForEach(work.steps.indices, id: \.self) { index in
+                        stepRow(work.steps[index], index: index)
                     }
                 }
-                .padding(12)
             }
-            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.black.opacity(0.4)))
-            .onChange(of: session.logs.count) {
-                withAnimation { proxy.scrollTo(session.logs.count - 1, anchor: .bottom) }
-            }
-            .onAppear { proxy.scrollTo(session.logs.count - 1, anchor: .bottom) }
+            .scrollIndicators(.hidden)
         }
     }
 
-    private var filesList: some View {
-        ScrollView {
-            VStack(spacing: 8) {
-                ForEach(LiveSession.files.indices, id: \.self) { index in
-                    fileRow(LiveSession.files[index], edited: index == 0)
+    @ViewBuilder
+    private func terminalPanel(_ work: LiveWork) -> some View {
+        if work.terminal.isEmpty {
+            emptyPanel("No terminal output yet.")
+        } else {
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(work.terminal.indices, id: \.self) { index in
+                            let line = work.terminal[index]
+                            Text(line.text)
+                                .font(Theme.mono(12))
+                                .foregroundStyle(line.kind.color)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .id(index)
+                        }
+                    }
+                    .padding(12)
+                }
+                .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.black.opacity(0.4)))
+                .onChange(of: work.terminal.count) {
+                    withAnimation { proxy.scrollTo(work.terminal.count - 1, anchor: .bottom) }
+                }
+                .onAppear { proxy.scrollTo(work.terminal.count - 1, anchor: .bottom) }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func filesList(_ work: LiveWork) -> some View {
+        if work.files.isEmpty {
+            emptyPanel("No files touched yet.")
+        } else {
+            ScrollView {
+                VStack(spacing: 8) {
+                    ForEach(work.files.indices, id: \.self) { index in
+                        fileRow(work.files[index], done: work.state == .done)
+                    }
                 }
             }
+            .scrollIndicators(.hidden)
         }
-        .scrollIndicators(.hidden)
     }
 
-    private func stepRow(_ index: Int) -> some View {
-        let step = LiveSession.steps[index]
-        let state = session.state(of: index)
-        let isOpen = openStep == index && state != .future
+    private func stepRow(_ step: LiveWork.Step, index: Int) -> some View {
+        let isOpen = openStep == index || (openStep == nil && step.state == .now)
         return VStack(alignment: .leading, spacing: 8) {
             Button {
-                withAnimation { openStep = openStep == index ? nil : index }
+                withAnimation { openStep = isOpen ? -1 : index }
             } label: {
                 HStack(spacing: 10) {
-                    stepIcon(state)
+                    stepIcon(step.state)
                     Text(step.title)
                         .font(.system(size: 14.5, weight: .semibold))
-                        .foregroundStyle(state == .future ? Theme.muted : Theme.textBright)
+                        .foregroundStyle(step.state == .todo ? Theme.muted : Theme.textBright)
+                        .multilineTextAlignment(.leading)
                     Spacer()
-                    if !step.took.isEmpty, state == .done {
+                    if !step.took.isEmpty, step.state == .done {
                         Text(step.took)
                             .font(.system(size: 12))
                             .foregroundStyle(Theme.muted)
@@ -248,12 +357,9 @@ struct LiveWorkView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .disabled(step.lines.isEmpty)
 
-            if step.isAsk, state == .now {
-                askCard
-            } else if step.isAsk, state == .future, session.phase != .done {
-                EmptyView()
-            } else if isOpen {
+            if isOpen, !step.lines.isEmpty {
                 VStack(alignment: .leading, spacing: 3) {
                     ForEach(step.lines.indices, id: \.self) { lineIndex in
                         let line = step.lines[lineIndex]
@@ -270,17 +376,17 @@ struct LiveWorkView: View {
             }
         }
         .padding(12)
-        .glassCard(radius: 14, tint: state == .now ? 0x3B87D6 : nil, strength: 0.14)
+        .glassCard(radius: 14, tint: step.state == .now ? tint : nil, strength: 0.14)
     }
 
-    private func stepIcon(_ state: LiveSession.StepState) -> some View {
+    private func stepIcon(_ state: LiveWork.StepState) -> some View {
         Group {
             switch state {
             case .done:
                 Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.green)
             case .now:
                 Image(systemName: "circle.dotted.circle").foregroundStyle(Color(hex: 0x6FB0F0))
-            case .future:
+            case .todo:
                 Image(systemName: "circle").foregroundStyle(Theme.muted)
             }
         }
@@ -288,62 +394,27 @@ struct LiveWorkView: View {
         .frame(width: 20)
     }
 
-    @ViewBuilder
-    private var askCard: some View {
-        if session.phase == .ask {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Barry wants to push this fix to a new branch called fix/ci-setup. Nothing goes to main.")
-                    .font(.system(size: 13.5))
-                    .foregroundStyle(Theme.text)
-                if session.askOpen {
-                    HStack(spacing: 8) {
-                        Button("Allow") { store.allowPush() }
-                            .buttonStyle(FilledButtonStyle(fill: Theme.green.opacity(0.85), foreground: Theme.darkInk, height: 40))
-                        Button("Not now") { session.askOpen = false }
-                            .buttonStyle(GhostButtonStyle(height: 40))
-                    }
-                } else if session.denied {
-                    Text("You said no. The fix stays on your computer.")
-                        .font(.system(size: 13))
-                        .foregroundStyle(Theme.goldText)
-                } else {
-                    HStack {
-                        Text("Barry is waiting for your OK.")
-                            .font(.system(size: 13))
-                            .foregroundStyle(Theme.goldText)
-                        Spacer()
-                        Button("Review") { session.askOpen = true }
-                            .buttonStyle(GhostButtonStyle(height: 34, expand: false, fontSize: 13))
-                    }
-                }
-            }
-            .padding(12)
-            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Theme.gold.opacity(0.12)))
-            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Theme.goldBright.opacity(0.4), lineWidth: 1))
-        }
-    }
-
-    private func fileRow(_ file: LiveSession.FileChange, edited: Bool) -> some View {
+    private func fileRow(_ file: LiveWork.File, done: Bool) -> some View {
         HStack(spacing: 10) {
-            Image(systemName: edited ? "pencil" : "doc.text")
+            Image(systemName: file.edited ? "pencil" : "doc.text")
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(edited ? Theme.greenText : Theme.grayText)
+                .foregroundStyle(file.edited ? Theme.greenText : Theme.grayText)
                 .frame(width: 32, height: 32)
-                .background(RoundedRectangle(cornerRadius: 8).fill(edited ? Theme.green.opacity(0.12) : Theme.field))
+                .background(RoundedRectangle(cornerRadius: 8).fill(file.edited ? Theme.green.opacity(0.12) : Theme.field))
             VStack(alignment: .leading, spacing: 2) {
-                Text(file.name)
+                Text(file.path)
                     .font(Theme.mono(12.5))
                     .foregroundStyle(Theme.text)
                     .lineLimit(1)
                     .truncationMode(.middle)
-                Text(edited ? (session.at >= 4 ? "Edited" : "Editing now") : "Read only")
+                Text(file.edited ? (done ? "Edited" : "Editing") : "Read only")
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.sub)
             }
             Spacer()
-            Text(file.delta)
+            Text(file.change)
                 .font(Theme.mono(12))
-                .foregroundStyle(edited ? Theme.greenText : Theme.muted)
+                .foregroundStyle(file.edited ? Theme.greenText : Theme.muted)
         }
         .padding(12)
         .glassCard(radius: 14)
@@ -351,337 +422,71 @@ struct LiveWorkView: View {
 
     // MARK: Bottom bar
 
-    private var bottomBar: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 8) {
-                TextField("", text: $note, prompt: Text("Tell Barry something...").foregroundStyle(Theme.muted))
-                    .font(.system(size: 14.5))
-                    .foregroundStyle(Theme.text)
-                    .submitLabel(.send)
-                    .onSubmit(sendNote)
-                    .padding(.horizontal, 14)
-                    .frame(height: 42)
-                    .background(RoundedRectangle(cornerRadius: 21, style: .continuous).fill(Theme.field))
-                Button(action: sendNote) {
-                    Image(systemName: "arrow.up")
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(.white)
-                        .frame(width: 42, height: 42)
-                        .background(Circle().fill(store.accent))
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Send to Barry")
-            }
-            HStack(spacing: 8) {
-                switch session.phase {
-                case .stopped, .handed, .done:
-                    Button("Restart") { session.restart() }
-                        .buttonStyle(GhostButtonStyle(height: 40, fontSize: 14))
-                default:
-                    Button(session.phase == .paused ? "Resume" : "Pause") { session.togglePause() }
-                        .buttonStyle(GhostButtonStyle(height: 40, fontSize: 14))
-                        .disabled(session.phase == .ask)
-                    Button("To Chief") {
-                        store.startHandoff("barry")
+    private func bottomBar(_ work: LiveWork) -> some View {
+        let name = store.bot(work.botID)?.name ?? "your bot"
+        let busy = store.isBusy("work.\(work.id)")
+        return VStack(spacing: 8) {
+            if work.state.isRunning {
+                HStack(spacing: 8) {
+                    TextField("", text: $note, prompt: Text("Tell \(name) something...").foregroundStyle(Theme.muted))
+                        .font(.system(size: 14.5))
+                        .foregroundStyle(Theme.text)
+                        .submitLabel(.send)
+                        .onSubmit { sendNote(work) }
+                        .padding(.horizontal, 14)
+                        .frame(height: 42)
+                        .background(RoundedRectangle(cornerRadius: 21, style: .continuous).fill(Theme.field))
+                    Button {
+                        sendNote(work)
+                    } label: {
+                        Image(systemName: "arrow.up")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 42, height: 42)
+                            .background(Circle().fill(store.accent))
                     }
-                    .buttonStyle(GhostButtonStyle(height: 40, foreground: Theme.goldText, fontSize: 14))
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Send to \(name)")
+                }
+                HStack(spacing: 8) {
+                    Button(work.state == .paused ? "Resume" : "Pause") {
+                        let pause = work.state != .paused
+                        store.setWorkPaused(work.id, paused: pause)
+                        LiveActivities.shared.setBuildPaused(pause)
+                    }
+                    .buttonStyle(GhostButtonStyle(height: 40, fontSize: 14))
+                    .disabled(work.state == .waiting || busy)
+                    if work.botID != Bot.chiefID {
+                        Button("To Chief") {
+                            store.startHandoff(work.botID)
+                        }
+                        .buttonStyle(GhostButtonStyle(height: 40, foreground: Theme.goldText, fontSize: 14))
+                    }
                     Button(stopArmed ? "Sure?" : "Stop") {
                         if stopArmed {
-                            session.stop()
+                            stopArmed = false
+                            store.stopWork(work.id)
                         } else {
                             stopArmed = true
                         }
                     }
                     .buttonStyle(GhostButtonStyle(height: 40, foreground: Theme.redText, border: Theme.red.opacity(0.5), fontSize: 14))
+                    .disabled(busy)
                 }
+            } else {
+                Button("Open chat with \(name)") {
+                    store.openChat(work.botID)
+                }
+                .buttonStyle(GhostButtonStyle(height: 42, fontSize: 14))
             }
         }
     }
 
-    private func sendNote() {
+    private func sendNote(_ work: LiveWork) {
         let text = note.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
-        session.addNote(text)
+        store.sendNote(text, to: work.id)
         note = ""
         tab = .terminal
-    }
-}
-
-/// The pretend work session behind the Live work screen.
-@MainActor
-final class LiveSession: ObservableObject {
-    enum Phase: Equatable {
-        case working, ask, paused, done, stopped, handed
-
-        var label: String {
-            switch self {
-            case .working: return "Working"
-            case .ask: return "Waiting for you"
-            case .paused: return "Paused"
-            case .done: return "Done"
-            case .stopped: return "Stopped"
-            case .handed: return "Handed to Chief"
-            }
-        }
-
-        var status: BotStatus {
-            switch self {
-            case .working, .done: return .working
-            case .ask: return .waiting
-            case .paused, .stopped: return .paused
-            case .handed: return .handed
-            }
-        }
-    }
-
-    enum StepState: Equatable {
-        case done, now, future
-    }
-
-    enum LineKind: Equatable {
-        case cmd, ok, warn, err, dim, text, add, del
-
-        var color: Color {
-            switch self {
-            case .add, .ok: return Theme.greenText
-            case .del, .err: return Theme.redText
-            case .cmd: return Theme.commandText
-            case .warn: return Theme.goldText
-            case .text: return Color(hex: 0xE6E4F2)
-            case .dim: return Theme.label
-            }
-        }
-
-        var background: Color {
-            switch self {
-            case .add: return Theme.green.opacity(0.1)
-            case .del: return Theme.red.opacity(0.1)
-            default: return .clear
-            }
-        }
-    }
-
-    struct Line: Equatable {
-        var text: String
-        var kind: LineKind
-    }
-
-    struct Step {
-        var title: String
-        var took: String
-        var isAsk = false
-        var lines: [Line]
-    }
-
-    struct FileChange {
-        var name: String
-        var delta: String
-    }
-
-    static let steps: [Step] = [
-        Step(title: "Read the build workflow", took: "18s", lines: [
-            Line(text: "Read .github/workflows/linux-tests.yml", kind: .dim),
-            Line(text: "Read tools/ci/check_suite_clocks.sh", kind: .dim)
-        ]),
-        Step(title: "Found the problem", took: "41s", lines: [
-            Line(text: "Every job stops after about 4 seconds.", kind: .text),
-            Line(text: "The setup step asks for a runner that does not exist, so no code ever runs.", kind: .text)
-        ]),
-        Step(title: "Checked the tests still pass", took: "1m 12s", lines: [
-            Line(text: "$ ctest --output-on-failure", kind: .cmd),
-            Line(text: "All tests passed", kind: .ok)
-        ]),
-        Step(title: "Fixing linux-tests.yml", took: "", lines: [
-            Line(text: "@@ jobs.build", kind: .dim),
-            Line(text: "-   runs-on: farside-linux-big", kind: .del),
-            Line(text: "+   runs-on: ubuntu-latest", kind: .add),
-            Line(text: "+   timeout-minutes: 30", kind: .add)
-        ]),
-        Step(title: "Push the fix to a new branch", took: "", isAsk: true, lines: []),
-        Step(title: "Open a pull request for you", took: "", lines: [
-            Line(text: "Pull request: Fix CI runner in linux-tests", kind: .text),
-            Line(text: "Waiting for your review", kind: .dim)
-        ])
-    ]
-
-    static let files: [FileChange] = [
-        FileChange(name: ".github/workflows/linux-tests.yml", delta: "+2 -1"),
-        FileChange(name: "tools/ci/check_suite_clocks.sh", delta: "read"),
-        FileChange(name: "runner/src/main.cpp", delta: "read")
-    ]
-
-    static let baseLogs: [Line] = [
-        Line(text: "$ cat .github/workflows/linux-tests.yml", kind: .cmd),
-        Line(text: "runs-on: farside-linux-big", kind: .dim),
-        Line(text: "$ gh run view --log-failed", kind: .cmd),
-        Line(text: "Waiting for a runner to pick up this job...", kind: .warn),
-        Line(text: "Job stopped after 4s", kind: .err),
-        Line(text: "$ ctest --output-on-failure", kind: .cmd),
-        Line(text: "All tests passed", kind: .ok)
-    ]
-
-    static let pool: [Line] = [
-        Line(text: "$ git diff --stat", kind: .cmd),
-        Line(text: " .github/workflows/linux-tests.yml | 3 ++-", kind: .dim),
-        Line(text: "$ yamllint .github/workflows/linux-tests.yml", kind: .cmd),
-        Line(text: "ok, no problems found", kind: .ok),
-        Line(text: "$ act -j build --dryrun", kind: .cmd),
-        Line(text: "setup runner ... ok", kind: .ok),
-        Line(text: "checkout ... ok", kind: .ok),
-        Line(text: "configure ... ok", kind: .ok),
-        Line(text: "build ... ok", kind: .ok)
-    ]
-
-    static let afterAllow: [Line] = [
-        Line(text: "$ git switch -c fix/ci-setup", kind: .cmd),
-        Line(text: "Switched to a new branch 'fix/ci-setup'", kind: .dim),
-        Line(text: "$ git push -u origin fix/ci-setup", kind: .cmd),
-        Line(text: "branch pushed", kind: .ok),
-        Line(text: "$ gh pr create --draft", kind: .cmd),
-        Line(text: "draft pull request opened", kind: .ok)
-    ]
-
-    @Published var at = 3
-    @Published var elapsed = 252
-    @Published var poolShown = 0
-    @Published var allowShown = 0
-    @Published var allowed = false
-    @Published var denied = false
-    @Published var paused = false
-    @Published var stopped = false
-    @Published var handed = false
-    @Published var askOpen = true
-    @Published var notes: [String] = []
-    private var ticks = 0
-
-    var phase: Phase {
-        if stopped { return .stopped }
-        if handed { return .handed }
-        if at >= 6 { return .done }
-        if at == 4 && !allowed { return .ask }
-        if paused { return .paused }
-        return .working
-    }
-
-    var logs: [Line] {
-        var all = Self.baseLogs + Array(Self.pool.prefix(poolShown)) + Array(Self.afterAllow.prefix(allowShown))
-        all += notes.map { Line(text: "# Storm: \($0)", kind: .warn) }
-        if denied { all.append(Line(text: "Push cancelled. Fix kept on your computer.", kind: .warn)) }
-        if stopped { all.append(Line(text: "Stopped by Storm", kind: .err)) }
-        if handed { all.append(Line(text: "Handed to Chief", kind: .warn)) }
-        return all
-    }
-
-    var progress: Double {
-        let count = Double(Self.steps.count)
-        var value = Double(at) / count
-        if phase == .working && at == 3 { value += min(0.14, Double(poolShown) * 0.015) }
-        if phase == .working && at == 5 { value += min(0.14, Double(allowShown) * 0.022) }
-        if phase == .done { value = 1 }
-        return min(value, 1)
-    }
-
-    var nowLine: String {
-        switch phase {
-        case .stopped: return "Stopped. Nothing was pushed."
-        case .handed: return "Chief is picking this up."
-        case .done: return "Pull request: Fix CI runner in linux-tests"
-        case .paused: return "Paused. Barry will wait until you resume."
-        default:
-            if at == 4 { return denied ? "You said no. The fix stays on your computer." : "Waiting for you to OK the push" }
-            if at == 5 { return "Pushing the branch and opening a pull request" }
-            return "Changing the runner so the build can start"
-        }
-    }
-
-    func state(of index: Int) -> StepState {
-        if phase == .done || index < at { return .done }
-        if index == at { return .now }
-        return .future
-    }
-
-    /// Moves the session on by one second. Returns true when it just finished.
-    func tick() -> Bool {
-        let current = phase
-        guard current == .working || current == .ask else { return false }
-        elapsed += 1
-        guard current == .working else { return false }
-        ticks += 1
-        if at == 3 {
-            if ticks % 2 == 0, poolShown < Self.pool.count { poolShown += 1 }
-            if ticks >= 18 {
-                at = 4
-                ticks = 0
-                askOpen = true
-            }
-        } else if at == 5 {
-            if allowShown < Self.afterAllow.count { allowShown += 1 }
-            if ticks >= 9 {
-                at = 6
-                allowShown = Self.afterAllow.count
-                return true
-            }
-        }
-        return false
-    }
-
-    /// Follows what you decided in the Inbox, the call or Mission control.
-    func sync(with decision: PushDecision?) {
-        switch decision {
-        case .allowed:
-            guard !allowed else { return }
-            allowed = true
-            denied = false
-            poolShown = Self.pool.count
-            if at < 5 {
-                at = 5
-                ticks = 0
-            }
-            paused = false
-            askOpen = false
-        case .denied:
-            denied = true
-            askOpen = false
-        case nil:
-            if allowed && at < 6 {
-                // The push was undone.
-                allowed = false
-                at = 4
-                allowShown = 0
-                askOpen = true
-            }
-            denied = false
-        }
-    }
-
-    func togglePause() {
-        paused.toggle()
-    }
-
-    func stop() {
-        stopped = true
-    }
-
-    func handToChief() {
-        handed = true
-    }
-
-    func addNote(_ text: String) {
-        notes.append(text)
-    }
-
-    func restart() {
-        at = 3
-        ticks = 0
-        elapsed = 252
-        poolShown = 0
-        allowShown = 0
-        allowed = false
-        denied = false
-        paused = false
-        stopped = false
-        handed = false
-        askOpen = true
-        notes = []
     }
 }

@@ -3,9 +3,9 @@ import SwiftUI
 import UIKit
 
 /// Starts and updates the five Live Activities from the app.
-/// They use pretend data for now. Each one moves along on its own for a while,
-/// so you can lock the phone and watch it on the Lock Screen and in the Dynamic Island.
-/// Real updates will come from Squall on the computer later.
+/// Every one is built from real data from the paired computer: you start it with a
+/// Lock Screen button, and each update from the computer moves it along.
+/// They all end when the app loses the computer.
 @MainActor
 final class LiveActivities: ObservableObject {
     static let shared = LiveActivities()
@@ -17,11 +17,23 @@ final class LiveActivities: ObservableObject {
     /// Which activities are showing right now, so buttons can say "On Lock Screen".
     @Published private(set) var running: Set<Kind> = []
 
-    private var drivers: [Kind: Task<Void, Never>] = [:]
+    // What each activity is about, saved so it still works after the app restarts.
+    private static let buildKey = "squall.activity.buildWork"
+    private static let approvalKey = "squall.activity.approvalItem"
+    private static let routineKey = "squall.activity.routine"
+    private static let teamKey = "squall.activity.teamBots"
 
     private init() {
         refresh()
     }
+
+    /// The live job the build activity follows.
+    var buildWorkID: String? { UserDefaults.standard.string(forKey: Self.buildKey) }
+    /// The Inbox item the approval activity asks about.
+    var approvalItemID: String? { UserDefaults.standard.string(forKey: Self.approvalKey) }
+    /// The routine the routine activity counts.
+    var routineID: String? { UserDefaults.standard.string(forKey: Self.routineKey) }
+    private var teamBotIDs: [String] { UserDefaults.standard.stringArray(forKey: Self.teamKey) ?? [] }
 
     /// False when Live Activities are off for Squall in the iPhone's Settings (or not on this device).
     var enabled: Bool {
@@ -41,8 +53,6 @@ final class LiveActivities: ObservableObject {
 
     /// Takes one activity off the Lock Screen.
     func stop(_ kind: Kind) {
-        drivers[kind]?.cancel()
-        drivers[kind] = nil
         running.remove(kind)
         Task {
             switch kind {
@@ -56,46 +66,44 @@ final class LiveActivities: ObservableObject {
         }
     }
 
-    // MARK: - Barry at work
+    /// Takes everything off the Lock Screen, for when the computer is gone.
+    /// A call that's still going keeps its own activity until it ends.
+    func stopAll() {
+        for kind in [Kind.build, .approval, .routine, .team] where running.contains(kind) {
+            stop(kind)
+        }
+    }
 
-    static let buildSteps = [
-        "Reading the error log",
-        "Finding the bad runner",
-        "Fixing the setup step",
-        "Running the build test",
-        "Build passes"
-    ]
+    // MARK: - A bot at work
 
     @discardableResult
-    func startBuild() -> Bool {
+    func startBuild(_ work: LiveWork, bot: Bot?) -> Bool {
+        guard !work.steps.isEmpty, work.state.isRunning else { return false }
+        let name = bot?.name ?? "Your bot"
         let attributes = BuildActivityAttributes(
-            botName: "Barry",
-            botRole: "Coder",
-            letter: "B",
-            hex: 0x3B87D6,
-            title: "Fixing the Farside build",
-            steps: Self.buildSteps
+            botName: name,
+            botRole: bot?.role ?? "Teammate",
+            letter: bot?.letter ?? String(name.prefix(1)).uppercased(),
+            hex: bot?.hex ?? 0x3B87D6,
+            title: work.title,
+            steps: work.steps.map(\.title)
         )
-        let state = BuildActivityAttributes.ContentState(step: 0, paused: false, done: false)
-        guard begin(.build, attributes: attributes, state: state) else { return false }
-        drive(.build, every: 6) {
-            guard let activity = Self.current(BuildActivityAttributes.self) else { return false }
-            var state = activity.content.state
-            if state.done { return false }
-            if state.paused { return true }
-            state.step = min(state.step + 1, activity.attributes.steps.count - 1)
-            if state.step >= activity.attributes.steps.count - 1 {
-                state.done = true
-                await activity.end(ActivityContent(state: state, staleDate: nil), dismissalPolicy: .after(Date().addingTimeInterval(15 * 60)))
-                return false
-            }
-            await activity.update(ActivityContent(state: state, staleDate: nil))
-            return true
-        }
+        guard begin(.build, attributes: attributes, state: Self.buildState(work)) else { return false }
+        UserDefaults.standard.set(work.id, forKey: Self.buildKey)
         return true
     }
 
-    /// Mirrors the Pause button on the Live work screen.
+    private static func buildState(_ work: LiveWork) -> BuildActivityAttributes.ContentState {
+        let done = work.state == .done
+        let last = max(work.steps.count - 1, 0)
+        return BuildActivityAttributes.ContentState(
+            step: done ? last : min(work.currentStep, last),
+            paused: work.state == .paused || work.state == .stopped,
+            done: done
+        )
+    }
+
+    /// Mirrors the Pause button on the Live work screen, before the computer answers.
     func setBuildPaused(_ paused: Bool) {
         Task {
             guard let activity = Self.current(BuildActivityAttributes.self) else { return }
@@ -106,30 +114,41 @@ final class LiveActivities: ObservableObject {
         }
     }
 
-    // MARK: - Chief needs your OK
+    // MARK: - A bot needs your OK
 
     @discardableResult
-    func startApproval() -> Bool {
+    func startApproval(_ item: InboxItem, bot: Bot?) -> Bool {
+        guard item.kind == .ask else { return false }
         let attributes = ApprovalActivityAttributes(
-            askerName: "Chief",
-            askerRole: "Team lead",
-            title: "Barry wants to push",
-            message: "Barry fixed the Farside build and wants to push it to a new branch. Nothing goes to main.",
-            command: "git push origin fix/ci-setup"
+            askerName: bot?.name ?? "Your bot",
+            askerRole: bot?.role ?? "Teammate",
+            title: item.title,
+            message: item.body,
+            command: item.command ?? ""
         )
         let state = ApprovalActivityAttributes.ContentState(decision: .waiting)
-        return begin(.approval, attributes: attributes, state: state)
+        guard begin(.approval, attributes: attributes, state: state) else { return false }
+        UserDefaults.standard.set(item.id, forKey: Self.approvalKey)
+        return true
     }
 
     /// Called when you Allow or Deny inside the app, so the Lock Screen catches up.
-    func approvalDecided(_ decision: PushDecision?) {
-        guard let decision else { return }
-        let value: ApprovalActivityAttributes.Decision = decision == .allowed ? .allowed : .denied
+    func approvalAnswered(_ itemID: String, allowed: Bool) {
+        guard itemID == approvalItemID else { return }
+        endApproval(allowed ? .allowed : .denied)
+    }
+
+    private func endApproval(_ decision: ApprovalActivityAttributes.Decision?) {
         Task {
             for activity in Activity<ApprovalActivityAttributes>.activities where activity.activityState == .active {
                 guard activity.content.state.decision == .waiting else { continue }
-                let content = ActivityContent(state: ApprovalActivityAttributes.ContentState(decision: value), staleDate: nil)
-                await activity.end(content, dismissalPolicy: .after(Date().addingTimeInterval(8)))
+                if let decision {
+                    let content = ActivityContent(state: ApprovalActivityAttributes.ContentState(decision: decision), staleDate: nil)
+                    await activity.end(content, dismissalPolicy: .after(Date().addingTimeInterval(8)))
+                } else {
+                    // Answered somewhere else, like on the computer.
+                    await activity.end(nil, dismissalPolicy: .immediate)
+                }
             }
             self.refresh()
         }
@@ -138,42 +157,32 @@ final class LiveActivities: ObservableObject {
     // MARK: - A routine running
 
     @discardableResult
-    func startRoutine(botName: String, letter: String, hex: UInt32, task: String, when: String, nextRun: String) -> Bool {
-        let total = 40
+    func startRoutine(_ routine: Routine, bot: Bot?) -> Bool {
+        guard let run = routine.run, run.total > 0 else { return false }
+        let name = bot?.name ?? "Your bot"
         let attributes = RoutineActivityAttributes(
-            botName: botName,
-            routineName: when,
-            letter: letter,
-            hex: hex,
-            title: task,
-            total: total,
-            workingText: "Working on item",
-            finishedText: "Finished all \(total) items",
-            nextRun: nextRun
+            botName: name,
+            routineName: routine.whenTitle,
+            letter: bot?.letter ?? String(name.prefix(1)).uppercased(),
+            hex: bot?.hex ?? 0x2FB39A,
+            title: routine.task,
+            total: run.total,
+            workingText: run.label,
+            finishedText: "Finished all \(run.total)",
+            nextRun: routine.nextRunText
         )
-        let state = RoutineActivityAttributes.ContentState(done: 0, skipped: false)
+        let state = RoutineActivityAttributes.ContentState(done: run.done, skipped: false)
         guard begin(.routine, attributes: attributes, state: state) else { return false }
-        drive(.routine, every: 0.75) {
-            guard let activity = Self.current(RoutineActivityAttributes.self) else { return false }
-            var state = activity.content.state
-            if state.skipped { return false }
-            state.done = min(state.done + 1, activity.attributes.total)
-            if state.done >= activity.attributes.total {
-                await activity.end(ActivityContent(state: state, staleDate: nil), dismissalPolicy: .after(Date().addingTimeInterval(10 * 60)))
-                return false
-            }
-            await activity.update(ActivityContent(state: state, staleDate: nil))
-            return true
-        }
+        UserDefaults.standard.set(routine.id, forKey: Self.routineKey)
         return true
     }
 
     // MARK: - Call with Chief
 
-    /// Started by the call screen when a call connects.
+    /// Started by the call screen when a real call connects.
     @discardableResult
-    func startCall(pretend: Bool, caption: String) -> Bool {
-        let attributes = CallActivityAttributes(botName: "Chief", pretend: pretend)
+    func startCall(caption: String) -> Bool {
+        let attributes = CallActivityAttributes(botName: "Chief")
         let state = CallActivityAttributes.ContentState(startedAt: Date(), caption: caption, muted: false, ended: false, endedSeconds: 0)
         return begin(.call, attributes: attributes, state: state)
     }
@@ -204,37 +213,25 @@ final class LiveActivities: ObservableObject {
 
     // MARK: - Whole team
 
-    static let teamMembers = [
-        TeamActivityAttributes.Member(letter: "B", name: "Barry", what: "Fixing the Farside build", hex: 0x3B87D6),
-        TeamActivityAttributes.Member(letter: "S", name: "sss", what: "Writing Nimbus ideas", hex: 0xA68CED),
-        TeamActivityAttributes.Member(letter: "L", name: "Laptop", what: "Testing Nimbus on Windows", hex: 0x8C72DC),
-        TeamActivityAttributes.Member(letter: "S", name: "Starx", what: "Researching warp drives", hex: 0x3D91DA)
-    ]
+    /// Bots that are busy right now, the ones the team activity shows (up to 4).
+    static func teamMembers(from bots: [Bot]) -> [Bot] {
+        Array(bots.filter { !$0.isChief && $0.status.isBusy }.prefix(4))
+    }
 
     @discardableResult
-    func startTeam(paused: Bool) -> Bool {
-        let attributes = TeamActivityAttributes(members: Self.teamMembers)
-        let state = TeamActivityAttributes.ContentState(progress: [66, 48, 72, 30], paused: paused)
+    func startTeam(_ bots: [Bot], paused: Bool) -> Bool {
+        let members = Self.teamMembers(from: bots)
+        guard !members.isEmpty else { return false }
+        let attributes = TeamActivityAttributes(members: members.map {
+            TeamActivityAttributes.Member(letter: $0.letter, name: $0.name, what: $0.task, hex: $0.hex)
+        })
+        let state = TeamActivityAttributes.ContentState(progress: members.map { Self.percent($0.progress) }, paused: paused)
         guard begin(.team, attributes: attributes, state: state) else { return false }
-        let steps = [4, 5, 3, 6]
-        drive(.team, every: 2.5) {
-            guard let activity = Self.current(TeamActivityAttributes.self) else { return false }
-            var state = activity.content.state
-            if state.paused { return true }
-            state.progress = state.progress.enumerated().map { index, value in
-                min(100, value + (index < steps.count ? steps[index] : 3))
-            }
-            if state.progress.allSatisfy({ $0 >= 100 }) {
-                await activity.end(ActivityContent(state: state, staleDate: nil), dismissalPolicy: .after(Date().addingTimeInterval(10 * 60)))
-                return false
-            }
-            await activity.update(ActivityContent(state: state, staleDate: nil))
-            return true
-        }
+        UserDefaults.standard.set(members.map(\.id), forKey: Self.teamKey)
         return true
     }
 
-    /// Mirrors the Pause all switch in Mission control.
+    /// Mirrors the Pause all switch, before the computer answers.
     func setTeamPaused(_ paused: Bool) {
         Task {
             guard let activity = Self.current(TeamActivityAttributes.self) else { return }
@@ -245,13 +242,92 @@ final class LiveActivities: ObservableObject {
         }
     }
 
+    private static func percent(_ progress: Double) -> Int {
+        min(max(Int((progress * 100).rounded()), 0), 100)
+    }
+
+    // MARK: - Updates from the computer
+
+    /// Moves every running activity along to match the latest data from the computer,
+    /// and ends the ones whose job, question or routine is over.
+    func sync(work: [LiveWork], inbox: [InboxItem], routines: [Routine], bots: [Bot], paused: Bool) {
+        refresh()
+        guard !running.isEmpty else { return }
+
+        if running.contains(.build), let id = buildWorkID {
+            let job = work.first(where: { $0.id == id })
+            Task {
+                guard let activity = Self.current(BuildActivityAttributes.self) else { return }
+                guard let job else {
+                    await activity.end(nil, dismissalPolicy: .immediate)
+                    self.refresh()
+                    return
+                }
+                let state = Self.buildState(job)
+                if job.state == .done || job.state == .stopped {
+                    await activity.end(ActivityContent(state: state, staleDate: nil), dismissalPolicy: .after(Date().addingTimeInterval(10 * 60)))
+                    self.refresh()
+                } else if state != activity.content.state {
+                    await activity.update(ActivityContent(state: state, staleDate: nil))
+                }
+            }
+        }
+
+        if running.contains(.approval), let id = approvalItemID {
+            let stillAsking = inbox.contains(where: { $0.id == id && $0.kind == .ask })
+            if !stillAsking { endApproval(nil) }
+        }
+
+        if running.contains(.routine), let id = routineID {
+            let routine = routines.first(where: { $0.id == id })
+            Task {
+                guard let activity = Self.current(RoutineActivityAttributes.self) else { return }
+                var state = activity.content.state
+                guard !state.skipped else { return }
+                if let run = routine?.run {
+                    let done = min(run.done, activity.attributes.total)
+                    guard done != state.done else { return }
+                    state.done = done
+                    await activity.update(ActivityContent(state: state, staleDate: nil))
+                } else {
+                    // The run is over: show it finished for a bit.
+                    state.done = routine == nil ? state.done : activity.attributes.total
+                    await activity.end(ActivityContent(state: state, staleDate: nil), dismissalPolicy: .after(Date().addingTimeInterval(10 * 60)))
+                    self.refresh()
+                }
+            }
+        }
+
+        if running.contains(.team) {
+            let ids = teamBotIDs
+            let found = ids.map { id in bots.first(where: { $0.id == id }) }
+            Task {
+                guard let activity = Self.current(TeamActivityAttributes.self) else { return }
+                if found.allSatisfy({ $0 == nil }) {
+                    await activity.end(nil, dismissalPolicy: .immediate)
+                    self.refresh()
+                    return
+                }
+                let progress = found.map { bot -> Int in
+                    guard let bot else { return 100 }
+                    return bot.status.isBusy || bot.status == .paused ? Self.percent(bot.progress) : 100
+                }
+                let state = TeamActivityAttributes.ContentState(progress: progress, paused: paused)
+                if progress.allSatisfy({ $0 >= 100 }) {
+                    await activity.end(ActivityContent(state: state, staleDate: nil), dismissalPolicy: .after(Date().addingTimeInterval(10 * 60)))
+                    self.refresh()
+                } else if state != activity.content.state {
+                    await activity.update(ActivityContent(state: state, staleDate: nil))
+                }
+            }
+        }
+    }
+
     // MARK: - Helpers
 
     /// Ends any old one of the same kind, then asks iOS for a new one.
     private func begin<A: ActivityAttributes>(_ kind: Kind, attributes: A, state: A.ContentState) -> Bool {
         guard enabled else { return false }
-        drivers[kind]?.cancel()
-        drivers[kind] = nil
         let old = Activity<A>.activities
         do {
             _ = try Activity<A>.request(
@@ -272,22 +348,6 @@ final class LiveActivities: ObservableObject {
         return true
     }
 
-    /// Moves a pretend activity along every few seconds until `step` says stop.
-    /// Asks iOS for a little extra time so it keeps going for a bit after you lock the phone.
-    private func drive(_ kind: Kind, every seconds: Double, step: @escaping @MainActor () async -> Bool) {
-        drivers[kind]?.cancel()
-        let extraTime = ExtraTime(name: "squall.activity.\(kind.rawValue)")
-        drivers[kind] = Task { @MainActor [weak self] in
-            defer { extraTime.finish() }
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(seconds))
-                guard !Task.isCancelled else { return }
-                if await step() == false { break }
-            }
-            self?.refresh()
-        }
-    }
-
     private static func current<A: ActivityAttributes>(_ type: A.Type) -> Activity<A>? {
         Activity<A>.activities.last(where: { $0.activityState == .active })
     }
@@ -296,27 +356,6 @@ final class LiveActivities: ObservableObject {
         for activity in Activity<A>.activities {
             await activity.end(nil, dismissalPolicy: .immediate)
         }
-    }
-}
-
-/// A short stretch of background time, so pretend activities keep moving for about
-/// half a minute after the app goes away.
-@MainActor
-private final class ExtraTime {
-    private var id: UIBackgroundTaskIdentifier = .invalid
-
-    init(name: String) {
-        id = UIApplication.shared.beginBackgroundTask(withName: name) { [weak self] in
-            MainActor.assumeIsolated {
-                self?.finish()
-            }
-        }
-    }
-
-    func finish() {
-        guard id != .invalid else { return }
-        UIApplication.shared.endBackgroundTask(id)
-        id = .invalid
     }
 }
 

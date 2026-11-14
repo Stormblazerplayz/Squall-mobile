@@ -20,9 +20,13 @@ struct MissionControlView: View {
                     }
                     chiefPanel
                     SectionLabel(text: "Team")
-                    LazyVGrid(columns: columns, spacing: 10) {
-                        ForEach(store.teammates) { bot in
-                            MissionCard(bot: bot)
+                    if store.teammates.isEmpty {
+                        emptyRow("No teammates yet. Chief works alone for now.")
+                    } else {
+                        LazyVGrid(columns: columns, spacing: 10) {
+                            ForEach(store.teammates) { bot in
+                                MissionCard(bot: bot)
+                            }
                         }
                     }
                     SectionLabel(text: "Needs you")
@@ -44,7 +48,7 @@ struct MissionControlView: View {
             Text("\(store.workingCount) working · \(waiting) waiting on you · \(store.idleCount) idle")
                 .font(.system(size: 20, weight: .bold))
                 .foregroundStyle(Theme.textBright)
-            Toggle(isOn: $store.pausedAll) {
+            Toggle(isOn: Binding(get: { store.pausedAll }, set: { store.setPausedAll($0) })) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Pause all")
                         .font(.system(size: 15, weight: .medium))
@@ -55,11 +59,14 @@ struct MissionControlView: View {
                 }
             }
             .tint(Theme.yellow)
+            .disabled(store.isBusy("team.pause"))
             .padding(14)
             .glassCard(radius: 16)
             // The whole team on the Lock Screen, with Pause all.
-            LockScreenButton(kind: .team) {
-                LiveActivities.shared.startTeam(paused: store.pausedAll)
+            if !LiveActivities.teamMembers(from: store.bots).isEmpty {
+                LockScreenButton(kind: .team) {
+                    LiveActivities.shared.startTeam(store.bots, paused: store.pausedAll)
+                }
             }
         }
     }
@@ -102,9 +109,12 @@ struct MissionControlView: View {
                 store.openChat(bot.id)
             }
         }
-        list.append(Shortcut(id: "live", title: "Watch Barry live", icon: "dot.radiowaves.left.and.right") {
-            store.path.append(.live)
-        })
+        for job in store.work where job.state.isRunning {
+            let name = store.bot(job.botID)?.name ?? "your bot"
+            list.append(Shortcut(id: "live-\(job.id)", title: "Watch \(name) live", icon: "dot.radiowaves.left.and.right") {
+                store.watch(job.id)
+            })
+        }
         list.append(Shortcut(id: "routine", title: "New routine", icon: "clock") {
             store.path.append(.newRoutine)
         })
@@ -182,40 +192,52 @@ struct MissionControlView: View {
 
     @ViewBuilder
     private var needsYou: some View {
-        VStack(spacing: 8) {
-            askRow(
-                botID: "barry",
-                text: "Barry wants to push the Farside fix to fix/ci-setup.",
-                done: pushText
-            ) {
-                HStack(spacing: 8) {
-                    Button("Allow") { store.allowPush() }
-                        .buttonStyle(FilledButtonStyle(fill: Theme.green.opacity(0.85), foreground: Theme.darkInk, height: 36))
-                    Button("Deny") { store.denyPush() }
-                        .buttonStyle(GhostButtonStyle(height: 36))
-                }
-            }
-            askRow(
-                botID: "fox",
-                text: "Fox asks: should the new app icon be glowy or flat?",
-                done: store.iconChoice.map { "You picked \($0)." }
-            ) {
-                HStack(spacing: 8) {
-                    Button("Glowy") { store.pickIcon("Glowy lightning") }
-                        .buttonStyle(GhostButtonStyle(height: 36))
-                    Button("Flat") { store.pickIcon("Flat and simple") }
-                        .buttonStyle(GhostButtonStyle(height: 36))
+        let items = store.inbox.filter { $0.kind.needsYou }
+        if items.isEmpty {
+            emptyRow("No bot is waiting on you.")
+        } else {
+            VStack(spacing: 8) {
+                ForEach(items) { item in
+                    askRow(botID: item.botID, text: item.title.isEmpty ? item.body : item.title, done: nil) {
+                        answerButtons(item)
+                    }
                 }
             }
         }
     }
 
-    private var pushText: String? {
-        switch store.pushDecision {
-        case .allowed: return "Allowed. Barry is pushing the fix."
-        case .denied: return "You said no. The fix stays on your computer."
-        case nil: return nil
+    @ViewBuilder
+    private func answerButtons(_ item: InboxItem) -> some View {
+        let busy = store.isBusy("inbox.\(item.id)")
+        switch item.kind {
+        case .ask:
+            HStack(spacing: 8) {
+                Button("Allow") { store.answer(item.id, with: "allow") }
+                    .buttonStyle(FilledButtonStyle(fill: Theme.green.opacity(0.85), foreground: Theme.darkInk, height: 36))
+                Button("Deny") { store.answer(item.id, with: "deny") }
+                    .buttonStyle(GhostButtonStyle(height: 36))
+            }
+            .disabled(busy)
+        case .choice(let options):
+            HStack(spacing: 8) {
+                ForEach(options, id: \.self) { option in
+                    Button(option) { store.answer(item.id, with: option) }
+                        .buttonStyle(GhostButtonStyle(height: 36, fontSize: 13))
+                }
+            }
+            .disabled(busy)
+        case .error, .done:
+            EmptyView()
         }
+    }
+
+    private func emptyRow(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 13.5))
+            .foregroundStyle(Theme.sub)
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .glassCard(radius: 14)
     }
 
     private func askRow<Buttons: View>(botID: String, text: String, done: String?, @ViewBuilder buttons: () -> Buttons) -> some View {
@@ -241,11 +263,16 @@ struct MissionControlView: View {
         .glassCard(radius: 16, tint: done == nil ? Theme.goldHex : nil, strength: 0.1)
     }
 
+    @ViewBuilder
     private var handoffs: some View {
-        VStack(spacing: 8) {
-            handoffRow(from: "chief", to: "barry", what: "Fix the Farside build", when: "12 min ago")
-            handoffRow(from: "chief", to: "sss", what: "Nimbus project ideas", when: "40 min ago")
-            handoffRow(from: "starx", to: "chief", what: "Warp drive notes for review", when: "1 hr ago")
+        if store.handoffs.isEmpty {
+            emptyRow("No handoffs yet.")
+        } else {
+            VStack(spacing: 8) {
+                ForEach(store.handoffs) { handoff in
+                    handoffRow(from: handoff.from, to: handoff.to, what: handoff.what, when: handoff.time)
+                }
+            }
         }
     }
 
@@ -322,8 +349,8 @@ private struct MissionCard: View {
         .glassCard(radius: 16, tint: bot.hex, strength: 0.1)
         .contentShape(Rectangle())
         .onTapGesture {
-            if bot.id == "barry" {
-                store.path.append(.live)
+            if let job = store.work(for: bot.id), job.state.isRunning {
+                store.watch(job.id)
             } else {
                 store.openChat(bot.id)
             }

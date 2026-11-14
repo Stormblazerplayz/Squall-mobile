@@ -34,10 +34,11 @@ struct HandoffSheet: View {
                 HStack(spacing: 10) {
                     Button("Cancel") { dismiss() }
                         .buttonStyle(GhostButtonStyle())
-                    Button("Hand off to Chief") {
+                    Button(store.isBusy("handoff") ? "Handing off…" : "Hand off to Chief") {
                         store.confirmHandoff(botID: botID, job: job, note: note)
                     }
                     .buttonStyle(FilledButtonStyle(fill: Theme.gold, foreground: Theme.darkInk))
+                    .disabled(store.isBusy("handoff") || !store.isConnected)
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)

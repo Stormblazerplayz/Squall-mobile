@@ -101,6 +101,7 @@ enum PairingError: Error, Equatable {
     case cantSave
     case voiceNotSupported
     case chiefBusy
+    case liveDataNotSupported
 
     var message: String {
         switch self {
@@ -126,10 +127,19 @@ enum PairingError: Error, Equatable {
             return "Squall on your computer can't do voice calls yet. Update it, then call again."
         case .chiefBusy:
             return "Chief can't talk right now. Try again in a minute."
+        case .liveDataNotSupported:
+            return "Squall on your computer can't send your team yet. Update it, then try again."
         }
     }
 }
 
 extension PairingError: LocalizedError {
+    var errorDescription: String? { message }
+}
+
+/// An action the computer said no to, with its reason.
+struct SyncActionError: Error, LocalizedError {
+    let message: String
+
     var errorDescription: String? { message }
 }

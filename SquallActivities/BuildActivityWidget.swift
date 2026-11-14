@@ -3,7 +3,7 @@ import AppIntents
 import SwiftUI
 import WidgetKit
 
-/// Barry at work: the build steps fill in, with Pause and Watch live.
+/// A bot at work: the steps fill in, with Pause and Watch live.
 struct BuildActivityWidget: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: BuildActivityAttributes.self) { context in
@@ -159,7 +159,7 @@ private enum BuildText {
 
     static func line(_ a: BuildActivityAttributes, _ s: BuildActivityAttributes.ContentState) -> String {
         guard !a.steps.isEmpty else { return "" }
-        if s.done { return "\(a.steps[a.steps.count - 1]). The pull request is ready." }
+        if s.done { return "Done: \(a.title)" }
         let index = min(max(0, s.step), a.steps.count - 1)
         let prefix = s.paused ? "Paused at step" : "Step"
         return "\(prefix) \(index + 1) of \(a.steps.count) · \(a.steps[index])"

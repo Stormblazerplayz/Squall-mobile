@@ -14,7 +14,7 @@ struct SquallApp: App {
                 if pairing.setupDone {
                     RootView()
                 } else {
-                    // First launch: pair with Squall on the computer, or skip and use pretend data.
+                    // First launch: pair with Squall on the computer, or skip and pair later.
                     PairingView(place: .firstRun) {
                         pairing.finishSetup()
                     }
@@ -30,6 +30,11 @@ struct SquallApp: App {
             .onOpenURL { url in
                 store.open(url)
             }
+            // All data comes from the paired computer. This keeps asking it for updates,
+            // and starts over whenever the phone is paired, re-paired or unpaired.
+            .task(id: pairing.computer) {
+                await store.runSync(with: pairing)
+            }
         }
         .onChange(of: scenePhase, initial: true) { _, phase in
             switch phase {
@@ -37,8 +42,9 @@ struct SquallApp: App {
                 lock.appLeft()
                 cameFromBackground = true
             case .active:
-                // Catch up on anything pressed on the Lock Screen while away.
+                // Catch up on anything pressed on the Lock Screen while away, and on the computer.
                 store.handleActivityActions()
+                store.refreshNow()
                 // Only ask on the way back in, so cancelling Face ID doesn't loop.
                 if cameFromBackground {
                     cameFromBackground = false

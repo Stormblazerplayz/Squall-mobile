@@ -61,6 +61,12 @@ struct InboxItem: Identifiable, Equatable {
     var fresh: Bool = false
     /// Where "Open" goes for finished items.
     var opens: InboxDestination = .chat
+    /// More about a problem, like the full error.
+    var details: String? = nil
+    /// The command a bot wants to run, shown on the Lock Screen.
+    var command: String? = nil
+    /// The live job this is about, if any.
+    var workID: String? = nil
 }
 
 enum InboxDestination: Equatable {

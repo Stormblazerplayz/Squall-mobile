@@ -10,17 +10,15 @@ struct SettingsView: View {
 
     @State private var clearArmed = false
     @State private var unpairArmed = false
-    @State private var resetDataArmed = false
     @State private var resetSettingsArmed = false
-    @State private var showPairing = false
     @State private var currentIcon: String?
     @State private var changingIcon = false
 
     /// Asset name (nil is the normal icon), name shown, and the small preview image.
     private static let iconChoices: [(asset: String?, title: String, preview: String)] = [
-        (nil, "Classic", "IconPreviewDefault"),
+        (nil, "Chief's Bolt", "IconPreviewChiefsBolt"),
+        ("Classic", "Classic", "IconPreviewClassic"),
         ("StormCloud", "Storm Cloud", "IconPreviewStormCloud"),
-        ("ChiefsBolt", "Chief's Bolt", "IconPreviewChiefsBolt"),
         ("SquallSwirl", "Squall Swirl", "IconPreviewSquallSwirl"),
         ("BotCrew", "Bot Crew", "IconPreviewBotCrew"),
         ("Orbit", "Orbit", "IconPreviewOrbit"),
@@ -72,16 +70,11 @@ struct SettingsView: View {
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)
         }
-        .sheet(isPresented: $showPairing) {
-            PairingView(place: .settings) {
-                showPairing = false
-            }
-            .lockCover()
-            .environmentObject(pairing)
-            .environmentObject(store)
-            .environmentObject(lock)
+        .onAppear {
+            // Chief's Bolt used to be an extra icon; it's the normal one now.
+            let name = UIApplication.shared.alternateIconName
+            currentIcon = name == "ChiefsBolt" ? nil : name
         }
-        .onAppear { currentIcon = UIApplication.shared.alternateIconName }
         .onChange(of: appLock) { _, isOn in
             if isOn && !AppLock.canLock {
                 appLock = false
@@ -172,7 +165,10 @@ struct SettingsView: View {
                 }
                 HStack(spacing: 8) {
                     Button(pairing.connection == .checking ? "Checking..." : "Test connection") {
-                        Task { await pairing.checkConnection() }
+                        Task {
+                            await pairing.checkConnection()
+                            store.refreshNow()
+                        }
                     }
                     .buttonStyle(GhostButtonStyle(height: 40, fontSize: 14, sidePadding: 10))
                     .disabled(pairing.connection == .checking || pairing.busy)
@@ -205,14 +201,14 @@ struct SettingsView: View {
                         Text("Not paired")
                             .font(.system(size: 15, weight: .medium))
                             .foregroundStyle(Theme.text)
-                        Text("Squall is showing pretend data. Pair to link it to your computer.")
+                        Text("Pair to see your team from your computer.")
                             .font(.system(size: 12.5))
                             .foregroundStyle(Theme.sub)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer(minLength: 0)
                 }
-                Button("Pair with computer") { showPairing = true }
+                Button("Pair with computer") { store.showPairing = true }
                     .buttonStyle(FilledButtonStyle(fill: store.accent, height: 42))
             }
         }
@@ -225,15 +221,18 @@ struct SettingsView: View {
     }
 
     private func connectionLine(for computer: PairedComputer) -> (text: String, color: Color) {
-        switch pairing.connection {
-        case .unknown:
-            return (computer.address, Theme.sub)
-        case .checking:
+        if pairing.connection == .checking {
             return ("Checking \(computer.address)...", Theme.sub)
-        case .online:
+        }
+        switch store.link {
+        case .connected:
             return ("Connected · \(computer.address)", Theme.greenText)
+        case .connecting:
+            return ("Connecting to \(computer.address)...", Theme.sub)
         case .offline(let reason):
             return (reason, Theme.redText)
+        case .unpaired:
+            return (computer.address, Theme.sub)
         }
     }
 
@@ -307,35 +306,45 @@ struct SettingsView: View {
 
     private var claudeCodeSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("Version")
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(Theme.text)
-                Spacer()
-                Text(store.claudeCode == .upToDate ? ClaudeCodeUpdate.newVersion : ClaudeCodeUpdate.oldVersion)
-                    .font(Theme.mono(14))
-                    .foregroundStyle(Theme.text)
-                StatusPill(
-                    status: store.claudeCode == .upToDate ? .working : .waiting,
-                    text: store.claudeCode == .upToDate ? "Up to date" : "Update needed"
-                )
-            }
-            switch store.claudeCode {
-            case .needed:
-                Text("Chief stopped because this version is too old. Version \(ClaudeCodeUpdate.newVersion) or newer is needed.")
-                    .font(.system(size: 13))
-                    .foregroundStyle(Theme.sub)
-                Button("Update to \(ClaudeCodeUpdate.newVersion)") { store.runUpdate() }
+            if let code = store.claudeCode {
+                HStack {
+                    Text("Version")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(Theme.text)
+                    Spacer()
+                    Text(code.version.isEmpty ? "Unknown" : code.version)
+                        .font(Theme.mono(14))
+                        .foregroundStyle(Theme.text)
+                    StatusPill(
+                        status: code.needsUpdate ? .waiting : .working,
+                        text: code.needsUpdate ? "Update needed" : "Up to date"
+                    )
+                }
+                if let progress = code.updating {
+                    Text("Updating… \(Int(progress * 100))%")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.goldText)
+                    ProgressView(value: progress).tint(Theme.goldBright)
+                } else if code.needsUpdate {
+                    Text(code.latest.map { "Chief stopped because this version is too old. Version \($0) or newer is needed." }
+                         ?? "Chief stopped because this version is too old.")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.sub)
+                    Button(store.isBusy("claudeCode.update") ? "Starting update…" : (code.latest.map { "Update to \($0)" } ?? "Update Claude Code")) {
+                        store.runUpdate()
+                    }
                     .buttonStyle(FilledButtonStyle(fill: Theme.gold, foreground: Theme.darkInk, height: 42))
-            case .updating(let progress):
-                Text("Updating… \(Int(progress * 100))%")
-                    .font(.system(size: 13))
-                    .foregroundStyle(Theme.goldText)
-                ProgressView(value: progress).tint(Theme.goldBright)
-            case .upToDate:
-                Text("Chief is awake and can work again.")
-                    .font(.system(size: 13))
-                    .foregroundStyle(Theme.greenText)
+                    .disabled(store.isUpdatingClaudeCode || !store.isConnected)
+                } else {
+                    Text("Chief can use it on your computer.")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.greenText)
+                }
+            } else {
+                Text(store.isConnected ? "Your computer didn't say which version it has." : "Shows once your computer is connected.")
+                    .font(.system(size: 13.5))
+                    .foregroundStyle(Theme.sub)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .padding(14)
@@ -554,29 +563,12 @@ struct SettingsView: View {
         }
     }
 
-    private var isUpdating: Bool {
-        if case .updating = store.claudeCode { return true }
-        return false
-    }
-
     private var dataSection: some View {
         card {
             ShareLink(item: store.chatExport, preview: SharePreview("Squall chats")) {
                 Label("Export chats", systemImage: "square.and.arrow.up")
             }
             .buttonStyle(GhostButtonStyle(height: 42, fontSize: 14))
-            armedButton(
-                resetDataArmed ? "Tap again to reset pretend data" : "Reset pretend data",
-                armed: resetDataArmed
-            ) {
-                if resetDataArmed {
-                    resetDataArmed = false
-                    store.resetPretendData()
-                } else {
-                    resetDataArmed = true
-                }
-            }
-            .disabled(isUpdating)
             armedButton(
                 resetSettingsArmed ? "Tap again to reset settings" : "Reset settings",
                 armed: resetSettingsArmed
@@ -596,6 +588,7 @@ struct SettingsView: View {
                     clearArmed = true
                 }
             }
+            .disabled(!store.isConnected)
         }
     }
 

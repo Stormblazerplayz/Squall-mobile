@@ -10,10 +10,10 @@ private func soon(_ seconds: TimeInterval = 8) -> ActivityUIDismissalPolicy {
     .after(Date().addingTimeInterval(seconds))
 }
 
-// MARK: - Barry at work
+// MARK: - A bot at work
 
 struct PauseBuildIntent: LiveActivityIntent {
-    static let title: LocalizedStringResource = "Pause or resume Barry"
+    static let title: LocalizedStringResource = "Pause or resume the work"
 
     init() {}
 
@@ -31,10 +31,10 @@ struct PauseBuildIntent: LiveActivityIntent {
     }
 }
 
-// MARK: - Chief needs your OK
+// MARK: - A bot needs your OK
 
 struct AllowPushIntent: LiveActivityIntent {
-    static let title: LocalizedStringResource = "Allow Barry's push"
+    static let title: LocalizedStringResource = "Allow the request"
 
     init() {}
 
@@ -46,7 +46,7 @@ struct AllowPushIntent: LiveActivityIntent {
 }
 
 struct DenyPushIntent: LiveActivityIntent {
-    static let title: LocalizedStringResource = "Deny Barry's push"
+    static let title: LocalizedStringResource = "Deny the request"
 
     init() {}
 
