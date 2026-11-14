@@ -5,6 +5,10 @@ struct ChatView: View {
     @EnvironmentObject private var store: SquallStore
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var draft = ""
+    @State private var sentCount = 0
+    @AppStorage(Prefs.showTyping) private var showTyping = true
+    @AppStorage(Prefs.sendOnReturn) private var sendOnReturn = false
+    @AppStorage(Prefs.haptics) private var haptics = true
     @State private var showLiveLog = false
     @State private var workTimer = true
     @State private var judge = false
@@ -50,7 +54,7 @@ struct ChatView: View {
                                         store.send(chip)
                                     }
                                 }
-                                if store.typingBotID == bot.id {
+                                if showTyping && store.typingBotID == bot.id {
                                     TypingRow(bot: bot)
                                 }
                                 Color.clear.frame(height: 1).id("bottom")
@@ -84,6 +88,7 @@ struct ChatView: View {
             }
         }
         .animation(.easeOut(duration: 0.2), value: showLiveLog)
+        .sensoryFeedback(.impact(weight: .light), trigger: sentCount) { _, _ in haptics }
         .animation(.easeOut(duration: 0.2), value: showContext)
     }
 
@@ -151,6 +156,13 @@ struct ChatView: View {
                 .focused($inputFocused)
                 .submitLabel(.send)
                 .onSubmit(sendDraft)
+                .onChange(of: draft) { old, new in
+                    // "Send with Return": a Return typed at the end sends instead of starting a new line.
+                    if sendOnReturn, new.count == old.count + 1, new.hasSuffix("\n") {
+                        draft = String(new.dropLast())
+                        sendDraft()
+                    }
+                }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 11)
                 .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Theme.field))
@@ -184,6 +196,7 @@ struct ChatView: View {
         guard canSend else { return }
         store.send(draft)
         draft = ""
+        sentCount += 1
     }
 
     private func roundButton(_ icon: String, label: String, action: @escaping () -> Void) -> some View {
@@ -467,6 +480,8 @@ struct MessageView: View {
     /// Bot to use when the message has no author we know.
     let bot: Bot
     var onChip: (String) -> Void = { _ in }
+    @AppStorage(Prefs.chatTextSize) private var textSize = 15.0
+    @AppStorage(Prefs.showTimes) private var showTimes = true
 
     var body: some View {
         switch message.kind {
@@ -497,14 +512,16 @@ struct MessageView: View {
             Spacer(minLength: 50)
             VStack(alignment: .trailing, spacing: 3) {
                 Text(message.text)
-                    .font(.system(size: 15))
+                    .font(.system(size: textSize))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
                     .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(store.accent))
-                Text(message.time)
-                    .font(.system(size: 11))
-                    .foregroundStyle(Theme.muted)
+                if showTimes {
+                    Text(message.time)
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.muted)
+                }
             }
         }
     }
@@ -518,16 +535,18 @@ struct MessageView: View {
                     Text(who.name)
                         .font(.system(size: 13, weight: .bold))
                         .foregroundStyle(who.nameColor)
-                    Text(message.time)
-                        .font(.system(size: 11))
-                        .foregroundStyle(Theme.muted)
+                    if showTimes {
+                        Text(message.time)
+                            .font(.system(size: 11))
+                            .foregroundStyle(Theme.muted)
+                    }
                 }
                 Text(message.text)
-                    .font(.system(size: 15))
+                    .font(.system(size: textSize))
                     .foregroundStyle(Theme.text)
                 if let text2 = message.text2 {
                     Text(text2)
-                        .font(.system(size: 15))
+                        .font(.system(size: textSize))
                         .foregroundStyle(Theme.text)
                 }
                 if !message.chips.isEmpty {

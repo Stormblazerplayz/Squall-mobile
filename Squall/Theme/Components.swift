@@ -4,18 +4,21 @@ import SwiftUI
 struct GlowBackground: View {
     var topHex: UInt32 = 0x7C5CF6
     var bottomHex: UInt32 = 0x20B296
+    @AppStorage(Prefs.softGlow) private var softGlow = false
 
     var body: some View {
+        // "Softer glow" in Settings turns the background light down.
+        let dim = softGlow ? 0.4 : 1.0
         ZStack {
             Theme.background
             RadialGradient(
-                colors: [Color(hex: topHex, opacity: 0.24), Color(hex: topHex, opacity: 0)],
+                colors: [Color(hex: topHex, opacity: 0.24 * dim), Color(hex: topHex, opacity: 0)],
                 center: .topLeading,
                 startRadius: 0,
                 endRadius: 520
             )
             RadialGradient(
-                colors: [Color(hex: bottomHex, opacity: 0.16), Color(hex: bottomHex, opacity: 0)],
+                colors: [Color(hex: bottomHex, opacity: 0.16 * dim), Color(hex: bottomHex, opacity: 0)],
                 center: .bottomTrailing,
                 startRadius: 0,
                 endRadius: 480

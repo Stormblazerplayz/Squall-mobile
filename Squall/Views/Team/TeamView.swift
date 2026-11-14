@@ -5,6 +5,8 @@ struct TeamView: View {
     @EnvironmentObject private var store: SquallStore
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var showChiefSteps = false
+    @AppStorage(Prefs.haptics) private var haptics = true
+    @AppStorage(Prefs.teamName) private var teamName = "Storm"
 
     private var isWide: Bool { sizeClass == .regular }
 
@@ -45,7 +47,7 @@ struct TeamView: View {
             .scrollIndicators(.hidden)
         }
         .animation(.easeOut(duration: 0.25), value: store.picking)
-        .sensoryFeedback(.impact(weight: .medium), trigger: store.picking)
+        .sensoryFeedback(.impact(weight: .medium), trigger: store.picking) { _, _ in haptics }
     }
 
     private var header: some View {
@@ -55,7 +57,7 @@ struct TeamView: View {
                 Text("Squall")
                     .font(.system(size: 22, weight: .bold))
                     .foregroundStyle(Theme.textBright)
-                Text("Storm's AI team")
+                Text(Prefs.teamTitle(teamName))
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.sub)
             }
