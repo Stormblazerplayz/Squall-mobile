@@ -3,6 +3,7 @@ import SwiftUI
 struct RootView: View {
     @EnvironmentObject private var store: SquallStore
     @EnvironmentObject private var lock: AppLock
+    @EnvironmentObject private var pairing: PairingStore
 
     var body: some View {
         NavigationStack(path: $store.path) {
@@ -43,6 +44,7 @@ struct RootView: View {
                 .lockCover()
                 .environmentObject(store)
                 .environmentObject(lock)
+                .environmentObject(pairing)
         }
     }
 

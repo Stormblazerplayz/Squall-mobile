@@ -115,6 +115,22 @@ final class PairingStore: ObservableObject {
         }
     }
 
+    // MARK: Voice calls
+
+    /// Chief may take a while to think, so voice turns wait longer than other requests.
+    private let voiceClient = PairingClient(timeout: 45)
+
+    func voiceTurn(_ turn: PairingClient.VoiceTurn) async throws -> PairingClient.VoiceReply {
+        guard let computer else { throw PairingError.cantReach }
+        guard let token = KeychainStore.read(account: Self.tokenAccount) else { throw PairingError.tokenRejected }
+        return try await voiceClient.voiceTurn(computer, token: token, turn: turn)
+    }
+
+    func voiceEnd(callId: String, seconds: Int) async {
+        guard let computer, let token = KeychainStore.read(account: Self.tokenAccount) else { return }
+        await voiceClient.voiceEnd(computer, token: token, callId: callId, seconds: seconds)
+    }
+
     /// Forgets the computer on this phone, and asks the computer to forget this phone too.
     func unpair() async {
         guard let computer, !busy else { return }

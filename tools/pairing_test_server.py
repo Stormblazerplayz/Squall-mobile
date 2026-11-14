@@ -10,10 +10,13 @@ It prints the computer's address and a 6-digit code. In the Squall app, pick
 (`pip install qrcode`), it also prints a QR code you can scan.
 
 Press Enter to make a new code. Press Ctrl+C to stop.
-It speaks the protocol in docs/pairing.md.
+It speaks the protocol in docs/pairing.md, including voice calls: once paired,
+Call Chief in the app talks to a pretend Chief here that gives simple answers.
+Use --no-voice to act like a desktop that can't do calls yet.
 """
 
 import argparse
+import random
 import hashlib
 import hmac
 import json
@@ -86,7 +89,32 @@ class PairingState:
             return self.devices.pop(self.token_hash(token), None) if token else None
 
 
-def make_handler(state):
+def chief_reply(text, turn):
+    """A pretend Chief: simple answers so a voice call can be tried end to end."""
+    said = text.lower()
+    if any(word in said for word in ("bye", "goodbye", "hang up", "that's all", "thats all")):
+        return "Okay, talk soon. I'll ping you if anything changes.", True
+    if "barry" in said:
+        return "Barry is fixing the Farside build. He needs your OK to push the fix.", False
+    if any(word in said for word in ("status", "doing", "up to", "update", "team")):
+        return "Barry is on the Farside build, sss is halfway through the Nimbus ideas, and Fox is drawing the app icon.", False
+    if any(word in said for word in ("hello", "hi ", "hey")) or said in ("hi", "hey"):
+        return "Hey! What do you need?", False
+    if "joke" in said:
+        return "Why did the robot go on holiday? It needed to recharge.", False
+    if said.endswith("?"):
+        return random.choice([
+            "Good question. I'll ask the team and put the answer in your Inbox.",
+            "I'm not sure yet. Want me to have sss look into it?",
+        ]), False
+    return random.choice([
+        f"Got it. You said: {text}",
+        "Okay, I'll pass that on to the team.",
+        "Sounds good. Anything else?",
+    ]), False
+
+
+def make_handler(state, voice):
     class Handler(BaseHTTPRequestHandler):
         server_version = "SquallTestDesktop/1"
 
@@ -110,16 +138,51 @@ def make_handler(state):
         def path_only(self):
             return urllib.parse.urlparse(self.path).path
 
-        def do_POST(self):
-            if self.path_only() != "/api/v1/pair":
-                return self.send_json(404, {"error": "not_found"})
+        def read_json(self):
+            """Returns the JSON body as a dict, or None after answering 400."""
             try:
                 length = min(int(self.headers.get("Content-Length", "0")), 16_384)
                 body = json.loads(self.rfile.read(length) or b"{}")
             except (ValueError, json.JSONDecodeError):
-                return self.send_json(400, {"error": "bad_json"})
+                body = None
             if not isinstance(body, dict):
-                return self.send_json(400, {"error": "bad_json"})
+                self.send_json(400, {"error": "bad_json"})
+                return None
+            return body
+
+        def do_POST(self):
+            path = self.path_only()
+            if path == "/api/v1/pair":
+                return self.pair()
+            if path in ("/api/v1/voice/turn", "/api/v1/voice/end") and voice:
+                return self.voice(path)
+            return self.send_json(404, {"error": "not_found"})
+
+        def voice(self, path):
+            device = state.device_for(self.bearer())
+            if device is None:
+                return self.send_json(401, {"error": "unknown_token"})
+            body = self.read_json()
+            if body is None:
+                return
+            who = device.get("deviceName", "the phone")
+            if path == "/api/v1/voice/end":
+                print(f"  Call with {who} ended after {body.get('seconds', '?')} seconds.")
+                return self.send_json(204)
+            text = str(body.get("text", "")).strip()
+            if body.get("event") == "start":
+                print(f"\n  {who} is calling Chief.")
+                reply, end = "Hey, Chief here. What's up?", False
+            else:
+                print(f"  You:   {text}")
+                reply, end = chief_reply(text, body.get("turn", 0))
+            print(f"  Chief: {reply}")
+            self.send_json(200, {"text": reply, "audio": None, "endCall": end})
+
+        def pair(self):
+            body = self.read_json()
+            if body is None:
+                return
             device = body.get("device") if isinstance(body.get("device"), dict) else {}
             status, reply = state.try_pair(body.get("code"), device)
             self.send_json(status, reply)
@@ -185,10 +248,11 @@ def main():
     parser.add_argument("--port", type=int, default=47615)
     parser.add_argument("--name", default=socket.gethostname() or "Squall desktop")
     parser.add_argument("--host", default=None, help="address to show, if the guess is wrong")
+    parser.add_argument("--no-voice", action="store_true", help="act like a desktop that can't do voice calls yet")
     args = parser.parse_args()
 
     state = PairingState(args.name)
-    server = ThreadingHTTPServer(("0.0.0.0", args.port), make_handler(state))
+    server = ThreadingHTTPServer(("0.0.0.0", args.port), make_handler(state, voice=not args.no_voice))
     threading.Thread(target=server.serve_forever, daemon=True).start()
     host = args.host or local_ip()
     print(f"Pretend Squall desktop '{args.name}' is listening on port {args.port}.")

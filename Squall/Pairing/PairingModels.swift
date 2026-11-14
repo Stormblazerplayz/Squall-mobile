@@ -99,6 +99,8 @@ enum PairingError: Error, Equatable {
     case badReply
     case tokenRejected
     case cantSave
+    case voiceNotSupported
+    case chiefBusy
 
     var message: String {
         switch self {
@@ -120,6 +122,10 @@ enum PairingError: Error, Equatable {
             return "Your computer forgot this device. Unpair, then pair again."
         case .cantSave:
             return "Couldn't save the pairing on this device. Try again."
+        case .voiceNotSupported:
+            return "Squall on your computer can't do voice calls yet. Update it, then call again."
+        case .chiefBusy:
+            return "Chief can't talk right now. Try again in a minute."
         }
     }
 }

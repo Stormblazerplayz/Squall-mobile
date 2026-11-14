@@ -104,6 +104,21 @@ final class SquallStore: ObservableObject {
         return lines.joined(separator: "\n")
     }
 
+    /// Saves a real voice call into the chat with Chief.
+    func logCall(_ lines: [(fromMe: Bool, text: String)], seconds: Int) {
+        guard !lines.isEmpty else { return }
+        let time = TimeText.now()
+        append(ChatMessage(kind: .system, author: Bot.chiefID, text: "Voice call with Chief · \(TimeText.stopwatch(seconds))", time: time), to: Bot.chiefID)
+        for line in lines {
+            append(ChatMessage(
+                kind: line.fromMe ? .me : .bot,
+                author: line.fromMe ? ChatMessage.meID : Bot.chiefID,
+                text: line.text,
+                time: time
+            ), to: Bot.chiefID)
+        }
+    }
+
     /// Puts all the pretend data back the way it was on first launch. Settings stay.
     func resetPretendData() {
         replyTask?.cancel()

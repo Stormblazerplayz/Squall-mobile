@@ -84,6 +84,63 @@ Header `Authorization: Bearer <token>`. Used by **Test connection** in Settings.
 
 Header `Authorization: Bearer <token>`. The desktop forgets that phone and answers `204`. The phone forgets the computer even if this call fails.
 
+## Voice calls
+
+**Call Chief** in the app is a real call once paired. The phone does the listening and the talking, so the desktop only deals with text:
+
+1. The phone turns your voice into text with on-device speech recognition (that's also the live captions).
+2. When you pause, it sends that sentence to the desktop.
+3. The desktop asks Chief and sends back what Chief says.
+4. The phone speaks it with its own voice, or plays audio if the desktop sends some.
+5. If you talk while Chief is talking, the phone stops Chief and listens (barge-in).
+
+The app needs Microphone and Speech Recognition permission. When it isn't paired, Call Chief stays the pretend call and says so on screen.
+
+### `POST /api/v1/voice/turn`
+
+Header `Authorization: Bearer <token>`. The phone waits up to 45 seconds for an answer.
+
+```json
+{
+  "callId": "8C1D...UUID",
+  "event": "start",
+  "turn": 1,
+  "bot": "chief",
+  "text": "",
+  "locale": "en_US",
+  "wantsAudio": true
+}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `callId` | Same for every turn of one call. |
+| `event` | `start` when the call opens (text is empty, Chief should say hello), then `turn` for each thing you say. |
+| `turn` | Counts up from 1 within the call. |
+| `bot` | Who you're calling. Always `chief` for now. |
+| `text` | What you said, with punctuation. |
+| `locale` | The phone's language, like `en_US`. Answer in that language. |
+| `wantsAudio` | `true` means the phone can play audio you send back. Sending none is fine. |
+
+Desktop answers:
+
+| Status | When | Body |
+| --- | --- | --- |
+| `200` | Chief answered | `{"text": "Barry is fixing the build.", "audio": null, "endCall": false}` |
+| `401` | Unknown token | `{"error": "unknown_token"}` (the call ends, the phone says to pair again) |
+| `404` / `501` | Desktop can't do calls yet | The phone says to update Squall on the computer |
+| `409` / `503` | Chief can't talk right now | The phone shows it and keeps listening |
+
+- `text` is what Chief says. Keep it short and speakable: no code blocks or long lists.
+- `audio` is optional: `{"format": "mp3", "base64": "..."}`. Any format iOS can play (mp3, m4a, wav, caf). If it's there the phone plays it instead of speaking `text`, but still shows `text` as the caption.
+- `endCall: true` hangs up after Chief finishes talking, for when you say bye.
+
+### `POST /api/v1/voice/end`
+
+Header `Authorization: Bearer <token>`. Body `{"callId": "...", "seconds": 42}`. Sent when the call ends, best effort. Answer `204`.
+
+The phone also saves the whole call (what you said and what Chief said) into the chat with Chief.
+
 ## Live messages (next step)
 
 Once paired, the app will open a WebSocket to `ws://<host>:<port>/api/v1/events` with the same `Authorization: Bearer <token>` header. Each message is one JSON object with a `type`:
@@ -107,4 +164,4 @@ On a computer on the same Wi-Fi as the phone or iPad:
 python3 tools/pairing_test_server.py
 ```
 
-It prints the address, a 6-digit code and the `squall://` link (and a QR code if `pip install qrcode` is done). In the app, scan it or tap **Type the code**. Press Enter in the terminal for a fresh code. If the phone can't reach it, allow Python through the computer's firewall for private networks.
+It prints the address, a 6-digit code and the `squall://` link (and a QR code if `pip install qrcode` is done). In the app, scan it or tap **Type the code**. Press Enter in the terminal for a fresh code. Once paired, **Call Chief** talks to a pretend Chief in the terminal (say "what's Barry doing" or "bye"). Add `--no-voice` to act like a desktop that can't do calls yet. If the phone can't reach it, allow Python through the computer's firewall for private networks.

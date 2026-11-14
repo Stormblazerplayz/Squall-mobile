@@ -31,6 +31,10 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Squall uses the microphone so you can talk to Chief on a voice call.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Squall turns what you say on a call into text so Chief on your computer can answer, and shows it as captions.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Squall uses Face ID to unlock the app when App lock is on.</string>
 	<key>NSCameraUsageDescription</key>

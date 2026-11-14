@@ -25,6 +25,38 @@ struct PairingClient {
         var protocolVersion: Int?
     }
 
+    /// One thing said on a voice call. See "Voice calls" in docs/pairing.md.
+    struct VoiceTurn: Encodable {
+        enum Event: String, Encodable {
+            case start
+            case turn
+        }
+
+        var callId: String
+        var event: Event
+        var turn: Int
+        var bot: String
+        var text: String
+        var locale: String
+        var wantsAudio: Bool
+    }
+
+    struct VoiceReply: Decodable {
+        struct Audio: Decodable {
+            var format: String?
+            var base64: String
+        }
+
+        var text: String
+        var audio: Audio?
+        var endCall: Bool?
+    }
+
+    private struct VoiceEnd: Encodable {
+        var callId: String
+        var seconds: Int
+    }
+
     private struct PairRequest: Encodable {
         var code: String
         var protocolVersion: Int
@@ -107,6 +139,47 @@ struct PairingClient {
         request.httpMethod = "DELETE"
         request.timeoutInterval = 4
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        _ = try? await send(request)
+    }
+
+    /// Sends what you said on a call and gets Chief's answer back.
+    func voiceTurn(_ computer: PairedComputer, token: String, turn: VoiceTurn) async throws -> VoiceReply {
+        guard let url = Self.url(host: computer.host, port: computer.port, path: "/api/v1/voice/turn") else {
+            throw PairingError.badAddress
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.httpBody = try JSONEncoder().encode(turn)
+        let (data, response) = try await send(request)
+        switch response.statusCode {
+        case 200:
+            guard let reply = try? JSONDecoder().decode(VoiceReply.self, from: data) else {
+                throw PairingError.badReply
+            }
+            return reply
+        case 401, 403:
+            throw PairingError.tokenRejected
+        case 404, 501:
+            throw PairingError.voiceNotSupported
+        case 409, 503:
+            throw PairingError.chiefBusy
+        default:
+            throw PairingError.badReply
+        }
+    }
+
+    /// Tells the computer the call ended. Best effort.
+    func voiceEnd(_ computer: PairedComputer, token: String, callId: String, seconds: Int) async {
+        guard let url = Self.url(host: computer.host, port: computer.port, path: "/api/v1/voice/end") else { return }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 4
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.httpBody = try? JSONEncoder().encode(VoiceEnd(callId: callId, seconds: seconds))
         _ = try? await send(request)
     }
 
