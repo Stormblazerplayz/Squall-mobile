@@ -81,7 +81,7 @@ struct TeamWidgetView: View {
         Group {
             switch state {
             case .noData:
-                message(icon: "desktopcomputer", title: "Open Squall", detail: "Pair with your computer to see your team here.")
+                message(icon: "arrow.triangle.2.circlepath", title: "Open Squall to sync", detail: "Your team shows up here after Squall talks to your computer.")
             case .notPaired:
                 message(icon: "desktopcomputer", title: "Not paired", detail: "Open Squall to pair with your computer.")
             case .team(let snapshot):
