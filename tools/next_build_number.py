@@ -4,10 +4,11 @@
 Used by .github/workflows/ios.yml right before a build that will be uploaded, so build numbers
 go up by exactly 1 per TestFlight upload (test runs and failed runs don't use up a number).
 
-It looks in two places and takes the highest:
+It looks in three places and takes the highest:
   1. App Store Connect: every build of the app (needs the API key, see below).
   2. Git tags named testflight-<number>, which the workflow adds after each upload. These catch an
-     upload that Apple hasn't listed yet.
+     upload that Apple hasn't listed yet (or one that failed Apple's processing but still used up its number).
+  3. tools/testflight_history.txt: build numbers uploaded before the tags existed.
 
 Needs these environment variables (the workflow sets them from the repo secrets):
   ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_PATH (the .p8 file), BUNDLE_ID
@@ -75,25 +76,54 @@ def get(path: str, token: str) -> dict:
         return json.load(r)
 
 
+def _versions(url: str, token: str, field: str, pages: int = 10) -> list:
+    """Every build number on all pages of an App Store Connect list (newest first)."""
+    out = []
+    while url and pages > 0:
+        page = get(url, token)
+        for item in page.get("data", []):
+            v = str(item.get("attributes", {}).get(field, "")).strip()
+            if v.isdigit():
+                out.append((int(v), item.get("attributes", {}).get("processingState") or item.get("attributes", {}).get("state")))
+        url = page.get("links", {}).get("next")
+        pages -= 1
+    return out
+
+
 def highest_from_apple() -> int:
-    """The highest build number App Store Connect has for this app (0 if it has none)."""
+    """The highest build number App Store Connect has for this app (0 if it has none).
+
+    Looks at every build (processing, failed or ready) and, where Apple offers it, every upload,
+    because Apple won't take a build number that isn't higher than one it has already seen.
+    """
     token = make_token(os.environ["ASC_KEY_ID"], os.environ["ASC_ISSUER_ID"], os.environ["ASC_KEY_PATH"])
     bundle = os.environ["BUNDLE_ID"]
     apps = get("/apps?" + urllib.parse.urlencode({"filter[bundleId]": bundle, "fields[apps]": "bundleId"}), token)
     app_id = next((a["id"] for a in apps.get("data", []) if a["attributes"].get("bundleId") == bundle), None)
     if not app_id:
         raise RuntimeError(f"App Store Connect has no app with the bundle ID {bundle}")
-    best, url, pages = 0, "/builds?" + urllib.parse.urlencode(
-        {"filter[app]": app_id, "fields[builds]": "version", "sort": "-uploadedDate", "limit": "200"}), 0
-    while url and pages < 10:
-        page = get(url, token)
-        for b in page.get("data", []):
-            v = str(b["attributes"].get("version", ""))
-            if v.isdigit():
-                best = max(best, int(v))
-        url = page.get("links", {}).get("next")
-        pages += 1
-    return best
+    found = _versions("/builds?" + urllib.parse.urlencode(
+        {"filter[app]": app_id, "fields[builds]": "version,processingState,uploadedDate", "sort": "-uploadedDate", "limit": "200"}),
+        token, "version")
+    seen = {"builds": max((v for v, _ in found), default=0)}
+    # Extra looks that may not work on every account. Each one can only raise the number, never lower it.
+    extra = {
+        "builds in any state": ("/builds?" + urllib.parse.urlencode(
+            {"filter[app]": app_id, "filter[processingState]": "PROCESSING,FAILED,INVALID,VALID",
+             "fields[builds]": "version,processingState", "limit": "200"}), "version"),
+        "build uploads": (f"/apps/{app_id}/buildUploads?" + urllib.parse.urlencode({"limit": "200"}), "cfBundleVersion"),
+    }
+    for name, (url, field) in extra.items():
+        try:
+            more = _versions(url, token, field)
+            found += more
+            seen[name] = max((v for v, _ in more), default=0)
+        except Exception as e:
+            seen[name] = f"not available ({str(e)[:60]})"
+    newest = sorted({v: s for v, s in found}.items(), reverse=True)[:5]
+    print("App Store Connect: " + ", ".join(f"{k} {v}" for k, v in seen.items())
+          + ". Newest: " + ", ".join(f"{v} ({s or 'unknown'})" for v, s in newest), file=sys.stderr)
+    return max((v for v, _ in found), default=0)
 
 
 def highest_from_tags() -> int:
@@ -101,6 +131,15 @@ def highest_from_tags() -> int:
     out = subprocess.run(["git", "ls-remote", "--tags", "origin", "testflight-*"],
                          capture_output=True, text=True).stdout
     numbers = [int(m) for m in re.findall(r"refs/tags/testflight-(\d+)$", out, re.M)]
+    return max(numbers, default=0)
+
+
+def highest_from_history() -> int:
+    """The highest build number written in tools/testflight_history.txt: uploads from before the tags existed."""
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "testflight_history.txt")
+    if not os.path.exists(path):
+        return 0
+    numbers = [int(n) for n in re.findall(r"^\s*(\d+)\b", open(path).read(), re.M)]
     return max(numbers, default=0)
 
 
@@ -142,13 +181,13 @@ def main() -> None:
         except Exception as e:   # network hiccup or Apple being slow: try again
             error = e
             time.sleep(5 * (attempt + 1))
-    tags = highest_from_tags()
+    tags = max(highest_from_tags(), highest_from_history())
     if apple is None:
         if tags == 0:
             sys.exit(f"::error title=Build number::Couldn't read the latest TestFlight build from App Store Connect: {error}")
         print(f"::warning title=Build number::Couldn't reach App Store Connect ({error}), so using the git tags.", file=sys.stderr)
         apple = 0
-    print(f"Latest TestFlight build: {apple} (App Store Connect), {tags} (git tags)", file=sys.stderr)
+    print(f"Latest TestFlight build: {apple} (App Store Connect), {tags} (git tags and upload history)", file=sys.stderr)
     print(max(apple, tags) + 1)
 
 

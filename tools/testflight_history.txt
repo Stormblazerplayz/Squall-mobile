@@ -1,0 +1,8 @@
+# TestFlight uploads from before the testflight-<number> tags existed (from the GitHub Actions logs).
+# tools/next_build_number.py never picks a number at or below these. One build number per line.
+4   run 4   7aa9c39
+6   run 6   7d33875
+13  run 13  a6df1c5
+15  run 15  1884685
+23  run 23  6b1a493
+16  run 26  d2098ca (uploaded after 23, so Apple may refuse it)
