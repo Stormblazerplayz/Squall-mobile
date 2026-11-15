@@ -71,7 +71,7 @@ The workflow is `.github/workflows/ios.yml`. One job runs every time:
 
 If the secrets aren't set, step 3 is skipped with a "TestFlight skipped" note and the run still passes.
 
-Each run's build number is the GitHub run number, so every upload is newer than the last one. To change the version people see (like `0.1.0`), edit `MARKETING_VERSION` in `project.yml`.
+Each TestFlight upload gets the newest TestFlight build number plus 1 (read from App Store Connect, and tagged `testflight-<number>` after the upload), so build numbers go up by exactly 1. Pull request checks don't use up a number. To change the version people see (like `0.1.0`), edit `MARKETING_VERSION` in `project.yml`.
 
 ## Setting up TestFlight (one time)
 
