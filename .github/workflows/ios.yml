@@ -69,6 +69,7 @@ jobs:
             echo "upload=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          echo "secrets=true" >> "$GITHUB_OUTPUT"
 
           if [ "$EVENT_NAME" = "pull_request" ]; then
             echo "::notice title=TestFlight skipped::Pull requests only check the build. TestFlight runs on pushes to main or from Run workflow."
@@ -85,7 +86,7 @@ jobs:
           fi
 
       - name: Install the App Store Connect API key
-        if: steps.signing.outputs.sign == 'true'
+        if: steps.signing.outputs.secrets == 'true'
         run: |
           KEY_DIR="$HOME/.appstoreconnect/private_keys"
           KEY_PATH="$KEY_DIR/AuthKey_${ASC_KEY_ID}.p8"
@@ -113,6 +114,10 @@ jobs:
           else
             N=1
             echo "Not a TestFlight upload, so the build number stays 1."
+            if [ "${{ steps.signing.outputs.secrets }}" = "true" ]; then
+              # Practice run, so a broken number lookup shows up here and not after merging.
+              echo "The next TestFlight build would be number $(python3 tools/next_build_number.py)."
+            fi
           fi
           echo "BUILD_NUMBER=$N" >> "$GITHUB_ENV"
 
