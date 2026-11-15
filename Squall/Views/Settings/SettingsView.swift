@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import UserNotifications
 
 struct SettingsView: View {
     @EnvironmentObject private var store: SquallStore
@@ -37,6 +38,8 @@ struct SettingsView: View {
     @AppStorage(Prefs.defaultRole) private var defaultRole = "Generalist"
     @AppStorage(Prefs.appLock) private var appLock = false
     @AppStorage(Prefs.hideInSwitcher) private var hideInSwitcher = false
+    @AppStorage(Prefs.autoLockScreen) private var autoLockScreen = true
+    @ObservedObject private var alerts = SquallAlerts.shared
 
     private let lockMethod = AppLock.methodName
     private static let githubURL = URL(string: "https://github.com/Stormblazerplayz/Squall-mobile")!
@@ -108,6 +111,8 @@ struct SettingsView: View {
         claudeCodeSection
         SectionLabel(text: "Notifications")
         notificationSection
+        SectionLabel(text: "Lock Screen")
+        lockScreenSection
         SectionLabel(text: "Privacy")
         privacySection
         SectionLabel(text: "Data")
@@ -238,6 +243,9 @@ struct SettingsView: View {
             detailRow("Computer", computer.name)
             detailRow("Address", computer.address)
             detailRow("Paired", computer.pairedAt.formatted(date: .abbreviated, time: .shortened))
+            if let version = store.desktop?.summary {
+                detailRow("Squall on it", version)
+            }
             TimelineView(.periodic(from: .now, by: 30)) { context in
                 detailRow("Last synced", store.lastSynced.map { SyncAge.text($0, now: context.date) } ?? "Not yet")
             }
@@ -541,6 +549,19 @@ struct SettingsView: View {
 
     private var notificationSection: some View {
         card {
+            if alerts.permission == .denied {
+                permissionRow("Notifications are off for Squall in the Settings app.", button: "Open Settings") {
+                    if let url = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(url)
+                    }
+                }
+                line
+            } else if alerts.permission == .notDetermined {
+                permissionRow("Let Squall ping you when a bot needs you, even when the app is closed.", button: "Turn on") {
+                    Task { await alerts.askNow() }
+                }
+                line
+            }
             SwitchRow(title: "When a bot needs me", subtitle: "Questions and OKs", isOn: $store.settings.notifyNeedsMe, tint: store.accent)
             line
             SwitchRow(title: "When something breaks", subtitle: "Errors get stacked, so one ping per problem", isOn: $store.settings.notifyErrors, tint: store.accent)
@@ -572,6 +593,37 @@ struct SettingsView: View {
             }
         }
         .animation(.easeOut(duration: 0.2), value: store.settings.quietHours)
+    }
+
+    private func permissionRow(_ text: String, button: String, action: @escaping () -> Void) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "bell.badge.fill")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Theme.goldText)
+            Text(text)
+                .font(.system(size: 13.5))
+                .foregroundStyle(Theme.text)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 6)
+            Button(button, action: action)
+                .buttonStyle(GhostButtonStyle(height: 34, expand: false, fontSize: 13.5, sidePadding: 10))
+        }
+    }
+
+    private var lockScreenSection: some View {
+        card {
+            SwitchRow(
+                title: "Show on Lock Screen by itself",
+                subtitle: "A new OK request, or your team when it starts working, shows up on the Lock Screen without a tap. iPhone only.",
+                isOn: $autoLockScreen,
+                tint: store.accent
+            )
+            line
+            Text("Allow, Deny and Pause on the Lock Screen, in notifications, in widgets and in Control Center go straight to your computer, even when Squall is closed. Allow asks for Face ID first.")
+                .font(.system(size: 12.5))
+                .foregroundStyle(Theme.sub)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 
     private var quietSubtitle: String {

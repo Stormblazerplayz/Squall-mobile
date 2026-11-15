@@ -17,6 +17,9 @@ struct RootView: View {
                 }
         }
         .tint(store.accent)
+        .background {
+            KeyCommands()
+        }
         .overlay(alignment: .top) {
             if let toast = store.toast {
                 ToastView(toast: toast) { action in
@@ -180,7 +183,56 @@ struct SquallTabBar: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .keyboardShortcut(Self.key(for: tab), modifiers: .command)
         .accessibilityLabel(tab.label)
         .accessibilityAddTraits(isOn ? .isSelected : [])
+    }
+
+    /// ⌘1 to ⌘5 on a keyboard, in the order of the tabs.
+    private static func key(for tab: AppTab) -> KeyEquivalent {
+        let number = (AppTab.allCases.firstIndex(of: tab) ?? 0) + 1
+        return KeyEquivalent(Character(String(number)))
+    }
+}
+
+/// Keyboard shortcuts for iPad (and iPhone with a keyboard). Hold ⌘ to see them all.
+/// The tabs are ⌘1 to ⌘5, on the tab bar itself.
+private struct KeyCommands: View {
+    @EnvironmentObject private var store: SquallStore
+
+    var body: some View {
+        Group {
+            Button("Refresh") {
+                store.refreshNow()
+            }
+            .keyboardShortcut("r", modifiers: .command)
+            Button("Call Chief") {
+                store.showCall = true
+            }
+            .keyboardShortcut("k", modifiers: [.command, .shift])
+            Button("New teammate") {
+                if store.isConnected {
+                    store.showNewTeammate = true
+                } else {
+                    store.showToast("Connect to your computer first.", action: .pair)
+                }
+            }
+            .keyboardShortcut("n", modifiers: .command)
+            Button("Mission control") {
+                store.open(SquallLink.mission)
+            }
+            .keyboardShortcut("m", modifiers: [.command, .shift])
+            Button("Settings") {
+                if store.path.last != .settings { store.path = [.settings] }
+            }
+            .keyboardShortcut(",", modifiers: .command)
+            Button("Back") {
+                if !store.path.isEmpty { store.path.removeLast() }
+            }
+            .keyboardShortcut("[", modifiers: .command)
+        }
+        .frame(width: 0, height: 0)
+        .opacity(0)
+        .accessibilityHidden(true)
     }
 }

@@ -233,6 +233,7 @@ struct TeamWidgetView: View {
                 Text("Squall")
                     .foregroundStyle(Palette.text)
                 Spacer(minLength: 0)
+                pauseButton(snapshot)
             }
             .font(.system(size: 13, weight: .bold))
             Text(headline(snapshot))
@@ -261,12 +262,14 @@ struct TeamWidgetView: View {
 
     private func medium(_ snapshot: WidgetSnapshot) -> some View {
         HStack(alignment: .top, spacing: 14) {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: answerID(snapshot) == nil ? 6 : 4) {
                 HStack(spacing: 6) {
                     Image(systemName: "bolt.fill")
                         .foregroundStyle(Palette.gold)
                     Text("Squall")
                         .foregroundStyle(Palette.text)
+                    Spacer(minLength: 0)
+                    pauseButton(snapshot)
                 }
                 .font(.system(size: 13, weight: .bold))
                 Text(headline(snapshot))
@@ -278,7 +281,10 @@ struct TeamWidgetView: View {
                     Text("\(snapshot.firstAskBot ?? "A bot") asks: \(ask)")
                         .font(.system(size: 11.5))
                         .foregroundStyle(Palette.sub)
-                        .lineLimit(3)
+                        .lineLimit(answerID(snapshot) == nil ? 3 : 2)
+                    if let id = answerID(snapshot) {
+                        answerButtons(id)
+                    }
                 } else if snapshot.unreadInbox > 0 {
                     Text("\(snapshot.unreadInbox) unread in Inbox")
                         .font(.system(size: 11.5))
@@ -318,6 +324,48 @@ struct TeamWidgetView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
+    }
+
+    // MARK: - Buttons
+
+    /// The OK request the widget can answer: a plain Allow or Deny, from fresh data only.
+    private func answerID(_ snapshot: WidgetSnapshot) -> String? {
+        guard !snapshot.isStale(now: entry.date) else { return nil }
+        return snapshot.firstAskID
+    }
+
+    /// Pauses or resumes the whole team on the computer.
+    private func pauseButton(_ snapshot: WidgetSnapshot) -> some View {
+        Button(intent: SetTeamPausedIntent(paused: !snapshot.paused)) {
+            Image(systemName: snapshot.paused ? "play.fill" : "pause.fill")
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(snapshot.paused ? Palette.greenText : Palette.text)
+                .frame(width: 24, height: 24)
+                .background(Circle().fill(Palette.button))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(snapshot.paused ? "Resume the team" : "Pause the team")
+    }
+
+    private func answerButtons(_ itemID: String) -> some View {
+        HStack(spacing: 6) {
+            Button(intent: AnswerAskIntent(itemID: itemID, allow: true)) {
+                Text("Allow")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(Palette.ink)
+                    .frame(maxWidth: .infinity, minHeight: 24)
+                    .background(Capsule().fill(Palette.green))
+            }
+            .buttonStyle(.plain)
+            Button(intent: AnswerAskIntent(itemID: itemID, allow: false)) {
+                Text("Deny")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(Palette.text)
+                    .frame(maxWidth: .infinity, minHeight: 24)
+                    .background(Capsule().fill(Palette.button))
+            }
+            .buttonStyle(.plain)
         }
     }
 

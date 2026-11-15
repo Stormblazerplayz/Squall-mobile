@@ -2,6 +2,8 @@ import SwiftUI
 
 @main
 struct SquallApp: App {
+    // Notifications and background checks are set up as the app launches.
+    @UIApplicationDelegateAdaptor(SquallAppDelegate.self) private var appDelegate
     @StateObject private var store = SquallStore()
     @StateObject private var pairing = PairingStore()
     @StateObject private var lock = AppLock()
@@ -41,12 +43,15 @@ struct SquallApp: App {
             case .background:
                 lock.appLeft()
                 cameFromBackground = true
+                // Ask iOS to let Squall check the computer again in a while.
+                BackgroundRefresh.schedule()
             case .active:
                 // Catch up on anything pressed on the Lock Screen while away, and on the computer.
                 store.handleActivityActions()
                 // And anything Siri or a Shortcut asked for, like "Call Chief".
                 store.handleIntentRequests()
                 store.refreshNow()
+                Task { await SquallAlerts.shared.refreshPermission() }
                 // Only ask on the way back in, so cancelling Face ID doesn't loop.
                 if cameFromBackground {
                     cameFromBackground = false

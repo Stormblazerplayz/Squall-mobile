@@ -18,9 +18,11 @@ struct StateSnapshot: Decodable {
     var work: [WorkDTO]
     var handoffs: [HandoffDTO]
     var claudeCode: ClaudeCodeDTO?
+    /// Squall on the computer itself. Older desktops don't send it.
+    var desktop: DesktopInfo?
 
     private enum CodingKeys: String, CodingKey {
-        case version, paused, typing, bots, chats, groups, inbox, routines, work, handoffs, claudeCode
+        case version, paused, typing, bots, chats, groups, inbox, routines, work, handoffs, claudeCode, desktop
     }
 
     init(from decoder: Decoder) throws {
@@ -35,12 +37,41 @@ struct StateSnapshot: Decodable {
         work = c.lossyArray(WorkDTO.self, forKey: .work)
         handoffs = c.lossyArray(HandoffDTO.self, forKey: .handoffs)
         claudeCode = try? c.decodeIfPresent(ClaudeCodeDTO.self, forKey: .claudeCode)
+        desktop = (try? c.decodeIfPresent(DesktopInfo.self, forKey: .desktop)) ?? nil
         let rawChats = (try? c.decodeIfPresent([String: [Lossy<MessageDTO>]].self, forKey: .chats)) ?? [:]
         var cleanChats: [String: [MessageDTO]] = [:]
         for (key, list) in rawChats {
             cleanChats[key] = list.compactMap(\.value)
         }
         chats = cleanChats
+    }
+}
+
+/// `"desktop": {"version": "1.4.0", "latest": "1.5.0", "updating": false}` in the state.
+struct DesktopInfo: Decodable, Equatable {
+    var version: String?
+    /// The newest version on GitHub Releases, when the desktop has checked.
+    var latest: String?
+    /// True while the desktop is downloading or installing an update.
+    var updating: Bool
+
+    private enum CodingKeys: String, CodingKey {
+        case version, latest, updating
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        version = c.lenientString(.version)
+        latest = c.lenientString(.latest)
+        updating = (try? c.decodeIfPresent(Bool.self, forKey: .updating)) ?? false
+    }
+
+    /// "1.4.0", "1.4.0 · 1.5.0 is ready" or "1.4.0 · updating".
+    var summary: String? {
+        guard let version, !version.isEmpty else { return nil }
+        if updating { return "\(version) · updating" }
+        if let latest, !latest.isEmpty, latest != version { return "\(version) · \(latest) is ready" }
+        return version
     }
 }
 

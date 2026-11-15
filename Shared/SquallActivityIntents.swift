@@ -4,10 +4,31 @@ import Foundation
 
 // The buttons on the Lock Screen and in the Dynamic Island.
 // LiveActivityIntent runs these inside the app, without opening it.
-// Each one updates its Live Activity right away, then tells the app.
+// Each one updates its Live Activity right away, then sends the press straight to the
+// computer. If that can't be done yet, it leaves a note so the app sends it once it's connected.
 
 private func soon(_ seconds: TimeInterval = 8) -> ActivityUIDismissalPolicy {
     .after(Date().addingTimeInterval(seconds))
+}
+
+/// What the activity is about (a job, an Inbox item or a routine), saved by the app.
+private func subject(_ key: String) -> String? {
+    let value = UserDefaults.standard.string(forKey: key)
+    return (value?.isEmpty ?? true) ? nil : value
+}
+
+/// Sends the press to the computer. When the app doesn't know what it's about, or the
+/// computer can't be reached right now, the app catches up later instead.
+private func deliver(_ type: String, _ fields: [String: Any]?, otherwise fallback: SquallActivityAction) async {
+    if let fields {
+        do {
+            try await SquallDirect.send(type, fields)
+            return
+        } catch {
+            // Falls through to the note below.
+        }
+    }
+    SquallActivityBridge.post(fallback)
 }
 
 // MARK: - A bot at work
@@ -26,7 +47,8 @@ struct PauseBuildIntent: LiveActivityIntent {
             nowPaused = state.paused
             await activity.update(ActivityContent(state: state, staleDate: nil))
         }
-        SquallActivityBridge.post(nowPaused ? .pauseBuild : .resumeBuild)
+        let fields: [String: Any]? = subject(SquallActivityKeys.buildWork).map { ["workId": $0, "paused": nowPaused] }
+        await deliver("work.pause", fields, otherwise: nowPaused ? .pauseBuild : .resumeBuild)
         return .result()
     }
 }
@@ -35,12 +57,15 @@ struct PauseBuildIntent: LiveActivityIntent {
 
 struct AllowPushIntent: LiveActivityIntent {
     static let title: LocalizedStringResource = "Allow the request"
+    // Allowing a bot to do something needs the phone unlocked, like Face ID.
+    static let authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
 
     init() {}
 
     func perform() async throws -> some IntentResult {
         await decide(.allowed)
-        SquallActivityBridge.post(.allowPush)
+        let fields: [String: Any]? = subject(SquallActivityKeys.approvalItem).map { ["itemId": $0, "answer": "allow"] }
+        await deliver("inbox.answer", fields, otherwise: .allowPush)
         return .result()
     }
 }
@@ -52,7 +77,8 @@ struct DenyPushIntent: LiveActivityIntent {
 
     func perform() async throws -> some IntentResult {
         await decide(.denied)
-        SquallActivityBridge.post(.denyPush)
+        let fields: [String: Any]? = subject(SquallActivityKeys.approvalItem).map { ["itemId": $0, "answer": "deny"] }
+        await deliver("inbox.answer", fields, otherwise: .denyPush)
         return .result()
     }
 }
@@ -79,7 +105,8 @@ struct SkipRoutineIntent: LiveActivityIntent {
             state.skipped = true
             await activity.end(ActivityContent(state: state, staleDate: nil), dismissalPolicy: soon())
         }
-        SquallActivityBridge.post(.skipRoutine)
+        let fields: [String: Any]? = subject(SquallActivityKeys.routine).map { ["routineId": $0] }
+        await deliver("routine.skip", fields, otherwise: .skipRoutine)
         return .result()
     }
 }
@@ -138,7 +165,7 @@ struct PauseTeamIntent: LiveActivityIntent {
             nowPaused = state.paused
             await activity.update(ActivityContent(state: state, staleDate: nil))
         }
-        SquallActivityBridge.post(nowPaused ? .pauseTeam : .resumeTeam)
+        await deliver("team.pause", ["paused": nowPaused], otherwise: nowPaused ? .pauseTeam : .resumeTeam)
         return .result()
     }
 }

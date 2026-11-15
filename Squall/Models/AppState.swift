@@ -146,10 +146,17 @@ enum Prefs {
     static let appLock = "squall.appLock"
     static let hideInSwitcher = "squall.hideInSwitcher"
     static let settings = "squall.settings"
+    static let autoLockScreen = "squall.autoLockScreen"
 
     /// Every @AppStorage key, so "Reset settings" can clear them.
     static let all = [teamName, chatTextSize, showTyping, showTimes, sendOnReturn, haptics, sounds,
-                      softGlow, openChat, lastChat, defaultRole, appLock, hideInSwitcher, settings]
+                      softGlow, openChat, lastChat, defaultRole, appLock, hideInSwitcher, settings,
+                      autoLockScreen]
+
+    /// "Show on Lock Screen by itself" in Settings. On unless turned off.
+    static var autoLockScreenOn: Bool {
+        UserDefaults.standard.object(forKey: autoLockScreen) as? Bool ?? true
+    }
 
     /// The name you go by, from Settings. Falls back to Storm.
     static var displayName: String {
