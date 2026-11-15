@@ -4,29 +4,6 @@ import Foundation
 // Siri and Shortcuts. Everything here asks the paired computer for real data;
 // when it can't be reached, Siri says so (and how old the saved copy is) instead of guessing.
 
-/// Screens Siri or a Shortcut asked the app to open. Kept in UserDefaults so a request
-/// made while the app was closed still opens the screen once it's up.
-enum SquallIntentRequests {
-    static let notification = Notification.Name("squall.intentRequest")
-    private static let key = "squall.intent.pending"
-
-    /// Asks the app to open a screen, like "call" (same names as squall:// links).
-    static func post(_ route: String) {
-        let defaults = UserDefaults.standard
-        var pending = defaults.stringArray(forKey: key) ?? []
-        pending.append(route)
-        defaults.set(pending, forKey: key)
-        NotificationCenter.default.post(name: notification, object: nil)
-    }
-
-    static func drain() -> [String] {
-        let defaults = UserDefaults.standard
-        let pending = defaults.stringArray(forKey: key) ?? []
-        if !pending.isEmpty { defaults.removeObject(forKey: key) }
-        return pending
-    }
-}
-
 /// "Call Chief in Squall": opens the app on a voice call with Chief.
 struct CallChiefIntent: AppIntent {
     static let title: LocalizedStringResource = "Call Chief"
@@ -124,6 +101,127 @@ struct ApproveChiefIntent: AppIntent {
     }
 }
 
+/// Turns a failed send into one sentence Siri can say.
+enum SiriText {
+    static func failure(_ error: Error, _ lead: String) -> String {
+        let reason = (error as? SquallDirect.Failure)?.message ?? PairingError.cantReach.message
+        return "\(lead) \(reason)"
+    }
+}
+
+/// "Pause my team in Squall": pauses every bot on the computer.
+struct PauseTeamSiriIntent: AppIntent {
+    static let title: LocalizedStringResource = "Pause my team"
+    static let description = IntentDescription("Pauses every bot on your computer until you resume them.")
+    static let openAppWhenRun = false
+
+    init() {}
+
+    func perform() async throws -> some IntentResult & ProvidesDialog {
+        do {
+            try await SquallDirect.send("team.pause", ["paused": true])
+            return .result(dialog: "Paused. Your team waits until you resume it.")
+        } catch {
+            return .result(dialog: "\(SiriText.failure(error, "Nothing was paused."))")
+        }
+    }
+}
+
+/// "Resume my team in Squall": starts every bot again.
+struct ResumeTeamSiriIntent: AppIntent {
+    static let title: LocalizedStringResource = "Resume my team"
+    static let description = IntentDescription("Starts every bot on your computer again after a pause.")
+    static let openAppWhenRun = false
+
+    init() {}
+
+    func perform() async throws -> some IntentResult & ProvidesDialog {
+        do {
+            try await SquallDirect.send("team.pause", ["paused": false])
+            return .result(dialog: "Done. Your team is back to work.")
+        } catch {
+            return .result(dialog: "\(SiriText.failure(error, "Your team wasn't resumed."))")
+        }
+    }
+}
+
+/// "Tell Chief in Squall": Siri asks what to say, then sends it to Chief's chat.
+struct TellChiefIntent: AppIntent {
+    static let title: LocalizedStringResource = "Tell Chief"
+    static let description = IntentDescription("Sends Chief a message on your computer, like a new job for the team.")
+    static let openAppWhenRun = false
+    // Chief can start real work from a message, so the phone has to be unlocked.
+    static let authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
+
+    @Parameter(title: "Message", requestValueDialog: "What should I tell Chief?")
+    var message: String
+
+    init() {}
+
+    func perform() async throws -> some IntentResult & ProvidesDialog {
+        let text = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else {
+            return .result(dialog: "Nothing was sent to Chief.")
+        }
+        do {
+            try await SquallDirect.send("chat.send", ["chatId": Bot.chiefID, "text": text])
+            return .result(dialog: "Sent to Chief.")
+        } catch {
+            return .result(dialog: "\(SiriText.failure(error, "Chief didn't get it."))")
+        }
+    }
+}
+
+/// "What needs me in Squall": reads out what's waiting on you.
+struct WhatNeedsMeIntent: AppIntent {
+    static let title: LocalizedStringResource = "What needs me"
+    static let description = IntentDescription("Reads out the OKs and questions your bots are waiting on.")
+    static let openAppWhenRun = false
+
+    init() {}
+
+    @MainActor
+    func perform() async throws -> some IntentResult & ProvidesDialog {
+        let pairing = PairingStore()
+        guard pairing.isPaired else {
+            return .result(dialog: "Squall isn't paired with your computer yet. Open Squall to pair.")
+        }
+        let snapshot: StateSnapshot
+        do {
+            snapshot = try await pairing.fetchState()
+        } catch {
+            let reason = (error as? PairingError)?.message ?? PairingError.cantReach.message
+            return .result(dialog: "\(reason)")
+        }
+        return .result(dialog: "\(NeedsMeSummary.spoken(snapshot))")
+    }
+}
+
+/// Turns the waiting OKs and questions into a few sentences Siri can read out.
+enum NeedsMeSummary {
+    static func spoken(_ snapshot: StateSnapshot) -> String {
+        let bots = snapshot.bots.map(\.model)
+        let waiting = snapshot.inbox.map(\.model).filter { $0.kind.needsYou }
+        guard !waiting.isEmpty else {
+            return "Nothing needs you right now."
+        }
+        var parts = [waiting.count == 1 ? "1 thing needs you." : "\(waiting.count) things need you."]
+        for item in waiting.prefix(3) {
+            let name = bots.first(where: { $0.id == item.botID })?.name ?? "A bot"
+            switch item.kind {
+            case .ask:
+                parts.append("\(name) wants your OK: \(item.title).")
+            default:
+                parts.append("\(name) asks: \(item.title).")
+            }
+        }
+        if waiting.count > 3 {
+            parts.append("Open Squall for the rest.")
+        }
+        return parts.joined(separator: " ")
+    }
+}
+
 /// The phrases Siri knows without any setup. Each must say the app's name.
 struct SquallShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
@@ -156,6 +254,46 @@ struct SquallShortcuts: AppShortcutsProvider {
             ],
             shortTitle: "Approve Chief",
             systemImageName: "checkmark.shield.fill"
+        )
+        AppShortcut(
+            intent: WhatNeedsMeIntent(),
+            phrases: [
+                "What needs me in \(.applicationName)",
+                "What's waiting in \(.applicationName)",
+                "Check my \(.applicationName) inbox"
+            ],
+            shortTitle: "What needs me",
+            systemImageName: "tray.full.fill"
+        )
+        AppShortcut(
+            intent: TellChiefIntent(),
+            phrases: [
+                "Tell Chief in \(.applicationName)",
+                "Send Chief a message in \(.applicationName)",
+                "Give \(.applicationName) a job"
+            ],
+            shortTitle: "Tell Chief",
+            systemImageName: "text.bubble.fill"
+        )
+        AppShortcut(
+            intent: PauseTeamSiriIntent(),
+            phrases: [
+                "Pause my team in \(.applicationName)",
+                "Pause my \(.applicationName) team",
+                "Pause \(.applicationName)"
+            ],
+            shortTitle: "Pause team",
+            systemImageName: "pause.circle.fill"
+        )
+        AppShortcut(
+            intent: ResumeTeamSiriIntent(),
+            phrases: [
+                "Resume my team in \(.applicationName)",
+                "Resume my \(.applicationName) team",
+                "Resume \(.applicationName)"
+            ],
+            shortTitle: "Resume team",
+            systemImageName: "play.circle.fill"
         )
     }
 }

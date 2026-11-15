@@ -189,7 +189,8 @@ Answer `200` with one JSON object. Every field is optional and anything unknown 
      "files": [{"path": ".github/workflows/ci.yml", "change": "+2 -1", "edited": true}]}
   ],
   "handoffs": [{"id": "h1", "from": "chief", "to": "bot-a", "what": "Fix the build", "at": "2026-11-14T14:54:00Z"}],
-  "claudeCode": {"version": "2.1.0", "latest": "2.1.0", "needsUpdate": false, "updating": null}
+  "claudeCode": {"version": "2.1.0", "latest": "2.1.0", "needsUpdate": false, "updating": null},
+  "desktop": {"version": "1.4.0", "latest": "1.5.0", "updating": false}
 }
 ```
 
@@ -205,6 +206,7 @@ Answer `200` with one JSON object. Every field is optional and anything unknown 
 | `work` | Jobs bots are doing. `state` is `working`, `waiting`, `paused`, `done` or `stopped`. Step `state` is `done`, `now` or `todo`. Line `kind` is `cmd`, `ok`, `warn`, `err`, `dim`, `text`, `add` or `del`. `askId` points at the Inbox item the job waits on. |
 | `handoffs` | Recent work passed between bots, newest first. |
 | `claudeCode` | The Claude Code version Chief uses. `updating` is 0 to 1 while an update runs. |
+| `desktop` | Optional. Squall desktop's own `version`, the newest on GitHub Releases as `latest` (once it has checked), and `updating` while it installs one. Settings > Computer shows it as "1.4.0 · 1.5.0 is ready" or "1.4.0 · updating". |
 
 Lock Screen Live Activities only start from this data: a running `work` job, an `ask` Inbox item, a routine with `run`, or busy bots. They end when the thing they follow is gone, and when the phone loses the computer.
 
@@ -215,6 +217,8 @@ One thing you did on the phone. The body is flat: `type`, a unique `id` (so the 
 ```json
 {"type": "inbox.answer", "id": "5B2E...UUID", "itemId": "i1", "answer": "allow"}
 ```
+
+Actions don't only come from the app's screens. Widget and Control Center buttons, Lock Screen and Dynamic Island buttons, notification buttons (Allow and Deny) and Siri send them too, often while the app is closed and hasn't fetched the state yet. They use the same token and the same types, and every press has its own `id`. Siri's **Tell Chief** sends `chat.send` with `chatId` `chief`.
 
 Answer `200` with `{"ok": true}`. When something new was made, add its id: `{"ok": true, "id": "bot-c"}`. When it didn't work, answer `{"ok": false, "error": "Short reason to show"}` (any status). The phone fetches `/api/v1/state` right after, so the desktop doesn't need to send the new state back.
 

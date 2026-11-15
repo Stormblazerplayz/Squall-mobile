@@ -39,6 +39,9 @@ final class PairingStore: ObservableObject {
         if saved == nil {
             // A token left over from an earlier install, with nothing pointing at it.
             KeychainStore.delete(account: Self.tokenAccount)
+            SquallDirect.clearShared()
+        } else if let saved {
+            Self.shareCopy(of: saved)
         }
         _computer = Published(initialValue: saved)
         _setupDone = Published(initialValue: defaults.bool(forKey: Self.setupKey) || saved != nil)
@@ -82,6 +85,7 @@ final class PairingStore: ObservableObject {
                 throw PairingError.cantSave
             }
             UserDefaults.standard.set(data, forKey: Self.computerKey)
+            Self.shareCopy(of: paired)
             computer = paired
             connection = .online
             return true
@@ -107,6 +111,7 @@ final class PairingStore: ObservableObject {
                 if let data = try? JSONEncoder().encode(renamed) {
                     UserDefaults.standard.set(data, forKey: Self.computerKey)
                 }
+                Self.shareCopy(of: renamed)
                 self.computer = renamed
             }
             connection = .online
@@ -164,11 +169,18 @@ final class PairingStore: ObservableObject {
             await client.unpair(computer, token: token)
         }
         KeychainStore.delete(account: Self.tokenAccount)
+        SquallDirect.clearShared()
         UserDefaults.standard.removeObject(forKey: Self.computerKey)
         self.computer = nil
         connection = .unknown
         errorText = nil
         busy = false
+    }
+
+    /// Keeps the copy that widget, Control Center and notification buttons use in step.
+    private static func shareCopy(of computer: PairedComputer) {
+        guard let token = KeychainStore.read(account: tokenAccount) else { return }
+        SquallDirect.saveShared(SquallDirect.Pairing(host: computer.host, port: computer.port, token: token, name: computer.name))
     }
 
     private func deviceInfo() -> PairingClient.DeviceInfo {

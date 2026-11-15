@@ -1,5 +1,6 @@
 import Network
 import SwiftUI
+import UIKit
 import WidgetKit
 
 /// Holds everything the app shows. All of it comes from Squall on the paired computer:
@@ -43,6 +44,8 @@ final class SquallStore: ObservableObject {
     @Published private(set) var handoffs: [Handoff] = []
     @Published private(set) var pausedAll = false
     @Published private(set) var claudeCode: ClaudeCodeInfo?
+    /// Squall on the computer: its version, and whether an update is ready or running.
+    @Published private(set) var desktop: DesktopInfo?
     /// Actions on their way to the computer, so buttons can wait.
     @Published private(set) var busyActions: Set<String> = []
 
@@ -89,6 +92,10 @@ final class SquallStore: ObservableObject {
     private var settingsTask: Task<Void, Never>?
     private var activityObserver: NSObjectProtocol?
     private var intentObserver: NSObjectProtocol?
+    private var directObserver: NSObjectProtocol?
+    /// Whether any teammate was busy at the last update, so the team only goes
+    /// on the Lock Screen by itself when it starts working.
+    private var teamWasBusy: Bool?
     private let pathMonitor = NWPathMonitor()
     private var networkWasUp = true
     /// What the phone knew before the last update, to notice new asks and finished jobs.
@@ -139,6 +146,17 @@ final class SquallStore: ObservableObject {
                 self?.handleIntentRequests()
             }
         }
+        // A widget, Control Center or notification button sent something: show what happened.
+        directObserver = NotificationCenter.default.addObserver(
+            forName: SquallDirect.sentNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.lastVersion = nil
+                self?.refreshNow()
+            }
+        }
         // Try the computer again as soon as Wi-Fi comes back.
         pathMonitor.pathUpdateHandler = { [weak self] path in
             let up = path.status == .satisfied
@@ -173,6 +191,7 @@ final class SquallStore: ObservableObject {
         lastVersion = nil
         failures = 0
         knownNeedsYou = nil
+        teamWasBusy = nil
         link = .connecting
         if lastSynced != nil {
             // Same computer as before (the task restarted): keep showing what's there.
@@ -278,7 +297,7 @@ final class SquallStore: ObservableObject {
         }
         let waiting = inbox.filter { $0.kind.needsYou }
         let first = waiting.first
-        let snapshot = WidgetSnapshot(
+        var snapshot = WidgetSnapshot(
             paired: true,
             computerName: computerName,
             syncedAt: syncedAt,
@@ -289,15 +308,22 @@ final class SquallStore: ObservableObject {
             firstAsk: first?.title,
             firstAskBot: first.flatMap { bot($0.botID)?.name }
         )
+        // Allow and Deny on the widget only for a plain OK, never for a question with choices.
+        if let first, first.kind == .ask { snapshot.firstAskID = first.id }
         var compare = snapshot
         compare.syncedAt = lastWidget?.syncedAt ?? syncedAt
         let changed = compare != lastWidget
         let old = syncedAt.timeIntervalSince(lastWidgetAt ?? .distantPast) > 5 * 60
         guard changed || old else { return }
+        let pausedChanged = lastWidget?.paused != snapshot.paused
         lastWidget = snapshot
         lastWidgetAt = syncedAt
         if SquallShared.saveWidget(snapshot) {
             WidgetCenter.shared.reloadTimelines(ofKind: SquallShared.widgetKind)
+            // The Pause switch in Control Center reads the same summary.
+            if pausedChanged, #available(iOS 18.0, *) {
+                ControlCenter.shared.reloadAllControls()
+            }
         }
     }
 
@@ -330,6 +356,7 @@ final class SquallStore: ObservableObject {
         let newHandoffs = snapshot.handoffs.enumerated().map { $0.element.model(index: $0.offset) }
         let newTyping = (snapshot.typing?.isEmpty ?? true) ? nil : snapshot.typing
         let newCode = snapshot.claudeCode?.model
+        let newDesktop = snapshot.desktop
 
         // Only touch what changed, so screens don't redraw every few seconds.
         if bots != newBots { bots = newBots }
@@ -342,6 +369,7 @@ final class SquallStore: ObservableObject {
         if typingBotID != newTyping { typingBotID = newTyping }
         if pausedAll != snapshot.paused { pausedAll = snapshot.paused }
         if claudeCode != newCode { claudeCode = newCode }
+        if desktop != newDesktop { desktop = newDesktop }
 
         if !newBots.isEmpty, bot(currentChatID) == nil, groups.first(where: { $0.id == currentChatID }) == nil {
             currentChatID = Bot.chiefID
@@ -359,6 +387,32 @@ final class SquallStore: ObservableObject {
         let needsYou = Set(inbox.filter { $0.kind.needsYou }.map(\.id))
         let problems = Set(inbox.filter { $0.kind == .error }.map(\.id))
         let running = Set(work.filter { $0.state.isRunning }.map(\.id))
+        let teamBusy = !LiveActivities.teamMembers(from: bots).isEmpty
+
+        // Notifications for anything new, and the badge on the app icon.
+        let alerts = SquallAlerts.shared
+        alerts.process(
+            inbox: inbox,
+            bots: bots,
+            settings: settings,
+            computerKey: dataComputerKey ?? "",
+            inForeground: UIApplication.shared.applicationState == .active
+        )
+        if knownNeedsYou == nil {
+            // The first real data from the computer: a good moment to ask about notifications.
+            Task { await alerts.askOnce() }
+        }
+
+        // A new OK request, or the team getting to work, goes on the Lock Screen by itself.
+        if let known = knownNeedsYou, Prefs.autoLockScreenOn {
+            let newAsk = inbox.first { $0.kind == .ask && !known.contains($0.id) }
+            let teamJustBusy = teamWasBusy == false && teamBusy
+            if newAsk != nil || teamJustBusy {
+                LiveActivities.shared.autoStart(newAsk: newAsk, teamJustBusy: teamJustBusy, bots: bots, paused: pausedAll)
+            }
+        }
+        teamWasBusy = teamBusy
+
         if let known = knownNeedsYou {
             let finished = work.contains { runningWork.contains($0.id) && $0.state == .done }
             if !needsYou.subtracting(known).isEmpty {
@@ -379,6 +433,7 @@ final class SquallStore: ObservableObject {
         clearData()
         dataComputerKey = nil
         SnapshotCache.clear()
+        SquallAlerts.shared.forget()
         // The widgets switch to "Not paired" instead of showing an old team.
         if SquallShared.loadWidget()?.paired != false, SquallShared.saveWidget(.notPaired()) {
             WidgetCenter.shared.reloadTimelines(ofKind: SquallShared.widgetKind)
@@ -393,6 +448,7 @@ final class SquallStore: ObservableObject {
         if showingSaved { showingSaved = false }
         if retryAt != nil { retryAt = nil }
         knownNeedsYou = nil
+        teamWasBusy = nil
         knownProblems = []
         runningWork = []
         lastSavedData = nil
@@ -409,6 +465,7 @@ final class SquallStore: ObservableObject {
         typingBotID = nil
         pausedAll = false
         claudeCode = nil
+        desktop = nil
         picking = nil
         liveWorkID = nil
         handoffTarget = nil

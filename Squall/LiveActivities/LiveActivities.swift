@@ -18,10 +18,10 @@ final class LiveActivities: ObservableObject {
     @Published private(set) var running: Set<Kind> = []
 
     // What each activity is about, saved so it still works after the app restarts.
-    private static let buildKey = "squall.activity.buildWork"
-    private static let approvalKey = "squall.activity.approvalItem"
-    private static let routineKey = "squall.activity.routine"
-    private static let teamKey = "squall.activity.teamBots"
+    private static let buildKey = SquallActivityKeys.buildWork
+    private static let approvalKey = SquallActivityKeys.approvalItem
+    private static let routineKey = SquallActivityKeys.routine
+    private static let teamKey = SquallActivityKeys.teamBots
 
     private init() {
         refresh()
@@ -244,6 +244,21 @@ final class LiveActivities: ObservableObject {
 
     private static func percent(_ progress: Double) -> Int {
         min(max(Int((progress * 100).rounded()), 0), 100)
+    }
+
+    // MARK: - By itself
+
+    /// Puts a new OK request, or a team that just got to work, on the Lock Screen without
+    /// a tap (Settings > Lock Screen). Never replaces one that's already showing.
+    func autoStart(newAsk: InboxItem?, teamJustBusy: Bool, bots: [Bot], paused: Bool) {
+        guard enabled else { return }
+        refresh()
+        if let item = newAsk, !running.contains(.approval) {
+            startApproval(item, bot: bots.first(where: { $0.id == item.botID }))
+        }
+        if teamJustBusy, !running.contains(.team) {
+            startTeam(bots, paused: paused)
+        }
     }
 
     // MARK: - Updates from the computer

@@ -36,10 +36,29 @@ Say these to Siri, or find them in the Shortcuts app:
 - **"Call Chief in Squall"**: opens a voice call with Chief.
 - **"What's my team doing in Squall"**: Siri says what Chief and the team are up to and what needs you. If the computer isn't answering, it says how old the saved copy is.
 - **"Approve Chief's request in Squall"**: Siri reads what Chief wants to do and asks before allowing it. It needs your iPhone unlocked.
+- **"What needs me in Squall"**: Siri reads out the OKs and questions waiting on you.
+- **"Tell Chief in Squall"**: Siri asks what to say and sends it to Chief, like a new job. It needs your iPhone unlocked.
+- **"Pause my team in Squall"** and **"Resume my team in Squall"**: pause or start every bot.
+
+## Notifications
+
+Squall pings you when a bot needs your OK or an answer, when something breaks, and (if you turn it on) when work is done. It follows Settings > Notifications: which pings, sound, quiet hours and muted bots. An OK request has **Allow** and **Deny** right on the notification (Allow asks for Face ID first). The app icon's badge counts what needs you.
+
+Squall checks the computer while it's open, for a little while after you leave it, and now and then in the background when iOS allows, so a ping can come a few minutes late. Nothing pings for old news when you first pair.
+
+## Control Center (iOS 18)
+
+Add **Pause my team** (a switch) and **Call Chief** from Control Center's edit screen, or put them on the Lock Screen or the Action button.
+
+## Keyboard (iPad)
+
+⌘1 to ⌘5 switch tabs, ⌘R refreshes, ⌘N adds a teammate, ⇧⌘K calls Chief, ⇧⌘M opens Mission control, ⌘, opens Settings and ⌘[ goes back. Hold ⌘ to see them all.
 
 ## Widgets
 
 Add the **Squall team** widget to the Home Screen (small or medium) or the Lock Screen. It shows what needs you, who's working and when it last synced. Tap it to open the Inbox or Team. With no data it says so, and after Unpair it says "Not paired".
+
+On the Home Screen it has a **Pause / Resume** button, and the medium one shows **Allow** and **Deny** for the first OK request (only while its data is fresh). The buttons send straight to your computer, even when Squall is closed, and the widget changes only after the computer says yes.
 
 The app hands the widget its data through a shared Keychain group (`<team>.<bundle id>.shared`), which needs no setup. If you also turn on **App Groups** for both App IDs at developer.apple.com and add `group.<bundle id>`, the GitHub build signs with that too and uses it first.
 
@@ -56,6 +75,8 @@ Five Live Activities show on the Lock Screen and in the Dynamic Island. Tap the 
 - **A routine running** (Routines, while one runs): counts up, with Skip today.
 - **Call with Chief** (Call Chief): starts by itself when a call connects, with a timer, captions, Mute and End. Calls keep going when you leave the app or lock the phone.
 - **Whole team** (Mission control): four bots with bars, and Pause all.
+
+With **Show on Lock Screen by itself** (Settings > Lock Screen, on at first), a new OK request and a team that just started working go on the Lock Screen without a tap while Squall is open. The Lock Screen buttons send straight to your computer, even if Squall was closed.
 
 They only start from real data from your computer, update while the app gets new data, and end when the job is gone or the computer stops answering. If nothing shows up, turn on Live Activities for Squall in the iPhone's Settings app. The extension lives in `SquallActivities`, and the parts it shares with the app are in `Shared`.
 

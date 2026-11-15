@@ -31,6 +31,8 @@ struct WidgetSnapshot: Codable, Equatable {
     /// The first thing waiting on you, and who asked.
     var firstAsk: String?
     var firstAskBot: String?
+    /// The Inbox item of that first ask, when it's a plain OK (so the widget can show Allow and Deny).
+    var firstAskID: String? = nil
 
     var workingCount: Int {
         members.filter { $0.status == "working" || $0.status == "waiting" }.count
@@ -109,8 +111,9 @@ enum SquallShared {
     }
 
     /// The full Keychain group, like ABCDE12345.com.stormblazerplayz.squall.shared.
-    /// Nil when this build wasn't signed with it.
-    private static let keychainGroup: String? = {
+    /// Nil when this build wasn't signed with it. The widgets' data and the copy of the
+    /// pairing that widget, Control Center and notification buttons use both live here.
+    static let keychainGroup: String? = {
         let suffix = SquallShared.plistValue("SquallKeychainGroup")
         guard !suffix.isEmpty, let prefix = SquallShared.teamPrefix() else { return nil }
         return prefix + "." + suffix
