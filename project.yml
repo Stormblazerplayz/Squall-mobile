@@ -40,7 +40,9 @@ targets:
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         CODE_SIGN_STYLE: Automatic
         ENABLE_PREVIEWS: YES
-    scheme: {}
+    scheme:
+      testTargets:
+        - SquallTests
   # Live Activities on the Lock Screen and in the Dynamic Island, plus the team widget.
   SquallActivities:
     type: app-extension
@@ -60,3 +62,19 @@ targets:
         SKIP_INSTALL: YES
         APPLICATION_EXTENSION_API_ONLY: YES
         LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks"
+  # Unit tests (Siri and Shortcuts), run on an iPhone simulator by the GitHub build.
+  SquallTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: SquallTests
+    dependencies:
+      - target: Squall
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(SQUALL_BUNDLE_ID).tests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/Squall.app/Squall
+        BUNDLE_LOADER: $(TEST_HOST)
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGN_STYLE: Automatic

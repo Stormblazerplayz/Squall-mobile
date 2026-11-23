@@ -218,7 +218,7 @@ One thing you did on the phone. The body is flat: `type`, a unique `id` (so the 
 {"type": "inbox.answer", "id": "5B2E...UUID", "itemId": "i1", "answer": "allow"}
 ```
 
-Actions don't only come from the app's screens. Widget and Control Center buttons, Lock Screen and Dynamic Island buttons, notification buttons (Allow and Deny) and Siri send them too, often while the app is closed and hasn't fetched the state yet. They use the same token and the same types, and every press has its own `id`. Siri's **Tell Chief** sends `chat.send` with `chatId` `chief`.
+Actions don't only come from the app's screens. Widget and Control Center buttons, Lock Screen and Dynamic Island buttons, notification buttons (Allow and Deny) and Siri send them too, often while the app is closed and hasn't fetched the state yet. They use the same token and the same types, and every press has its own `id`. Siri's **Ask Chief**, **Ask a bot** and **Start a task** send `chat.send` with the bot's id as `chatId`. To read the answer out, Ask then fetches `/api/v1/state` about once a second for up to 24 seconds and takes the bot's messages after the one it sent, once that bot isn't `typing` or `working` any more. Siri's **Approve** and **Decline** send `inbox.answer`.
 
 Answer `200` with `{"ok": true}`. When something new was made, add its id: `{"ok": true, "id": "bot-c"}`. When it didn't work, answer `{"ok": false, "error": "Short reason to show"}` (any status). The phone fetches `/api/v1/state` right after, so the desktop doesn't need to send the new state back.
 

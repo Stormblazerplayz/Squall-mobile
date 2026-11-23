@@ -31,14 +31,18 @@ Screens that slide in:
 
 ## Siri and Shortcuts
 
-Say these to Siri, or find them in the Shortcuts app:
+Say these to Siri, or find them in the Shortcuts app and Spotlight. Everything goes to your real computer; if Squall isn't paired or the computer isn't answering, Siri says so.
 
+- **"Ask Chief in Squall"**: Siri asks what you want to know, sends it to Chief and reads you Chief's real answer, with a card showing it. If Chief takes longer than Siri can wait, Siri reads what's there so far and the rest lands in your chat with Chief.
+- **"Ask Builder in Squall"** (any bot's name), or **"Ask a bot in Squall"**: same, for any bot. Siri asks "Which bot?" when you don't say one.
+- **"Start a task in Squall"** (or "Tell Chief in Squall"): Siri asks for the job and gives it to Chief. In Shortcuts you can pick another bot.
+- **"What's my team doing in Squall"**: who's working on what and what needs you, with a team card. If the computer isn't answering, it says how old the saved copy is.
+- **"What needs me in Squall"**: reads out the OKs and questions waiting on you.
+- **"Approve the request in Squall"** and **"Decline the request in Squall"**: Siri reads who's asking and what it wants to run, and asks before sending Allow or Deny. Questions with choices stay in the app. In Shortcuts you can pick whose request.
 - **"Call Chief in Squall"**: opens a voice call with Chief.
-- **"What's my team doing in Squall"**: Siri says what Chief and the team are up to and what needs you. If the computer isn't answering, it says how old the saved copy is.
-- **"Approve Chief's request in Squall"**: Siri reads what Chief wants to do and asks before allowing it. It needs your iPhone unlocked.
-- **"What needs me in Squall"**: Siri reads out the OKs and questions waiting on you.
-- **"Tell Chief in Squall"**: Siri asks what to say and sends it to Chief, like a new job. It needs your iPhone unlocked.
 - **"Pause my team in Squall"** and **"Resume my team in Squall"**: pause or start every bot.
+
+Asking, starting a task, approving and declining need your iPhone or iPad unlocked. Your bots also show up in Spotlight: search a bot's name and tap it to open its chat.
 
 ## Notifications
 
