@@ -67,11 +67,13 @@ final class CameraFeed {
         decoding = true
         Task.detached(priority: .userInitiated) { [weak self] in
             let decoded = UIImage(data: data)?.preparingForDisplay()
-            await MainActor.run {
-                self?.decoding = false
-                if let decoded { self?.image = decoded }
-            }
+            await self?.showDecoded(decoded)
         }
+    }
+
+    private func showDecoded(_ decoded: UIImage?) {
+        decoding = false
+        if let decoded { image = decoded }
     }
 
     private func failed(_ message: String) {
@@ -197,6 +199,18 @@ final class WatchCenter {
         }
     }
 
+    /// A manual check only shows its result; it never counts toward the alarm.
+    private func showCheck(_ outcome: Result<DetectionResult, Error>, printerID: UUID) {
+        busy.remove(printerID)
+        switch outcome {
+        case .success(let r):
+            results[printerID] = r
+            lastError[printerID] = nil
+        case .failure(let e):
+            lastError[printerID] = (e as? LocalizedError)?.errorDescription ?? e.localizedDescription
+        }
+    }
+
     private func handle(_ outcome: Result<DetectionResult, Error>, printerID: UUID, jpeg: Data) {
         busy.remove(printerID)
         switch outcome {
@@ -233,14 +247,7 @@ final class WatchCenter {
         busy.insert(printerID)
         Task.detached(priority: .userInitiated) { [weak self] in
             let outcome: Result<DetectionResult, Error> = Result { try detector.analyze(jpeg: jpeg, words: words) }
-            await MainActor.run {
-                guard let self else { return }
-                self.busy.remove(printerID)
-                switch outcome {
-                case .success(let r): self.results[printerID] = r; self.lastError[printerID] = nil
-                case .failure(let e): self.lastError[printerID] = (e as? LocalizedError)?.errorDescription ?? e.localizedDescription
-                }
-            }
+            await self?.showCheck(outcome, printerID: printerID)
         }
     }
 }

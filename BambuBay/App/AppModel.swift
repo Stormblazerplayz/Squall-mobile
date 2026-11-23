@@ -14,6 +14,14 @@ final class AppModel {
     var settings = AppSettings() { didSet { saveSettings(); if !settings.queuePaused { scheduleQueueCheck() } } }
     /// Printers whose bed you confirmed is clear after the last print.
     private(set) var bedCleared: Set<UUID> = []
+    /// Printers that finished or stopped a print since you last tapped "Bed's clear".
+    /// Kept across launches, so a printer that went back to Ready with a part still on the bed
+    /// never gets a new job dropped on top of it.
+    private(set) var bedDirty: Set<UUID> = Set(
+        (UserDefaults.standard.stringArray(forKey: "bedDirty") ?? []).compactMap(UUID.init(uuidString:))
+    ) {
+        didSet { UserDefaults.standard.set(bedDirty.map(\.uuidString), forKey: "bedDirty") }
+    }
     /// A message to show as a banner (errors from the queue, mostly).
     var banner: String?
 
@@ -106,13 +114,14 @@ final class AppModel {
 
     func markBedClear(_ printerID: UUID) {
         bedCleared.insert(printerID)
+        bedDirty.remove(printerID)
         scheduleQueueCheck()
     }
 
     /// True when a new print may start on this printer's bed.
     func bedIsReady(_ link: PrinterLink) -> Bool {
         switch link.state.phase {
-        case .idle: return true
+        case .idle: return link.config.autoEject || !bedDirty.contains(link.id) || bedCleared.contains(link.id)
         case .finish, .failed: return link.config.autoEject || bedCleared.contains(link.id)
         default: return false
         }
@@ -313,6 +322,10 @@ final class AppModel {
 
     private func phaseChanged(_ link: PrinterLink, from old: PrinterState.Phase, to new: PrinterState.Phase) {
         UserDefaults.standard.set(new.rawValue, forKey: "lastPhase.\(link.id.uuidString)")
+        if (new == .finish || new == .failed) && old.isBusy {
+            bedDirty.insert(link.id)
+            bedCleared.remove(link.id)
+        }
         let name = link.config.name
         let job = link.state.jobName
         switch new {
