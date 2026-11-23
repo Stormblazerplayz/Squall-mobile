@@ -2,14 +2,14 @@ import Foundation
 
 // The brain behind Siri and Shortcuts. The intents in SquallAppIntents.swift are thin:
 // they hand their job to `SquallSiri`, which talks to the paired computer through a
-// `SquallLink` and returns what Siri says plus what its card shows.
+// `SiriLink` and returns what Siri says plus what its card shows.
 // Everything comes from the computer. When it can't be reached, Siri says so plainly.
 
 // MARK: - The connection
 
 /// What Siri needs from the paired computer. The app uses `PairingLink`; tests use their own.
 @MainActor
-protocol SquallLink: AnyObject {
+protocol SiriLink: AnyObject {
     var isPaired: Bool { get }
     var computerName: String? { get }
     /// A fresh copy of everything from GET /api/v1/state.
@@ -22,11 +22,11 @@ protocol SquallLink: AnyObject {
 
 /// The real connection: the app's own pairing with the computer.
 @MainActor
-final class PairingLink: SquallLink {
+final class PairingLink: SiriLink {
     private let pairing: PairingStore
 
-    init(pairing: PairingStore = PairingStore()) {
-        self.pairing = pairing
+    init(pairing: PairingStore? = nil) {
+        self.pairing = pairing ?? PairingStore()
     }
 
     var isPaired: Bool { pairing.isPaired }
@@ -111,12 +111,12 @@ enum SiriRequestPrep: Equatable {
 
 @MainActor
 struct SquallSiri {
-    let link: SquallLink
+    let link: SiriLink
     /// How often to look for a bot's answer, and for how long, after asking it something.
     var pollEvery: Duration = .milliseconds(1200)
     var waitFor: Duration = .seconds(24)
 
-    init(link: SquallLink, pollEvery: Duration = .milliseconds(1200), waitFor: Duration = .seconds(24)) {
+    init(link: SiriLink, pollEvery: Duration = .milliseconds(1200), waitFor: Duration = .seconds(24)) {
         self.link = link
         self.pollEvery = pollEvery
         self.waitFor = waitFor
@@ -130,7 +130,7 @@ struct SquallSiri {
     }
 
     /// The plain words for anything that went wrong talking to the computer.
-    static func reason(_ error: Error) -> String {
+    nonisolated static func reason(_ error: Error) -> String {
         if let error = error as? PairingError { return error.message }
         if let error = error as? SyncActionError { return error.message }
         if let error = error as? SquallDirect.Failure { return error.message }

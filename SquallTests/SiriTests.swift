@@ -6,7 +6,7 @@ import XCTest
 // in the tests; the app itself always talks to the real paired computer.
 
 @MainActor
-final class FakeLink: SquallLink {
+final class FakeLink: SiriLink {
     var isPaired = true
     var computerName: String? = "Test-PC"
     /// Answers to GET /api/v1/state, in order. The last one keeps repeating.

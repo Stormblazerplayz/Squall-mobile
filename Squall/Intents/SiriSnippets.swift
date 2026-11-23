@@ -50,7 +50,7 @@ private struct BotBadge: View {
     }
 }
 
-private struct StatusPill: View {
+private struct SiriStatusPill: View {
     let status: BotStatus
 
     var body: some View {
@@ -177,7 +177,7 @@ private struct TeamCard: View {
                         }
                     }
                     Spacer(minLength: 6)
-                    StatusPill(status: bot.status)
+                    SiriStatusPill(status: bot.status)
                 }
             }
             if bots.count > 6 {

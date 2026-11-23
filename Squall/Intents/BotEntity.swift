@@ -36,7 +36,7 @@ struct BotQuery: EntityStringQuery {
     init() {}
 
     @MainActor
-    static func currentBots(link given: SquallLink? = nil) async -> [Bot] {
+    static func currentBots(link given: SiriLink? = nil) async -> [Bot] {
         let link = given ?? PairingLink()
         guard link.isPaired else { return [] }
         if let state = try? await link.fetchState() {
