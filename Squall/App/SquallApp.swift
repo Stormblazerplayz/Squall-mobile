@@ -1,3 +1,4 @@
+import CoreSpotlight
 import SwiftUI
 
 @main
@@ -30,6 +31,13 @@ struct SquallApp: App {
             .animation(.easeOut(duration: 0.3), value: pairing.setupDone)
             // Links from Live Activities, like squall://live or squall://inbox.
             .onOpenURL { url in
+                store.open(url)
+            }
+            // A bot picked in Spotlight opens its chat.
+            .onContinueUserActivity(CSSearchableItemActionType) { activity in
+                guard let id = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String,
+                      let botID = SiriSync.botID(fromSpotlightID: id),
+                      let url = URL(string: "squall://chat/\(botID)") else { return }
                 store.open(url)
             }
             // All data comes from the paired computer. This keeps asking it for updates,

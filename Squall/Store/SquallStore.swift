@@ -377,6 +377,8 @@ final class SquallStore: ObservableObject {
         if let picking, bot(picking) == nil { self.picking = nil }
 
         guard live else { return }
+        // Siri learns the bots' names, and Spotlight lists them.
+        SiriSync.update(bots: newBots)
         noticeChanges()
         LiveActivities.shared.sync(work: work, inbox: inbox, routines: routines, bots: bots, paused: pausedAll)
     }
@@ -434,6 +436,8 @@ final class SquallStore: ObservableObject {
         dataComputerKey = nil
         SnapshotCache.clear()
         SquallAlerts.shared.forget()
+        // Siri and Spotlight forget the old team too.
+        SiriSync.clear()
         // The widgets switch to "Not paired" instead of showing an old team.
         if SquallShared.loadWidget()?.paired != false, SquallShared.saveWidget(.notPaired()) {
             WidgetCenter.shared.reloadTimelines(ofKind: SquallShared.widgetKind)
@@ -578,7 +582,9 @@ final class SquallStore: ObservableObject {
             path = []
             tab = .team
         case "chat":
-            openChat(Bot.chiefID)
+            // squall://chat opens Chief; squall://chat/<bot id> opens that bot (from Spotlight).
+            let botID = url.pathComponents.first(where: { $0 != "/" }) ?? Bot.chiefID
+            openChat(bot(botID) != nil ? botID : Bot.chiefID)
         case "call":
             showCall = true
         case "settings":
