@@ -36,7 +36,8 @@ struct BotQuery: EntityStringQuery {
     init() {}
 
     @MainActor
-    static func currentBots(link: SquallLink = PairingLink()) async -> [Bot] {
+    static func currentBots(link given: SquallLink? = nil) async -> [Bot] {
+        let link = given ?? PairingLink()
         guard link.isPaired else { return [] }
         if let state = try? await link.fetchState() {
             return state.bots.map(\.model).sorted { $0.isChief && !$1.isChief }
@@ -44,18 +45,15 @@ struct BotQuery: EntityStringQuery {
         return (link.savedState()?.snapshot.bots.map(\.model) ?? []).sorted { $0.isChief && !$1.isChief }
     }
 
-    @MainActor
     func entities(for identifiers: [String]) async throws -> [BotEntity] {
         let bots = await Self.currentBots()
         return identifiers.compactMap { id in bots.first(where: { $0.id == id }).map(BotEntity.init) }
     }
 
-    @MainActor
     func entities(matching string: String) async throws -> [BotEntity] {
         BotMatcher.matches(string, in: await Self.currentBots()).map(BotEntity.init)
     }
 
-    @MainActor
     func suggestedEntities() async throws -> [BotEntity] {
         await Self.currentBots().map(BotEntity.init)
     }
