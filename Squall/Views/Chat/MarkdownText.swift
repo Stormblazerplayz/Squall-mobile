@@ -127,6 +127,32 @@ struct MarkdownText: View {
             .accessibilityAddTraits(.isHeader)
             .accessibilityValue(shut ? "Folded" : "Open")
             .accessibilityHint(shut ? "Double tap to open this part" : "Double tap to fold this part")
+            .contextMenu {
+                Button {
+                    UIPasteboard.general.string = MarkdownSections.copyText(blocks, heading: index)
+                } label: {
+                    Label("Copy this part", systemImage: "doc.on.doc")
+                }
+                Button {
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        folded = MarkdownSections.onlyThis(blocks, heading: index)
+                    }
+                } label: {
+                    Label("Show only this part", systemImage: "scope")
+                }
+                Button {
+                    withAnimation(.easeOut(duration: 0.2)) { folded = MarkdownSections.foldable(blocks) }
+                } label: {
+                    Label("Fold all", systemImage: "chevron.up.chevron.down")
+                }
+                if !folded.isEmpty {
+                    Button {
+                        withAnimation(.easeOut(duration: 0.2)) { folded = [] }
+                    } label: {
+                        Label("Open all", systemImage: "chevron.down")
+                    }
+                }
+            }
         }
     }
 

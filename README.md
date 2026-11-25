@@ -69,6 +69,7 @@ Tabs along the bottom:
 - **Chat keyboard shortcuts**: ⌘F, ⌘⇧D, ⌘E and ⌘⌥↑↓ to move between chats ([docs](docs/chat-shortcuts.md)).
 - **Chat stats**: who talks more, words, code, busiest hour and the longest reply in one chat ([docs](docs/chat-stats.md)).
 - **Find highlights**: Find in chat lights up the words you typed in gold ([docs](docs/find-in-chat.md)).
+- **Heading menu**: press and hold a heading in a long reply to copy that part, show only it, or fold and open all ([docs](docs/fold-sections.md)).
 - **Inbox**: things that need you (OKs and questions from your bots), problems and finished work. Allow, Deny, pick, Clear, and filters.
 - **Board**: every bot as a card with Chat, Steps and hand-off. A bot with a job running has Watch live.
 - **Routines**: routines that wake a bot on a schedule, with on/off switches. Long-press one to delete it.
