@@ -135,6 +135,7 @@ struct UnoLiveView: View {
                     .font(.system(size: 12.5))
                     .foregroundStyle(UnoColors.muted)
                     .lineLimit(2)
+                UnoTokenLine(session: running ?? latest)
             }
             Spacer(minLength: 0)
             if running != nil {
