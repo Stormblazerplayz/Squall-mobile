@@ -33,7 +33,7 @@ struct StarredButton: View {
     }
 }
 
-/// Copy, Copy as plain text, Star, Pin, Select, Remind me, Reply with quote, Forward to, Save as prompt and Share on a long press of a
+/// Copy, Copy as plain text, Star, Pin, Select, Remind me, Reply with quote, Forward to, Save as prompt, Share and Share as picture on a long press of a
 /// message. Star, Remind me and Reply need the chat it's in, so a message shown without one (like in a group) gets the rest.
 struct MessageMenu: ViewModifier {
     let message: ChatMessage
@@ -167,6 +167,17 @@ struct MessageMenu: ViewModifier {
                 }
                 ShareLink(item: words) {
                     Label("Share", systemImage: "square.and.arrow.up")
+                }
+                if message.kind == .me || message.kind == .bot {
+                    let picture = MessagePicture(
+                        authorName: authorName,
+                        hex: message.kind == .me ? store.accentHex : (store.bot(message.author)?.hex ?? Theme.defaultAccentHex),
+                        text: words,
+                        time: message.time
+                    )
+                    ShareLink(item: picture, preview: SharePreview("Message from \(authorName)", image: Image(systemName: "photo"))) {
+                        Label("Share as picture", systemImage: "photo")
+                    }
                 }
             }
         }
