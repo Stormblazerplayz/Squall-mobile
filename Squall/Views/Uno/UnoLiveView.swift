@@ -109,6 +109,9 @@ struct UnoLiveView: View {
                 if let notice = uno.notice {
                     UnoNoticeText(text: notice)
                 }
+                if let session = running ?? latest {
+                    UnoFilmstrip(session: session, agentName: agentName)
+                }
                 feedSection
                 recentSection
             }

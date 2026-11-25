@@ -300,6 +300,8 @@ The body is `{"op": "...", ...}`. A failed op answers `{"ok": false, "error": "P
 | `saveKey` / `removeKey` | `key` (save only) | `{ok, settings}` |
 | `check` | | `{ok, text}` |
 | `setMaxSteps` | `value` (10 to 300) | `{ok, settings}` |
+| `shots` | `sessionId` | `{ok, shots[]}`: the task's replay pictures, oldest first, without the pictures themselves |
+| `shot` | `sessionId`, `id` | `{ok, shot}` with the picture as base64 `jpeg` (the phone uses the GET below instead) |
 
 Keys sent with `input` `key` are `Escape`, `Tab`, `Return` and `ctrl+z`. `x` and `y` are the computer's own pixels (its `width` × `height`); the phone maps your tap on the fitted picture back to them. The API key goes to the PC once with `saveKey` and is never kept on the phone; `settings` only carries a short `keyHint`.
 
@@ -308,6 +310,12 @@ The phone asks for `state` about once a second while a Squall Uno screen is open
 ### `GET /api/v1/uno/frame?computer=<id>&after=<seq>`
 
 The newest screen of one computer as `200 image/jpeg`, with `X-Uno-Frame` (its number), `X-Uno-Width`, `X-Uno-Height` and `X-Uno-Cursor` (`x,y`). `204` when there's nothing newer than `after`, `404 {"error": "no_computer"}` when the computer is off. The phone asks about 4 times a second, only while the live view or the take-the-wheel sheet is open.
+
+### `GET /api/v1/uno/shot?session=<id>&id=<n>`
+
+One replay picture as `200 image/jpeg`, with `X-Uno-Step`, `X-Uno-Width`, `X-Uno-Height` and `X-Uno-Cursor` (`x,y`). `404 {"error": "no_shot"}` when the PC no longer keeps it. A shot in the `shots` list is `{id, sessionId, computerId, step, seq, at, kind, text, width, height, cursorX, cursorY, bytes}`; there's one for each screenshot Squall Uno took and one for the screen right after each click, typing or key.
+
+The live view shows them as the **Replay** filmstrip under the controls. It asks for `shots` again each time the task takes a step (and once more 1.6 seconds later, while the task is working), fetches each small picture only when it scrolls into view, and keeps the last 80 in memory. Tapping one opens a full-screen replay you can swipe through or play. The PC keeps pictures in memory only, so they're gone after Squall on the PC restarts.
 
 ## Safety
 
