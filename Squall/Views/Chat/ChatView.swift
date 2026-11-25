@@ -627,16 +627,27 @@ struct MessageView: View {
         HStack {
             Spacer(minLength: 50)
             VStack(alignment: .trailing, spacing: 3) {
-                Text(ChatLinks.mine(message.text))
-                    .font(.system(size: textSize))
-                    .foregroundStyle(.white)
-                    .tint(.white)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(bubbleStyle.shape(mine: true).fill(store.accent))
-                    .contentShape(.contextMenuPreview, bubbleStyle.shape(mine: true))
-                    .messageMenu(message, chatID: chatID, authorName: "You")
-                    .reactionBadge(chatID: chatID, messageID: message.id, tint: store.accent, trailing: true)
+                Group {
+                    if let jumbo = JumboEmoji.count(of: message) {
+                        // Only emoji: big and with no bubble, like a texting app.
+                        Text(JumboEmoji.text(message.text))
+                            .font(.system(size: JumboEmoji.size(for: jumbo)))
+                            .padding(.vertical, 2)
+                            .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            .transition(.scale(scale: 0.4).combined(with: .opacity))
+                    } else {
+                        Text(ChatLinks.mine(message.text))
+                            .font(.system(size: textSize))
+                            .foregroundStyle(.white)
+                            .tint(.white)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                            .background(bubbleStyle.shape(mine: true).fill(store.accent))
+                            .contentShape(.contextMenuPreview, bubbleStyle.shape(mine: true))
+                    }
+                }
+                .messageMenu(message, chatID: chatID, authorName: "You")
+                .reactionBadge(chatID: chatID, messageID: message.id, tint: store.accent, trailing: true)
                 if showTimes || isStarred {
                     HStack(spacing: 4) {
                         if isStarred { starMark }
@@ -677,7 +688,12 @@ struct MessageView: View {
                 FoldedReply(id: "\(chatID ?? "")/\(message.id)", text: message.text + (message.text2.map { "\n\n" + $0 } ?? ""),
                             size: textSize, tint: who.color) {
                     VStack(alignment: .leading, spacing: 6) {
-                        MarkdownText(text: message.text, size: textSize, tint: who.color)
+                        if let jumbo = JumboEmoji.count(of: message) {
+                            Text(JumboEmoji.text(message.text))
+                                .font(.system(size: JumboEmoji.size(for: jumbo)))
+                        } else {
+                            MarkdownText(text: message.text, size: textSize, tint: who.color)
+                        }
                         if let text2 = message.text2 {
                             MarkdownText(text: text2, size: textSize, tint: who.color)
                         }
