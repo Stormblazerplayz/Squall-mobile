@@ -140,21 +140,14 @@ struct CallChiefView: View {
         let ring: CGFloat = compact ? 150 : 210
         VStack(spacing: compact ? 10 : 14) {
             ZStack {
-                if call.state == .listening {
-                    // The ring grows with your voice.
-                    Circle()
-                        .stroke(store.accent.opacity(0.55), lineWidth: 3)
-                        .frame(width: ring, height: ring)
-                        .scaleEffect(0.9 + call.level * 0.35)
-                        .animation(.easeOut(duration: 0.12), value: call.level)
-                } else if call.isActive {
-                    Circle()
-                        .stroke(Theme.gold.opacity(0.35), lineWidth: 2)
-                        .frame(width: ring, height: ring)
-                        .scaleEffect(pulse ? 1.12 : 0.92)
-                        .opacity(pulse ? 0.2 : 0.8)
-                        .animation(.easeInOut(duration: call.state == .speaking ? 0.5 : 1.2).repeatForever(autoreverses: true), value: pulse)
-                }
+                // The moving light around Chief: your voice, Chief thinking or talking.
+                VoiceOrb(
+                    mood: call.muted && call.state == .listening ? .idle : VoiceOrb.Mood(call.state),
+                    level: call.level,
+                    size: ring,
+                    listenColor: store.accent,
+                    chiefColor: Theme.goldBright
+                )
                 Sphere(bot: store.chief, size: compact ? 110 : 160, glow: call.state == .speaking ? 0.9 : (call.isActive ? 0.6 : 0.45))
             }
             .onTapGesture {
