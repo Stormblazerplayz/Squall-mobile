@@ -14,6 +14,8 @@ struct SettingsView: View {
     @State private var resetSettingsArmed = false
     @State private var currentIcon: String?
     @State private var changingIcon = false
+    /// Words typed in the search field at the top. Only matching sections show while it has some.
+    @State private var search = ""
 
     /// Asset name (nil is the normal icon), name shown, and the small preview image.
     private static let iconChoices: [(asset: String?, title: String, preview: String)] = [
@@ -50,7 +52,10 @@ struct SettingsView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     profile
-                    if sizeClass == .regular {
+                    SettingsSearchField(text: $search, tint: store.accent)
+                    if SettingsSearch.isSearching(search) {
+                        searchResults
+                    } else if sizeClass == .regular {
                         // iPad: two columns of settings side by side.
                         HStack(alignment: .top, spacing: 18) {
                             VStack(alignment: .leading, spacing: 14) { firstColumn }
@@ -85,6 +90,58 @@ struct SettingsView: View {
                 store.showToast("Set a passcode on this device first, then turn App lock on.")
             } else if !isOn {
                 lock.turnedOff()
+            }
+        }
+    }
+
+    /// The sections that match the search, one under the other.
+    @ViewBuilder
+    private var searchResults: some View {
+        let names = SettingsSearch.matches(search)
+        if names.isEmpty {
+            VStack(spacing: 6) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(Theme.muted)
+                Text("No settings match “\(search.trimmingCharacters(in: .whitespacesAndNewlines))”")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(Theme.sub)
+                    .multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 30)
+        } else {
+            ForEach(names, id: \.self) { name in
+                searchSection(name)
+            }
+        }
+    }
+
+    /// One section by its name, with its label (Team model draws its own).
+    @ViewBuilder
+    private func searchSection(_ name: String) -> some View {
+        switch name {
+        case "Team model":
+            TeamModelSection()
+        case "Your team":
+            SectionLabel(text: name)
+            TeamManageSection()
+        default:
+            SectionLabel(text: name)
+            switch name {
+            case "Computer": computerSection
+            case "Look": lookSection
+            case "Chat": chatSection
+            case "Chief": chiefSection
+            case "New teammates": teammateSection
+            case "Plan usage": usageSection
+            case "Safety": safetySection
+            case "Claude Code": claudeCodeSection
+            case "Notifications": notificationSection
+            case "Lock Screen": lockScreenSection
+            case "Privacy": privacySection
+            case "Data": dataSection
+            default: aboutSection
             }
         }
     }

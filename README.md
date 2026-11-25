@@ -44,6 +44,7 @@ Tabs along the bottom:
 - **Pin a message**: keep one message at the top of its chat, with Copy and Unpin (see [docs/pinned-message.md](docs/pinned-message.md)).
 - **Messages wait when the computer is away**: they show as waiting and send by themselves once it's back (see [docs/outbox.md](docs/outbox.md)).
 - **Working now card**: the bottom of a chat shows the teammate's current job step and progress; tap to watch live (see [docs/work-now.md](docs/work-now.md)).
+- **Search in Settings**: type a word and only the matching settings show (see [docs/settings-search.md](docs/settings-search.md)).
 - **Inbox**: things that need you (OKs and questions from your bots), problems and finished work. Allow, Deny, pick, Clear, and filters.
 - **Board**: every bot as a card with Chat, Steps and hand-off. A bot with a job running has Watch live.
 - **Routines**: routines that wake a bot on a schedule, with on/off switches. Long-press one to delete it.
