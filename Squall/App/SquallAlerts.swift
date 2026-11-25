@@ -100,6 +100,9 @@ final class SquallAlerts: NSObject, ObservableObject, UNUserNotificationCenterDe
 
     private func post(_ item: InboxItem, botName: String, settings: AppSettings) {
         guard !settings.mutedBots.contains(item.botID) else { return }
+        // A Focus filter can hold some pings back (see FocusRules).
+        let focus = FocusRules.current
+        guard focus.allows(FocusRules.ping(for: item.kind), from: item.botID) else { return }
         let content = UNMutableNotificationContent()
         content.categoryIdentifier = AlertIDs.itemCategory
         switch item.kind {
@@ -124,9 +127,9 @@ final class SquallAlerts: NSObject, ObservableObject, UNUserNotificationCenterDe
         content.body = body
         content.threadIdentifier = item.botID
         content.userInfo = [AlertIDs.itemKey: item.id, AlertIDs.routeKey: "inbox"]
-        let quiet = settings.quietHours && Self.isQuietTime(settings)
+        let quiet = (settings.quietHours && Self.isQuietTime(settings)) || focus.silent
         if quiet {
-            // Quiet hours: it still lands in Notification Center, without lighting up the phone.
+            // Quiet hours or a silent Focus: it still lands in Notification Center, without lighting up the phone.
             content.interruptionLevel = .passive
         } else if settings.notifySound {
             content.sound = .default

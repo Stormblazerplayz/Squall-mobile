@@ -91,13 +91,15 @@ enum ReplyAlerts {
 
     @MainActor
     private static func post(_ reply: Reply, name: String, settings: AppSettings) {
+        let focus = FocusRules.current
+        guard focus.allows(.reply, from: reply.author) else { return }
         let content = UNMutableNotificationContent()
         content.title = name
         content.body = reply.text
         content.categoryIdentifier = category
         content.threadIdentifier = "reply.\(reply.chatID)"
         content.userInfo = [AlertIDs.routeKey: "chat/\(reply.chatID)", chatKey: reply.chatID]
-        if settings.quietHours && SquallAlerts.isQuietTime(settings) {
+        if (settings.quietHours && SquallAlerts.isQuietTime(settings)) || focus.silent {
             content.interruptionLevel = .passive
         } else if settings.notifySound {
             content.sound = .default
