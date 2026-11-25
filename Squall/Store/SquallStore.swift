@@ -50,6 +50,8 @@ final class SquallStore: ObservableObject {
     @Published private(set) var usage: PlanUsage?
     /// Actions on their way to the computer, so buttons can wait.
     @Published private(set) var busyActions: Set<String> = []
+    /// True while waiting messages are going out (see Outbox).
+    @Published private(set) var flushingOutbox = false
 
     // Local screen state
     @Published var picking: String?
@@ -252,6 +254,8 @@ final class SquallStore: ObservableObject {
             if link != .connected {
                 link = .connected
                 if wasOffline { Feedback.play(.connected) }
+                // Messages sent while it wasn't answering go out now.
+                flushOutbox()
             }
             keepCopy(reply.data, for: reply.computer, at: now)
         } catch {
@@ -403,6 +407,7 @@ final class SquallStore: ObservableObject {
             LastSeen.shared.keepOnly(chats: Set(newBots.map(\.id)))
             DoneWatch.shared.keepOnly(Set(newBots.map(\.id)))
             PinnedMessages.shared.keepOnly(chats: Set(newBots.map(\.id)).union(groups.map(\.id)))
+            Outbox.shared.keepOnly(chats: Set(newBots.map(\.id)).union(groups.map(\.id)))
         }
         InboxWidgetWriter.update(inbox: inbox, bots: newBots)
         LiveActivities.shared.sync(work: work, inbox: inbox, routines: routines, bots: bots, paused: pausedAll)
@@ -476,6 +481,7 @@ final class SquallStore: ObservableObject {
         LastSeen.shared.clear()
         DoneWatch.shared.clear()
         PinnedMessages.shared.clear()
+        Outbox.shared.clear()
         InboxWidgetWriter.forget()
     }
 
@@ -765,9 +771,36 @@ final class SquallStore: ObservableObject {
         let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         let id = chatID ?? currentChatID
-        guard requireConnection() else { return }
+        guard isConnected else {
+            // Paired but not answering: the message waits on the phone and goes out when the computer is back.
+            if link != .unpaired, Outbox.shared.add(text, chatID: id) {
+                showToast("Your computer isn't answering. This sends when it's back.")
+            } else {
+                _ = requireConnection()
+            }
+            return
+        }
         messages[id, default: []].append(ChatMessage(kind: .me, author: ChatMessage.meID, text: text, time: TimeText.now(), at: Date()))
         send(SyncAction(type: "chat.send", fields: ["chatId": .string(id), "text": .string(text)]))
+    }
+
+    /// Sends the messages waiting in the outbox, oldest first. Stops at the first one that doesn't go,
+    /// so nothing is sent out of order; the rest try again next time.
+    func flushOutbox() {
+        guard !flushingOutbox, isConnected, !Outbox.shared.entries.isEmpty else { return }
+        flushingOutbox = true
+        Task { @MainActor in
+            defer { flushingOutbox = false }
+            var sent = 0
+            for entry in Outbox.shared.entries {
+                guard isConnected else { break }
+                let action = SyncAction(type: "chat.send", fields: ["chatId": .string(entry.chatID), "text": .string(entry.text)])
+                guard await perform(action, busyKey: "outbox", quiet: true) != nil else { break }
+                Outbox.shared.remove(entry.id)
+                sent += 1
+            }
+            if sent > 0 { showToast(Outbox.sentText(sent)) }
+        }
     }
 
     func clearChat(_ id: String) {

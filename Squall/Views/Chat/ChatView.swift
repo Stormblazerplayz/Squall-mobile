@@ -82,6 +82,7 @@ struct ChatView: View {
                                         store.send(reply)
                                     }
                                 }
+                                OutboxBubbles(chatID: bot.id)
                                 if showTyping && store.typingBotID == bot.id {
                                     TypingRow(bot: bot)
                                 }
