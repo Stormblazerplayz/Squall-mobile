@@ -333,6 +333,29 @@ struct TableBlockView: View {
         }
         .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(0.04)))
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Color.white.opacity(0.1), lineWidth: 1))
+        .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .contextMenu {
+            if !printing {
+                Button {
+                    UIPasteboard.general.string = TableCopy.tabbed(header: header, rows: rows)
+                } label: {
+                    Label("Copy table", systemImage: "tablecells")
+                }
+                Button {
+                    UIPasteboard.general.string = TableCopy.csv(header: header, rows: rows)
+                } label: {
+                    Label("Copy as CSV", systemImage: "doc.on.doc")
+                }
+                ShareLink(item: TableFile(header: header, rows: rows), preview: SharePreview("table.csv", image: Image(systemName: "tablecells"))) {
+                    Label("Save as a CSV file", systemImage: "square.and.arrow.down")
+                }
+            }
+        }
+        .accessibilityHint(hint)
+    }
+
+    private var hint: String {
+        printing ? "" : "Press and hold to copy this table. \(TableCopy.summary(header: header, rows: rows))."
     }
 
     private var grid: some View {
