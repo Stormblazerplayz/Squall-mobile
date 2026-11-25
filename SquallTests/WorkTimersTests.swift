@@ -84,6 +84,36 @@ final class WorkTimersTests: XCTestCase {
         XCTAssertEqual(stop.fields["chatId"], .string("rex"))
     }
 
+    func testLockScreenState() {
+        let now = date("2026-11-25T10:00:00Z")
+        let timed = WorkTimers.Running(chatID: "rex", minutes: 30, startedAt: now, until: now.addingTimeInterval(1800), paused: false)
+        let state = WorkTimers.activityState(timed)
+        XCTAssertEqual(state.startedAt, now)
+        XCTAssertEqual(state.until, now.addingTimeInterval(1800))
+        XCTAssertFalse(state.paused)
+        XCTAssertFalse(state.ended)
+        XCTAssertEqual(state.endNote, "")
+
+        // Continuous has no end, and a missing start uses the one the activity already had.
+        let endless = WorkTimers.Running(chatID: "rex", minutes: nil, startedAt: nil, until: nil, paused: true)
+        let kept = WorkTimers.activityState(endless, fallbackStart: now)
+        XCTAssertEqual(kept.startedAt, now)
+        XCTAssertNil(kept.until)
+        XCTAssertTrue(kept.paused)
+
+        // An end before the start shows as Continuous instead of a broken countdown.
+        let backwards = WorkTimers.Running(chatID: "rex", minutes: 5, startedAt: now, until: now.addingTimeInterval(-60), paused: false)
+        XCTAssertNil(WorkTimers.activityState(backwards).until)
+    }
+
+    func testEndNote() {
+        let now = date("2026-11-25T10:00:00Z")
+        XCTAssertEqual(WorkTimers.endNote(until: now.addingTimeInterval(-30), now: now), "Time's up")
+        XCTAssertEqual(WorkTimers.endNote(until: now.addingTimeInterval(10), now: now), "Time's up")
+        XCTAssertEqual(WorkTimers.endNote(until: now.addingTimeInterval(600), now: now), "Stopped")
+        XCTAssertEqual(WorkTimers.endNote(until: nil, now: now), "Stopped")
+    }
+
     func testGoalText() {
         XCTAssertEqual(WorkTimers.goalText("  ship the shop  "), "/goal ship the shop")
         XCTAssertNil(WorkTimers.goalText("   \n "))

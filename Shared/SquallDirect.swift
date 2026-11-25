@@ -201,4 +201,5 @@ enum SquallActivityKeys {
     static let approvalItem = "squall.activity.approvalItem"
     static let routine = "squall.activity.routine"
     static let teamBots = "squall.activity.teamBots"
+    static let timerChat = "squall.activity.timerChat"
 }

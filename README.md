@@ -83,13 +83,14 @@ A small buzz and sound when you allow something, a bot needs you, a job finishes
 
 ## Live Activities
 
-Five Live Activities show on the Lock Screen and in the Dynamic Island. Tap the **Lock Screen** button on a screen to start one, then lock your phone:
+Six Live Activities show on the Lock Screen and in the Dynamic Island. Tap the **Lock Screen** button on a screen to start one, then lock your phone:
 
 - **A bot at work** (Live work): the job's steps fill in, with Pause and Watch live.
 - **Chief needs your OK** (Inbox, on an ask): Allow or Deny right from the Lock Screen.
 - **A routine running** (Routines, while one runs): counts up, with Skip today.
 - **Call with Chief** (Call Chief): starts by itself when a call connects, with a timer, captions, Mute and End. Calls keep going when you leave the app or lock the phone.
 - **Whole team** (Mission control): four bots with bars, and Pause all.
+- **Work timer** (a chat's timer, while one runs): counts down to the end with a bar that empties, or counts up for Continuous, with Stop and Open chat.
 
 With **Show on Lock Screen by itself** (Settings > Lock Screen, on at first), a new OK request and a team that just started working go on the Lock Screen without a tap while Squall is open. The Lock Screen buttons send straight to your computer, even if Squall was closed.
 

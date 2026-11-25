@@ -86,6 +86,23 @@ enum WorkTimers {
         return h > 0 ? String(format: "%d:%02d:%02d", h, m, s) : String(format: "%d:%02d", m, s)
     }
 
+    // MARK: - Lock Screen
+
+    /// What the Lock Screen timer shows for a running timer. `fallbackStart` is used when the computer sends no start time.
+    static func activityState(_ timer: Running, fallbackStart: Date = Date()) -> WorkTimerActivityAttributes.ContentState {
+        let start = timer.startedAt ?? fallbackStart
+        // An end before the start can't count down, so it shows as Continuous instead of breaking.
+        let until = timer.until.flatMap { $0 > start ? $0 : nil }
+        return WorkTimerActivityAttributes.ContentState(startedAt: start, until: until, paused: timer.paused, ended: false, endNote: "")
+    }
+
+    /// Why a timer that's gone from the computer's list ended: its time ran out, or someone stopped it early.
+    static func endNote(until: Date?, now: Date = Date()) -> String {
+        guard let until else { return "Stopped" }
+        // A few seconds of slack, since the computer checks its timers now and then.
+        return until.timeIntervalSince(now) <= 15 ? "Time's up" : "Stopped"
+    }
+
     // MARK: - Actions
 
     /// 0 starts a Continuous timer.

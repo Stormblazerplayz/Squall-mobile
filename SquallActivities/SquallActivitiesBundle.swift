@@ -14,6 +14,7 @@ struct SquallActivitiesBundle: WidgetBundle {
         RoutineActivityWidget()
         CallActivityWidget()
         TeamActivityWidget()
+        WorkTimerActivityWidget()
         // Control Center buttons need iOS 18.
         if #available(iOS 18.0, *) {
             PauseTeamControl()

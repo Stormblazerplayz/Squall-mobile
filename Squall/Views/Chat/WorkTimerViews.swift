@@ -56,6 +56,11 @@ struct WorkTimerBanner: View {
                             .foregroundStyle(Theme.sub)
                     }
                     Spacer(minLength: 8)
+                    if let bot = store.bot(chatID) {
+                        LockScreenButton(kind: .timer, compact: true) {
+                            LiveActivities.shared.startTimer(timer, bot: bot)
+                        }
+                    }
                     Button {
                         stop()
                     } label: {
@@ -156,6 +161,10 @@ struct WorkTimerSheet: View {
                             .font(.system(size: 12.5))
                             .foregroundStyle(Theme.sub)
                     }
+                    LockScreenButton(kind: .timer) {
+                        LiveActivities.shared.startTimer(running, bot: bot)
+                    }
+                    .padding(.top, 4)
                 }
                 Spacer(minLength: 0)
                 Button("Stop") {

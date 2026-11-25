@@ -561,6 +561,10 @@ final class SquallStore: ObservableObject {
                 }
             case .muteCall, .unmuteCall, .endCall:
                 activityCommand = ActivityCommand(action: action)
+            case .stopTimer:
+                if let chatID = activities.timerChatID {
+                    send(WorkTimers.stopAction(chatID: chatID))
+                }
             }
         }
         activities.refresh()
