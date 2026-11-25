@@ -10,6 +10,8 @@ struct ChatView: View {
     @AppStorage(Prefs.sendOnReturn) private var sendOnReturn = false
     @AppStorage(Prefs.haptics) private var haptics = true
     @State private var showLiveLog = false
+    /// A message Search opened the chat at, lit up for a moment.
+    @State private var flashID: String?
     @FocusState private var inputFocused: Bool
 
     var body: some View {
@@ -50,6 +52,12 @@ struct ChatView: View {
                                     MessageView(message: message, bot: bot) { chip in
                                         store.send(chip)
                                     }
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                            .fill(store.accent.opacity(flashID == message.id ? 0.2 : 0))
+                                            .padding(-6)
+                                    )
+                                    .animation(.easeOut(duration: 0.5), value: flashID)
                                 }
                                 if showTyping && store.typingBotID == bot.id {
                                     TypingRow(bot: bot)
@@ -62,7 +70,13 @@ struct ChatView: View {
                         }
                         .scrollIndicators(.hidden)
                         .scrollDismissesKeyboard(.interactively)
-                        .onAppear { proxy.scrollTo("bottom", anchor: .bottom) }
+                        .onAppear {
+                            proxy.scrollTo("bottom", anchor: .bottom)
+                            jumpIfAsked(proxy, botID: bot.id)
+                        }
+                        .onReceive(SearchJump.shared.$target) { _ in
+                            jumpIfAsked(proxy, botID: bot.id)
+                        }
                         .onChange(of: list.count) {
                             withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
                         }
@@ -71,6 +85,7 @@ struct ChatView: View {
                         }
                         .onChange(of: bot.id) {
                             proxy.scrollTo("bottom", anchor: .bottom)
+                            jumpIfAsked(proxy, botID: bot.id)
                         }
                     }
                     inputBar(bot)
@@ -95,6 +110,22 @@ struct ChatView: View {
         }
         .padding(.vertical, 40)
         .frame(maxWidth: .infinity)
+    }
+
+    /// Scrolls to the message a search result was tapped for, and lights it up for a moment.
+    private func jumpIfAsked(_ proxy: ScrollViewProxy, botID: String) {
+        guard let target = SearchJump.shared.target, target.chatID == botID else { return }
+        SearchJump.shared.target = nil
+        // After the chat's own scroll to the bottom, once the messages are laid out.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            withAnimation(.easeInOut(duration: 0.35)) {
+                proxy.scrollTo(target.messageID, anchor: .center)
+            }
+            flashID = target.messageID
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) {
+                if flashID == target.messageID { flashID = nil }
+            }
+        }
     }
 
     private func inputBar(_ bot: Bot) -> some View {
@@ -161,9 +192,11 @@ struct ChatView: View {
 
 private struct ChatHeader: View {
     @EnvironmentObject private var store: SquallStore
+    @EnvironmentObject private var lock: AppLock
     let bot: Bot
     @Binding var showLiveLog: Bool
     @State private var confirmClear = false
+    @State private var showSearch = false
 
     var body: some View {
         HStack(spacing: 10) {
@@ -191,6 +224,23 @@ private struct ChatHeader: View {
                     .lineLimit(1)
             }
             Spacer(minLength: 4)
+            Button {
+                showSearch = true
+            } label: {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Theme.sub)
+                    .frame(width: 36, height: 44)
+            }
+            .buttonStyle(.plain)
+            .keyboardShortcut("f", modifiers: .command)
+            .accessibilityLabel("Search chats")
+            .sheet(isPresented: $showSearch) {
+                ChatSearchView()
+                    .lockCover()
+                    .environmentObject(store)
+                    .environmentObject(lock)
+            }
             Button {
                 if let job = store.work(for: bot.id) {
                     store.watch(job.id)
