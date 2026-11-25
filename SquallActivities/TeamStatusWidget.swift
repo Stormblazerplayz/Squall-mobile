@@ -42,34 +42,61 @@ struct TeamStatusWidget: Widget {
         StaticConfiguration(kind: SquallShared.widgetKind, provider: TeamProvider()) { entry in
             TeamWidgetView(entry: entry)
                 .containerBackground(for: .widget) {
-                    WidgetBackdrop()
+                    WidgetBackdrop(snapshot: entry.snapshot)
                 }
         }
         .configurationDisplayName("Squall team")
         .description("What Chief and your bots are doing, and what needs you. Comes from your paired computer.")
-        .supportedFamilies([.systemSmall, .systemMedium, .accessoryRectangular, .accessoryCircular, .accessoryInline])
+        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge, .accessoryRectangular, .accessoryCircular, .accessoryInline])
     }
 }
 
 /// The dark glowy background, only on the Home Screen (the Lock Screen draws its own).
+/// The glows follow the team: gold when something needs you, green while bots
+/// work, and the calm purple otherwise.
 private struct WidgetBackdrop: View {
     @Environment(\.widgetFamily) private var family
+    let snapshot: WidgetSnapshot?
 
     var body: some View {
         switch family {
-        case .systemSmall, .systemMedium:
+        case .systemSmall, .systemMedium, .systemLarge:
             ZStack {
-                Color(activityHex: 0x0B0A12)
+                LinearGradient(
+                    colors: [Color(activityHex: 0x12101C), Color(activityHex: 0x08070D)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
                 RadialGradient(
-                    colors: [Color(activityHex: 0x6D5CE8, opacity: 0.35), .clear],
+                    colors: [Color(activityHex: 0x6D5CE8, opacity: 0.42), .clear],
                     center: .topLeading,
                     startRadius: 4,
-                    endRadius: 220
+                    endRadius: 240
+                )
+                RadialGradient(
+                    colors: [Color(activityHex: moodHex, opacity: 0.30), .clear],
+                    center: .bottomTrailing,
+                    startRadius: 4,
+                    endRadius: 200
+                )
+                // A thin shine along the top edge, like the app's glass cards.
+                LinearGradient(
+                    colors: [Color.white.opacity(0.07), .clear],
+                    startPoint: .top,
+                    endPoint: .init(x: 0.5, y: 0.18)
                 )
             }
         default:
             Color.clear
         }
+    }
+
+    private var moodHex: UInt32 {
+        guard let snapshot, snapshot.paired else { return 0x3B87D6 }
+        if snapshot.paused { return 0xFACC15 }
+        if snapshot.needsYou > 0 { return Palette.goldHex }
+        if snapshot.workingCount > 0 { return 0x22C55E }
+        return 0x3B87D6
     }
 }
 
@@ -169,6 +196,8 @@ struct TeamWidgetView: View {
             rectangular(snapshot)
         case .systemMedium:
             medium(snapshot)
+        case .systemLarge:
+            large(snapshot)
         default:
             small(snapshot)
         }
@@ -225,106 +254,234 @@ struct TeamWidgetView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func small(_ snapshot: WidgetSnapshot) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
-                Image(systemName: "bolt.fill")
-                    .foregroundStyle(Palette.gold)
-                Text("Squall")
-                    .foregroundStyle(Palette.text)
-                Spacer(minLength: 0)
-                pauseButton(snapshot)
-            }
-            .font(.system(size: 13, weight: .bold))
-            Text(headline(snapshot))
-                .font(.system(size: 22, weight: .bold, design: .rounded))
-                .foregroundStyle(snapshot.needsYou > 0 ? Palette.goldText : Palette.text)
-                .minimumScaleFactor(0.7)
+    /// The Squall mark, name and pause button across the top of the Home Screen sizes.
+    private func topBar(_ snapshot: WidgetSnapshot) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "bolt.fill")
+                .font(.system(size: 10, weight: .heavy))
+                .foregroundStyle(Palette.ink)
+                .frame(width: 18, height: 18)
+                .background(
+                    Circle().fill(LinearGradient(colors: [Palette.goldText, Palette.gold],
+                                                 startPoint: .topLeading, endPoint: .bottomTrailing))
+                )
+            Text("Squall")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(Palette.text)
+            Spacer(minLength: 0)
+            pauseButton(snapshot)
+        }
+    }
+
+    /// The big number and what it counts: things that need you, or bots at work.
+    private func bigCount(_ snapshot: WidgetSnapshot, size: CGFloat) -> some View {
+        let needs = snapshot.needsYou > 0
+        let value = needs ? snapshot.needsYou : snapshot.workingCount
+        let label: String
+        if snapshot.paused {
+            label = "paused"
+        } else if needs {
+            label = snapshot.needsYou == 1 ? "needs you" : "need you"
+        } else {
+            label = "working"
+        }
+        return HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text("\(value)")
+                .font(.system(size: size, weight: .heavy, design: .rounded))
+                .foregroundStyle(
+                    needs
+                        ? AnyShapeStyle(LinearGradient(colors: [Palette.goldText, Palette.gold], startPoint: .top, endPoint: .bottom))
+                        : AnyShapeStyle(Palette.text)
+                )
+                .minimumScaleFactor(0.6)
                 .lineLimit(1)
-            HStack(spacing: -6) {
-                ForEach(snapshot.members.prefix(5)) { member in
-                    memberBall(member, size: 24)
-                }
+            Text(label)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(needs ? Palette.goldText : Palette.sub)
+                .lineLimit(1)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    /// Overlapping bot balls, with a +N when there are more.
+    private func memberStack(_ snapshot: WidgetSnapshot, size: CGFloat, max shown: Int) -> some View {
+        HStack(spacing: -size * 0.28) {
+            ForEach(snapshot.members.prefix(shown)) { member in
+                memberBall(member, size: size)
+                    .overlay(Circle().stroke(Color(activityHex: 0x0B0A12), lineWidth: 1.5))
+            }
+            if snapshot.members.count > shown {
+                Text("+\(snapshot.members.count - shown)")
+                    .font(.system(size: size * 0.38, weight: .bold, design: .rounded))
+                    .foregroundStyle(Palette.text)
+                    .frame(width: size, height: size)
+                    .background(Circle().fill(Palette.button))
+                    .overlay(Circle().stroke(Color(activityHex: 0x0B0A12), lineWidth: 1.5))
+            }
+        }
+    }
+
+    /// The first ask in a soft gold card.
+    private func askCard(_ snapshot: WidgetSnapshot, ask: String, lines: Int, buttons: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 5) {
+                Image(systemName: "hand.raised.fill")
+                    .font(.system(size: 9.5, weight: .bold))
+                Text("\(snapshot.firstAskBot ?? "A bot") asks")
+                    .font(.system(size: 10.5, weight: .bold))
+                    .lineLimit(1)
+            }
+            .foregroundStyle(Palette.goldText)
+            Text(ask)
+                .font(.system(size: 12))
+                .foregroundStyle(Palette.text)
+                .lineLimit(lines)
+            if buttons, let id = answerID(snapshot) {
+                answerButtons(id)
+            }
+        }
+        .padding(8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color(activityHex: Palette.goldHex, opacity: 0.12))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color(activityHex: Palette.goldHex, opacity: 0.3), lineWidth: 1)
+        )
+    }
+
+    /// One bot: ball, name, and what it's doing in its status color.
+    private func memberRow(_ member: WidgetSnapshot.Member, size: CGFloat) -> some View {
+        HStack(spacing: 8) {
+            memberBall(member, size: size)
+            VStack(alignment: .leading, spacing: 0) {
+                Text(member.name)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Palette.text)
+                    .lineLimit(1)
+                Text(member.task.isEmpty ? member.statusLabel : member.task)
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(statusColor(member.status))
+                    .lineLimit(1)
             }
             Spacer(minLength: 0)
+        }
+    }
+
+    private func footer(_ snapshot: WidgetSnapshot) -> some View {
+        let stale = snapshot.isStale(now: entry.date)
+        return HStack(spacing: 4) {
+            Image(systemName: stale ? "clock.badge.exclamationmark" : "arrow.triangle.2.circlepath")
+                .font(.system(size: 9, weight: .bold))
+            syncedLine(snapshot)
+                .lineLimit(1)
+        }
+        .font(.system(size: 10.5))
+        .foregroundStyle(stale ? Palette.goldText : Palette.muted)
+    }
+
+    private func small(_ snapshot: WidgetSnapshot) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            topBar(snapshot)
+            Spacer(minLength: 0)
+            bigCount(snapshot, size: 38)
             if let ask = snapshot.firstAsk {
                 Text(ask)
                     .font(.system(size: 11.5))
                     .foregroundStyle(Palette.sub)
                     .lineLimit(2)
+            } else {
+                memberStack(snapshot, size: 24, max: 4)
             }
-            syncedLine(snapshot)
-                .font(.system(size: 10.5))
-                .foregroundStyle(snapshot.isStale(now: entry.date) ? Palette.goldText : Palette.muted)
+            Spacer(minLength: 0)
+            footer(snapshot)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
     }
 
     private func medium(_ snapshot: WidgetSnapshot) -> some View {
         HStack(alignment: .top, spacing: 14) {
-            VStack(alignment: .leading, spacing: answerID(snapshot) == nil ? 6 : 4) {
-                HStack(spacing: 6) {
-                    Image(systemName: "bolt.fill")
-                        .foregroundStyle(Palette.gold)
-                    Text("Squall")
-                        .foregroundStyle(Palette.text)
-                    Spacer(minLength: 0)
-                    pauseButton(snapshot)
-                }
-                .font(.system(size: 13, weight: .bold))
-                Text(headline(snapshot))
-                    .font(.system(size: 22, weight: .bold, design: .rounded))
-                    .foregroundStyle(snapshot.needsYou > 0 ? Palette.goldText : Palette.text)
-                    .minimumScaleFactor(0.7)
-                    .lineLimit(1)
+            VStack(alignment: .leading, spacing: 6) {
+                topBar(snapshot)
+                bigCount(snapshot, size: 30)
                 if let ask = snapshot.firstAsk {
-                    Text("\(snapshot.firstAskBot ?? "A bot") asks: \(ask)")
-                        .font(.system(size: 11.5))
-                        .foregroundStyle(Palette.sub)
-                        .lineLimit(answerID(snapshot) == nil ? 3 : 2)
-                    if let id = answerID(snapshot) {
-                        answerButtons(id)
+                    askCard(snapshot, ask: ask, lines: answerID(snapshot) == nil ? 2 : 1, buttons: true)
+                } else {
+                    if snapshot.unreadInbox > 0 {
+                        Text("\(snapshot.unreadInbox) unread in Inbox")
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(Palette.sub)
                     }
-                } else if snapshot.unreadInbox > 0 {
-                    Text("\(snapshot.unreadInbox) unread in Inbox")
-                        .font(.system(size: 11.5))
-                        .foregroundStyle(Palette.sub)
+                    Spacer(minLength: 0)
+                    footer(snapshot)
                 }
-                Spacer(minLength: 0)
-                syncedLine(snapshot)
-                    .font(.system(size: 10.5))
-                    .foregroundStyle(snapshot.isStale(now: entry.date) ? Palette.goldText : Palette.muted)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-            VStack(alignment: .leading, spacing: 5) {
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            VStack(alignment: .leading, spacing: 6) {
                 if snapshot.members.isEmpty {
                     Text("No bots yet")
                         .font(.system(size: 12))
                         .foregroundStyle(Palette.sub)
                 }
                 ForEach(snapshot.members.prefix(4)) { member in
-                    HStack(spacing: 7) {
-                        memberBall(member, size: 22)
-                        VStack(alignment: .leading, spacing: 0) {
-                            Text(member.name)
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(Palette.text)
-                                .lineLimit(1)
-                            Text(member.task.isEmpty ? member.statusLabel : member.task)
-                                .font(.system(size: 10.5))
-                                .foregroundStyle(statusColor(member.status))
-                                .lineLimit(1)
-                        }
-                    }
+                    memberRow(member, size: 22)
                 }
                 if snapshot.members.count > 4 {
                     Text("+\(snapshot.members.count - 4) more")
                         .font(.system(size: 10.5))
                         .foregroundStyle(Palette.muted)
                 }
+                if snapshot.firstAsk != nil {
+                    Spacer(minLength: 0)
+                    footer(snapshot)
+                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .padding(10)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.white.opacity(0.05))
+            )
         }
+    }
+
+    private func large(_ snapshot: WidgetSnapshot) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            topBar(snapshot)
+            HStack(alignment: .center) {
+                bigCount(snapshot, size: 40)
+                Spacer(minLength: 0)
+                memberStack(snapshot, size: 26, max: 4)
+            }
+            if let ask = snapshot.firstAsk {
+                askCard(snapshot, ask: ask, lines: 2, buttons: true)
+            } else if snapshot.unreadInbox > 0 {
+                Label("\(snapshot.unreadInbox) unread in Inbox", systemImage: "tray.fill")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Palette.sub)
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                if snapshot.members.isEmpty {
+                    Text("No bots yet")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Palette.sub)
+                }
+                ForEach(snapshot.members.prefix(snapshot.firstAsk == nil ? 6 : 4)) { member in
+                    memberRow(member, size: 26)
+                }
+            }
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.white.opacity(0.05))
+            )
+            Spacer(minLength: 0)
+            footer(snapshot)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     // MARK: - Buttons

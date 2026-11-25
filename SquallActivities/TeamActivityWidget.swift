@@ -19,10 +19,7 @@ struct TeamActivityWidget: Widget {
                         .padding(.leading, 2)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    Text("\(TeamText.average(s))%")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Palette.accentText)
-                        .monospacedDigit()
+                    TeamRing(state: s, size: 34, label: "\(TeamText.average(s))%")
                         .padding(.trailing, 4)
                 }
                 DynamicIslandExpandedRegion(.center) {
@@ -42,16 +39,17 @@ struct TeamActivityWidget: Widget {
                 Image(systemName: s.paused ? "pause.circle.fill" : "bolt.fill")
                     .foregroundStyle(s.paused ? Palette.sub : Palette.accentText)
             } compactTrailing: {
-                Text(TeamText.compact(s))
-                    .font(.system(size: 12.5, weight: .semibold))
-                    .foregroundStyle(TeamText.allDone(s) ? Palette.greenText : (s.paused ? Palette.sub : Palette.accentText))
+                HStack(spacing: 5) {
+                    Text(TeamText.compact(s))
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .foregroundStyle(TeamText.tint(s))
+                    TeamRing(state: s, size: 14)
+                }
             } minimal: {
                 if TeamText.allDone(s) {
                     Image(systemName: "checkmark.circle.fill").foregroundStyle(Palette.green)
                 } else {
-                    Text("\(TeamText.working(s))")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(s.paused ? Palette.sub : Palette.accentText)
+                    TeamRing(state: s, size: 22, label: "\(TeamText.working(s))")
                 }
             }
             .widgetURL(SquallLink.mission)
@@ -69,10 +67,7 @@ private struct TeamLockScreen: View {
             ActivityHeader(sub: "Squall · Your team", title: TeamText.title(state)) {
                 AvatarStack(members: attributes.members)
             } trailing: {
-                Text("\(TeamText.average(state))%")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Palette.accentText)
-                    .monospacedDigit()
+                TeamRing(state: state, size: 40, label: "\(TeamText.average(state))%")
             }
             TeamGrid(attributes: attributes, state: state)
             TeamButtons(state: state)
@@ -113,21 +108,27 @@ private struct TeamGrid: View {
                     .foregroundStyle(Palette.text)
                     .lineLimit(1)
                 Spacer(minLength: 2)
+                if finished {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(Palette.green)
+                }
                 Text(finished ? "Done" : "\(value)%")
                     .font(.system(size: 11.5, weight: .semibold))
-                    .foregroundStyle(finished ? Palette.greenText : Palette.accentText)
+                    .foregroundStyle(finished ? Palette.greenText : Color.shadeForActivity(member.hex))
                     .monospacedDigit()
+                    .contentTransition(.numericText(value: Double(value)))
             }
             Bar(
                 value: Double(value) / 100,
                 fill: LinearGradient(
                     colors: finished
                         ? [Palette.green, Palette.green]
-                        : [Color(activityHex: member.hex), Color(activityHex: member.hex, opacity: 0.6)],
+                        : [Color(activityHex: member.hex, opacity: 0.65), Color(activityHex: member.hex)],
                     startPoint: .leading,
                     endPoint: .trailing
                 ),
-                height: 4
+                height: 5
             )
         }
         .frame(maxWidth: .infinity)
@@ -165,7 +166,66 @@ private struct AvatarStack: View {
     }
 }
 
+/// A ring that fills with the team's progress: purple while working, green when
+/// everyone's done, gray while paused. An optional short label sits in the middle.
+private struct TeamRing: View {
+    let state: TeamActivityAttributes.ContentState
+    var size: CGFloat = 40
+    var label: String? = nil
+
+    var body: some View {
+        let fraction = max(0.02, min(1, Double(TeamText.allDone(state) ? 100 : TeamText.average(state)) / 100))
+        let tint = TeamText.tint(state)
+        let line = max(2, size * 0.12)
+        ZStack {
+            Circle()
+                .stroke(Palette.track, lineWidth: line)
+            Circle()
+                .trim(from: 0, to: fraction)
+                .stroke(
+                    AngularGradient(
+                        colors: [tint.opacity(0.5), tint],
+                        center: .center,
+                        startAngle: .degrees(0),
+                        endAngle: .degrees(360 * fraction)
+                    ),
+                    style: StrokeStyle(lineWidth: line, lineCap: .round)
+                )
+                .rotationEffect(.degrees(-90))
+            if let label {
+                Text(label)
+                    .font(.system(size: size * 0.3, weight: .bold, design: .rounded))
+                    .foregroundStyle(Palette.text)
+                    .monospacedDigit()
+                    .minimumScaleFactor(0.5)
+                    .lineLimit(1)
+                    .padding(line)
+            }
+        }
+        .frame(width: size, height: size)
+        .accessibilityLabel(TeamText.title(state))
+    }
+}
+
+fileprivate extension Color {
+    /// A bot's color lifted toward white, so a percent in that color reads on the dark card.
+    static func shadeForActivity(_ hex: UInt32) -> Color {
+        let r = Double((hex >> 16) & 0xFF) / 255
+        let g = Double((hex >> 8) & 0xFF) / 255
+        let b = Double(hex & 0xFF) / 255
+        let lift = 0.45
+        return Color(red: r + (1 - r) * lift, green: g + (1 - g) * lift, blue: b + (1 - b) * lift)
+    }
+}
+
 private enum TeamText {
+    /// The ring and compact text color for what the team is doing.
+    static func tint(_ s: TeamActivityAttributes.ContentState) -> Color {
+        if allDone(s) { return Palette.greenText }
+        if s.paused { return Palette.sub }
+        return Palette.accentText
+    }
+
     static func working(_ s: TeamActivityAttributes.ContentState) -> Int {
         s.progress.filter { $0 < 100 }.count
     }

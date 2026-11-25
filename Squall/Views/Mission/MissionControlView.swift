@@ -21,7 +21,14 @@ struct MissionControlView: View {
                     chiefPanel
                     SectionLabel(text: "Team")
                     if store.teammates.isEmpty {
-                        emptyRow("No teammates yet. Chief works alone for now.")
+                        EmptyStateCard(
+                            icon: "person.badge.plus",
+                            title: "Chief works alone for now",
+                            text: "Add teammates and you can watch, pause and steer all of them from here.",
+                            buttonTitle: "Add a teammate",
+                            tint: Theme.goldBright,
+                            action: { store.showNewTeammate = true }
+                        )
                     } else {
                         LazyVGrid(columns: columns, spacing: 10) {
                             ForEach(store.teammates) { bot in
@@ -194,7 +201,7 @@ struct MissionControlView: View {
     private var needsYou: some View {
         let items = store.inbox.filter { $0.kind.needsYou }
         if items.isEmpty {
-            emptyRow("No bot is waiting on you.")
+            emptyRow("No bot is waiting on you. Nice!", icon: "checkmark.circle")
         } else {
             VStack(spacing: 8) {
                 ForEach(items) { item in
@@ -231,13 +238,21 @@ struct MissionControlView: View {
         }
     }
 
-    private func emptyRow(_ text: String) -> some View {
-        Text(text)
-            .font(.system(size: 13.5))
-            .foregroundStyle(Theme.sub)
-            .padding(12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .glassCard(radius: 14)
+    private func emptyRow(_ text: String, icon: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Theme.muted)
+                .frame(width: 20)
+                .accessibilityHidden(true)
+            Text(text)
+                .font(.system(size: 13.5))
+                .foregroundStyle(Theme.sub)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassCard(radius: 14)
     }
 
     private func askRow<Buttons: View>(botID: String, text: String, done: String?, @ViewBuilder buttons: () -> Buttons) -> some View {
@@ -266,7 +281,7 @@ struct MissionControlView: View {
     @ViewBuilder
     private var handoffs: some View {
         if store.handoffs.isEmpty {
-            emptyRow("No handoffs yet.")
+            emptyRow("No handoffs yet. Long-press a bot on the Team tab and drop it on Chief to hand its work over.", icon: "arrow.left.arrow.right")
         } else {
             VStack(spacing: 8) {
                 ForEach(store.handoffs) { handoff in
@@ -277,23 +292,66 @@ struct MissionControlView: View {
     }
 
     private func handoffRow(from: String, to: String, what: String, when: String) -> some View {
-        HStack(spacing: 8) {
-            if let source = store.bot(from) { Sphere(bot: source, size: 26) }
-            Image(systemName: "arrow.right")
-                .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(Theme.goldText)
-            if let target = store.bot(to) { Sphere(bot: target, size: 26) }
-            Text(what)
-                .font(.system(size: 13.5, weight: .medium))
-                .foregroundStyle(Theme.text)
-                .lineLimit(1)
-            Spacer()
+        let source = store.bot(from)
+        let target = store.bot(to)
+        return HStack(alignment: .center, spacing: 10) {
+            // The two bots, joined by a moving dotted line in their colors.
+            HStack(spacing: 0) {
+                if let source { Sphere(bot: source, size: 28) }
+                HandoffLine(from: source?.color ?? Theme.goldText, to: target?.color ?? Theme.goldText)
+                    .frame(width: 30, height: 12)
+                if let target { Sphere(bot: target, size: 28) }
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(source?.name ?? "A teammate") to \(target?.name ?? "a teammate")")
+                    .font(.system(size: 11.5, weight: .semibold))
+                    .foregroundStyle(Theme.sub)
+                    .lineLimit(1)
+                Text(what)
+                    .font(.system(size: 13.5, weight: .medium))
+                    .foregroundStyle(Theme.text)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
             Text(when)
                 .font(.system(size: 11.5))
                 .foregroundStyle(Theme.muted)
         }
         .padding(12)
-        .glassCard(radius: 14)
+        .glassCard(radius: 14, tint: source?.hex, strength: 0.08)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// The dotted line between two bots in a hand off. The dots drift toward the bot that got the work.
+private struct HandoffLine: View {
+    let from: Color
+    let to: Color
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var phase: CGFloat = 0
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .trailing) {
+                Path { path in
+                    path.move(to: CGPoint(x: 3, y: geo.size.height / 2))
+                    path.addLine(to: CGPoint(x: max(geo.size.width - 7, 3), y: geo.size.height / 2))
+                }
+                .stroke(
+                    LinearGradient(colors: [from, to], startPoint: .leading, endPoint: .trailing),
+                    style: StrokeStyle(lineWidth: 2, lineCap: .round, dash: [2, 4], dashPhase: phase)
+                )
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 8, weight: .heavy))
+                    .foregroundStyle(to)
+            }
+        }
+        .onAppear {
+            guard !reduceMotion else { return }
+            withAnimation(.linear(duration: 0.8).repeatForever(autoreverses: false)) { phase = -12 }
+        }
+        .accessibilityHidden(true)
     }
 }
 
@@ -328,17 +386,7 @@ private struct MissionCard: View {
                 .foregroundStyle(Theme.sub)
                 .lineLimit(2)
             if !bot.log.isEmpty {
-                VStack(alignment: .leading, spacing: 2) {
-                    ForEach(bot.log.suffix(3).indices, id: \.self) { index in
-                        Text(bot.log[index])
-                            .font(Theme.mono(10.5))
-                            .foregroundStyle(bot.log[index].hasPrefix("$") ? Theme.commandText : Theme.greenText)
-                            .lineLimit(1)
-                    }
-                }
-                .padding(8)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(RoundedRectangle(cornerRadius: 8).fill(Color.black.opacity(0.35)))
+                StepLog(lines: bot.log, limit: 3, live: bot.status == .working, tint: bot.color, fontSize: 10.5)
             }
             if bot.progress > 0 && bot.status != .idle {
                 ProgressView(value: bot.progress).tint(bot.color)

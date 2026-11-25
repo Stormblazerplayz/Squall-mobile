@@ -15,7 +15,7 @@ struct BuildActivityWidget: Widget {
             let s = context.state
             return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    Avatar(letter: a.letter, hex: a.hex, size: 36)
+                    ProgressAvatar(attributes: a, state: s, size: 40)
                         .padding(.leading, 2)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
@@ -39,10 +39,7 @@ struct BuildActivityWidget: Widget {
                 DynamicIslandExpandedRegion(.bottom) {
                     VStack(spacing: 8) {
                         StepsBar(count: a.steps.count, step: s.step, done: s.done, hex: a.hex)
-                        Text(BuildText.line(a, s))
-                            .font(.system(size: 12.5))
-                            .foregroundStyle(Palette.sub)
-                            .lineLimit(1)
+                        StepLine(attributes: a, state: s)
                             .frame(maxWidth: .infinity, alignment: .leading)
                         BuildButtons(state: s)
                     }
@@ -80,18 +77,16 @@ private struct BuildLockScreen: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
             ActivityHeader(sub: "\(attributes.botName) · \(attributes.botRole)", title: attributes.title) {
-                Avatar(letter: attributes.letter, hex: attributes.hex)
+                ProgressAvatar(attributes: attributes, state: state, size: 38)
             } trailing: {
                 Text(BuildText.trailing(attributes, state))
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(BuildText.trailingColor(state))
                     .monospacedDigit()
+                    .contentTransition(.numericText())
             }
             StepsBar(count: attributes.steps.count, step: state.step, done: state.done, hex: attributes.hex)
-            Text(BuildText.line(attributes, state))
-                .font(.system(size: 12.5))
-                .foregroundStyle(Palette.sub)
-                .lineLimit(1)
+            StepLine(attributes: attributes, state: state)
             BuildButtons(state: state)
         }
     }
@@ -119,7 +114,8 @@ private struct BuildButtons: View {
     }
 }
 
-/// One short bar per step: done steps full, the current one half, the rest empty.
+/// One bar per step: finished steps glow in the bot's color, the current one is
+/// half full with a bright tip, and the rest wait in gray. All green when done.
 private struct StepsBar: View {
     let count: Int
     let step: Int
@@ -129,18 +125,85 @@ private struct StepsBar: View {
     var body: some View {
         HStack(spacing: 4) {
             ForEach(0..<max(1, count), id: \.self) { index in
-                Capsule()
-                    .fill(color(index))
-                    .frame(height: 6)
+                segment(index)
             }
         }
+        .frame(height: 7)
     }
 
-    private func color(_ index: Int) -> Color {
-        if done { return Palette.green }
-        if index < step { return Color(activityHex: hex) }
-        if index == step { return Color(activityHex: hex, opacity: 0.5) }
-        return Palette.track
+    @ViewBuilder
+    private func segment(_ index: Int) -> some View {
+        if done {
+            Capsule()
+                .fill(LinearGradient(colors: [Palette.green.opacity(0.75), Palette.green], startPoint: .leading, endPoint: .trailing))
+        } else if index < step {
+            Capsule()
+                .fill(LinearGradient(colors: [Color(activityHex: hex, opacity: 0.75), Color(activityHex: hex)],
+                                     startPoint: .leading, endPoint: .trailing))
+        } else if index == step {
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Palette.track)
+                    Capsule()
+                        .fill(LinearGradient(colors: [Color(activityHex: hex, opacity: 0.55), Color(activityHex: hex)],
+                                             startPoint: .leading, endPoint: .trailing))
+                        .frame(width: geo.size.width * 0.5)
+                        .shadow(color: Color(activityHex: hex, opacity: 0.8), radius: 3)
+                }
+            }
+        } else {
+            Capsule().fill(Palette.track)
+        }
+    }
+}
+
+/// The bot's ball inside a ring that fills as the steps go by.
+private struct ProgressAvatar: View {
+    let attributes: BuildActivityAttributes
+    let state: BuildActivityAttributes.ContentState
+    var size: CGFloat = 38
+
+    var body: some View {
+        let line = max(2, size * 0.08)
+        let tint = state.done ? Palette.green : (state.paused ? Palette.sub : Color(activityHex: attributes.hex))
+        ZStack {
+            Circle().stroke(Palette.track, lineWidth: line)
+            Circle()
+                .trim(from: 0, to: BuildText.fraction(attributes, state))
+                .stroke(tint, style: StrokeStyle(lineWidth: line, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+            Avatar(letter: attributes.letter, hex: attributes.hex, size: size - line * 4)
+                .overlay(alignment: .bottomTrailing) {
+                    if state.done || state.paused {
+                        Image(systemName: state.done ? "checkmark" : "pause.fill")
+                            .font(.system(size: size * 0.2, weight: .heavy))
+                            .foregroundStyle(Palette.ink)
+                            .frame(width: size * 0.36, height: size * 0.36)
+                            .background(Circle().fill(state.done ? Palette.green : Palette.sub))
+                            .overlay(Circle().stroke(Palette.ink, lineWidth: 1.5))
+                            .offset(x: line, y: line)
+                    }
+                }
+        }
+        .frame(width: size, height: size)
+    }
+}
+
+/// "Step 2 of 5 · Writing tests" with an icon for working, paused or done.
+private struct StepLine: View {
+    let attributes: BuildActivityAttributes
+    let state: BuildActivityAttributes.ContentState
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: state.done ? "checkmark.seal.fill" : (state.paused ? "pause.circle.fill" : "hammer.fill"))
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(state.done ? Palette.green : (state.paused ? Palette.sub : Color(activityHex: attributes.hex)))
+            Text(BuildText.line(attributes, state))
+                .font(.system(size: 12.5))
+                .foregroundStyle(Palette.sub)
+                .lineLimit(1)
+        }
     }
 }
 
@@ -155,6 +218,13 @@ private enum BuildText {
         if s.done { return Palette.greenText }
         if s.paused { return Palette.sub }
         return Color(activityHex: 0x8FC0F0)
+    }
+
+    /// How far along the job is, 0 to 1, for the ring.
+    static func fraction(_ a: BuildActivityAttributes, _ s: BuildActivityAttributes.ContentState) -> Double {
+        if s.done { return 1 }
+        guard a.steps.count > 0 else { return 0.02 }
+        return max(0.02, min(1, (Double(s.step) + 0.5) / Double(a.steps.count)))
     }
 
     static func line(_ a: BuildActivityAttributes, _ s: BuildActivityAttributes.ContentState) -> String {

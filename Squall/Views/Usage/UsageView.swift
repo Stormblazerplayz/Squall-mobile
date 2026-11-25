@@ -108,7 +108,7 @@ private struct MainWindowCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 18) {
-                UsageRing(percent: window.percent, limit: usage.slowDown ? usage.limit : nil)
+                UsageRing(percent: window.percent, limit: usage.slowDown ? usage.limit : nil, pace: window.predicting ? nil : window.atReset)
                 VStack(alignment: .leading, spacing: 6) {
                     Text(window.isFiveHour ? "5-hour limit" : window.label)
                         .font(.system(size: 18, weight: .bold))
@@ -308,6 +308,8 @@ private struct BotDayRow: View {
     let day: PlanUsage.BotDay
     /// This bot's time next to the busiest bot's, 0 to 1.
     let share: Double
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var grown = false
 
     var body: some View {
         HStack(spacing: 12) {
@@ -328,11 +330,15 @@ private struct BotDayRow: View {
                     ZStack(alignment: .leading) {
                         Capsule().fill(Color.white.opacity(0.07))
                         Capsule()
-                            .fill(bot.color)
-                            .frame(width: max(6, geo.size.width * min(max(share, 0), 1)))
+                            .fill(LinearGradient(colors: [Color.shade(bot.hex, towardWhite: true, 0.3), bot.color],
+                                                 startPoint: .leading, endPoint: .trailing))
+                            .frame(width: max(6, geo.size.width * (grown || reduceMotion ? min(max(share, 0), 1) : 0)))
+                            .shadow(color: bot.color.opacity(0.45), radius: 4)
                     }
                 }
-                .frame(height: 5)
+                .frame(height: 6)
+                .animation(.spring(response: 0.8, dampingFraction: 0.85), value: grown)
+                .onAppear { grown = true }
             }
         }
         .contentShape(Rectangle())
@@ -401,24 +407,53 @@ enum UsageStyle {
 }
 
 /// A ring that fills up with the percent used, with a gold tick at your limit.
+/// It sweeps in when it first shows, glows at its tip, and can show where the
+/// pace lands at reset as a faint dashed arc.
 struct UsageRing: View {
     let percent: Int
     var limit: Int? = nil
     var size: CGFloat = 116
     var line: CGFloat = 12
+    /// Where the pace lands when the window resets, drawn faintly past the fill.
+    var pace: Int? = nil
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var shown = false
 
     var body: some View {
         let level = UsageLevel.of(percent)
+        let fraction = CGFloat(min(max(percent, 0), 100)) / 100
+        let drawn = shown || reduceMotion ? fraction : 0
+        let colors = UsageStyle.colors(level)
         ZStack {
             Circle()
                 .stroke(Color.white.opacity(0.08), lineWidth: line)
+            if size >= 80 {
+                // Little ticks every 10%, like a gauge.
+                ForEach(0..<10, id: \.self) { index in
+                    Capsule()
+                        .fill(Color.white.opacity(index == 0 ? 0.3 : 0.14))
+                        .frame(width: 1.5, height: line * 0.45)
+                        .offset(y: -(size / 2 - line - 6))
+                        .rotationEffect(.degrees(Double(index) * 36))
+                }
+            }
+            if let pace, pace > percent {
+                let end = CGFloat(min(pace, 100)) / 100
+                Circle()
+                    .trim(from: drawn, to: shown || reduceMotion ? end : 0)
+                    .stroke(colors.last?.opacity(0.35) ?? Color.white.opacity(0.2),
+                            style: StrokeStyle(lineWidth: line * 0.45, lineCap: .round, dash: [2, 5]))
+                    .rotationEffect(.degrees(-90))
+            }
             Circle()
-                .trim(from: 0, to: CGFloat(min(max(percent, 0), 100)) / 100)
+                .trim(from: 0, to: drawn)
                 .stroke(
-                    LinearGradient(colors: UsageStyle.colors(level), startPoint: .topLeading, endPoint: .bottomTrailing),
+                    AngularGradient(colors: [colors.first ?? .white, colors.last ?? .white, colors.first ?? .white],
+                                    center: .center, startAngle: .degrees(0), endAngle: .degrees(360)),
                     style: StrokeStyle(lineWidth: line, lineCap: .round)
                 )
                 .rotationEffect(.degrees(-90))
+                .shadow(color: (colors.last ?? .clear).opacity(0.45), radius: line * 0.6)
             if let limit {
                 let spot = CGFloat(limit) / 100
                 Circle()
@@ -427,37 +462,53 @@ struct UsageRing: View {
                     .rotationEffect(.degrees(-90))
             }
             VStack(spacing: 0) {
-                Text("\(percent)%")
-                    .font(.system(size: size * 0.24, weight: .bold))
+                Text("\(shown || reduceMotion ? percent : 0)%")
+                    .font(.system(size: size * 0.24, weight: .bold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(Theme.textBright)
-                Text("used")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Theme.sub)
+                    .contentTransition(.numericText(value: Double(shown || reduceMotion ? percent : 0)))
+                if size >= 80 {
+                    Text("used")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Theme.sub)
+                }
             }
         }
         .frame(width: size, height: size)
+        .animation(.spring(response: 0.9, dampingFraction: 0.85), value: shown)
         .animation(.easeOut(duration: 0.5), value: percent)
+        .onAppear { shown = true }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(percent) percent used" + (limit.map { ", limit \($0) percent" } ?? ""))
     }
 }
 
-/// A thin bar that fills up with the percent used.
+/// A thin bar that fills up with the percent used. It grows in when it first shows,
+/// with a soft shine on the filled part.
 struct UsageBar: View {
     let percent: Int
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var shown = false
 
     var body: some View {
+        let fraction = CGFloat(min(max(percent, 0), 100)) / 100
         GeometryReader { geo in
             ZStack(alignment: .leading) {
                 Capsule().fill(Color.white.opacity(0.08))
                 Capsule()
                     .fill(LinearGradient(colors: UsageStyle.colors(UsageLevel.of(percent)), startPoint: .leading, endPoint: .trailing))
-                    .frame(width: geo.size.width * CGFloat(min(max(percent, 0), 100)) / 100)
+                    .overlay(
+                        Capsule().fill(LinearGradient(colors: [Color.white.opacity(0.28), Color.white.opacity(0)],
+                                                      startPoint: .top, endPoint: .bottom))
+                    )
+                    .frame(width: geo.size.width * (shown || reduceMotion ? fraction : 0))
+                    .shadow(color: (UsageStyle.colors(UsageLevel.of(percent)).last ?? .clear).opacity(0.4), radius: 4)
             }
         }
-        .frame(height: 6)
+        .frame(height: 7)
+        .animation(.spring(response: 0.8, dampingFraction: 0.85), value: shown)
         .animation(.easeOut(duration: 0.5), value: percent)
+        .onAppear { shown = true }
     }
 }
 

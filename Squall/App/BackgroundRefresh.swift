@@ -55,6 +55,13 @@ enum BackgroundRefresh {
                 computerKey: SnapshotCache.key(for: computer),
                 inForeground: false
             )
+            ReplyAlerts.process(
+                chats: snapshot.chats,
+                bots: snapshot.bots.map(\.model),
+                settings: AppSettings.saved,
+                computerKey: SnapshotCache.key(for: computer),
+                inForeground: false
+            )
             let data = reply.data
             let from = reply.computer
             Task.detached(priority: .utility) {
@@ -73,5 +80,11 @@ final class SquallAppDelegate: NSObject, UIApplicationDelegate {
         SquallAlerts.shared.setUp()
         BackgroundRefresh.register()
         return true
+    }
+
+    /// iPhone stays upright except on Squall Uno's big screen, which can turn sideways (see UnoOrientation).
+    @MainActor
+    func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
+        UIDevice.current.userInterfaceIdiom == .phone ? UnoOrientation.phoneMask : .all
     }
 }

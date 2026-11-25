@@ -6,6 +6,7 @@ struct InboxView: View {
     @State private var filter: InboxItem.Filter = .all
     @State private var openDetails: Set<String> = []
     @State private var selectedID: String?
+    @ObservedObject private var snooze = InboxSnooze.shared
     @Environment(\.horizontalSizeClass) private var sizeClass
 
     var body: some View {
@@ -37,6 +38,12 @@ struct InboxView: View {
                     .font(.system(size: 28, weight: .bold))
                     .foregroundStyle(Theme.textBright)
                 Spacer()
+                ClipboardButton()
+                    .padding(.trailing, 4)
+                NotesButton()
+                    .padding(.trailing, 4)
+                HistoryButton()
+                    .padding(.trailing, 4)
                 Button(store.unreadInboxCount == 0 ? "All read" : "Mark all read") {
                     store.markAllRead()
                 }
@@ -51,7 +58,7 @@ struct InboxView: View {
     }
 
     private var summary: String {
-        let needs = store.waitingOnYouCount
+        let needs = items(for: .needs).count
         let unread = store.unreadInboxCount
         let needsText = needs == 1 ? "1 thing needs you" : "\(needs) things need you"
         return "\(needsText) · \(unread) unread"
@@ -61,12 +68,14 @@ struct InboxView: View {
         items(for: filter).count
     }
 
+    /// Snoozed things wait at the bottom instead (see SnoozedSection).
     private func items(for filter: InboxItem.Filter) -> [InboxItem] {
+        let awake = snooze.awake(store.inbox)
         switch filter {
-        case .all: return store.inbox
-        case .needs: return store.inbox.filter { $0.kind.needsYou }
-        case .problems: return store.inbox.filter { $0.kind == .error }
-        case .done: return store.inbox.filter {
+        case .all: return awake
+        case .needs: return awake.filter { $0.kind.needsYou }
+        case .problems: return awake.filter { $0.kind == .error }
+        case .done: return awake.filter {
             if case .done = $0.kind { return true }
             return false
         }
@@ -89,12 +98,10 @@ struct InboxView: View {
     private var sections: some View {
         let shown = items(for: filter)
         if shown.isEmpty {
-            Text(filter.emptyText)
-                .font(.system(size: 14))
-                .foregroundStyle(Theme.sub)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 50)
+            emptyState
+                .padding(.top, 20)
         } else {
+            if filter == .all || filter == .needs { AnswerManyBar() }
             section("Needs you", dot: Theme.goldBright, items: shown.filter { $0.kind.needsYou })
             section("Problems", dot: Theme.redSoft, items: shown.filter { $0.kind == .error })
             section("Done", dot: Theme.green, items: shown.filter {
@@ -102,6 +109,28 @@ struct InboxView: View {
                 return false
             })
         }
+        SnoozedSection()
+    }
+
+    /// Nothing in this filter: say what shows up here and what to do next.
+    private var emptyState: some View {
+        let allEmpty = store.inbox.isEmpty
+        return EmptyStateCard(
+            icon: filter == .problems ? "checkmark.shield" : (filter == .done ? "checkmark.seal" : "tray"),
+            title: allEmpty ? "Inbox zero" : filter.emptyText,
+            text: allEmpty
+                ? "When a bot needs your OK, asks a question, hits a problem or finishes a job, it lands here."
+                : "Try another filter to see the rest.",
+            buttonTitle: allEmpty ? "Give Chief a job" : "Show everything",
+            tint: filter == .problems ? Theme.green : Theme.goldBright,
+            action: {
+                if allEmpty {
+                    store.openChat(Bot.chiefID)
+                } else {
+                    withAnimation { filter = .all }
+                }
+            }
+        )
     }
 
     @ViewBuilder
@@ -116,6 +145,8 @@ struct InboxView: View {
                 InboxCard(item: item, showDetails: openDetails.contains(item.id)) {
                     toggleDetails(item.id)
                 }
+                // Press and hold to snooze it.
+                .contextMenu { SnoozeMenuItems(item: item) }
             }
         }
     }
@@ -139,12 +170,10 @@ struct InboxView: View {
                     header
                     filterBar
                     if shown.isEmpty {
-                        Text(filter.emptyText)
-                            .font(.system(size: 14))
-                            .foregroundStyle(Theme.sub)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 50)
+                        emptyState
+                            .padding(.top, 20)
                     } else {
+                        if filter == .all || filter == .needs { AnswerManyBar() }
                         listSection("Needs you", dot: Theme.goldBright, items: shown.filter { $0.kind.needsYou }, selected: selected?.id)
                         listSection("Problems", dot: Theme.redSoft, items: shown.filter { $0.kind == .error }, selected: selected?.id)
                         listSection("Done", dot: Theme.green, items: shown.filter {
@@ -152,6 +181,7 @@ struct InboxView: View {
                             return false
                         }, selected: selected?.id)
                     }
+                    SnoozedSection()
                 }
                 .padding(20)
             }
@@ -198,6 +228,7 @@ struct InboxView: View {
                     selectedID = item.id
                     store.markRead(item.id)
                 }
+                .contextMenu { SnoozeMenuItems(item: item) }
             }
         }
     }
@@ -284,43 +315,81 @@ private struct InboxDetail: View {
 
 private struct InboxCard: View {
     @EnvironmentObject private var store: SquallStore
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let item: InboxItem
     let showDetails: Bool
     var toggleDetails: () -> Void
 
     var body: some View {
         let bot = store.bot(item.botID)
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top, spacing: 10) {
+        VStack(alignment: .leading, spacing: 11) {
+            HStack(alignment: .top, spacing: 11) {
                 ZStack(alignment: .bottomTrailing) {
                     if let bot {
-                        Sphere(bot: bot, size: 38)
+                        Sphere(bot: bot, size: 40)
                     }
-                    Text(item.kind.badge)
-                        .font(.system(size: 10, weight: .heavy))
+                    Image(systemName: kindIcon)
+                        .font(.system(size: 9, weight: .heavy))
                         .foregroundStyle(Theme.darkInk)
-                        .frame(width: 16, height: 16)
-                        .background(Circle().fill(badgeColor))
-                        .offset(x: 3, y: 3)
+                        .frame(width: 18, height: 18)
+                        .background(Circle().fill(kindColor))
+                        .overlay(Circle().stroke(Theme.background, lineWidth: 2))
+                        .offset(x: 4, y: 4)
+                        .accessibilityHidden(true)
                 }
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 6) {
-                        Text(item.title)
-                            .font(.system(size: 15, weight: .bold))
-                            .foregroundStyle(Theme.textBright)
-                        if item.unread {
-                            Circle().fill(store.accent).frame(width: 7, height: 7)
-                                .accessibilityLabel("Unread")
+                        Text(kindLabel.uppercased())
+                            .font(.system(size: 10, weight: .heavy))
+                            .kerning(0.6)
+                            .foregroundStyle(kindColor)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                            .background(Capsule().fill(kindColor.opacity(0.14)))
+                        if let bot {
+                            Text(bot.name)
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(bot.nameColor)
+                                .lineLimit(1)
                         }
+                        Spacer(minLength: 0)
+                        if item.unread {
+                            UnreadDot(color: store.accent, pulse: !reduceMotion && item.kind.needsYou)
+                        }
+                        Text(item.time)
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(Theme.muted)
                     }
-                    Text(item.body)
-                        .font(.system(size: 13.5))
-                        .foregroundStyle(Theme.sub)
+                    Text(item.title)
+                        .font(.system(size: 15.5, weight: .bold))
+                        .foregroundStyle(Theme.textBright)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if !item.body.isEmpty {
+                        Text(item.body)
+                            .font(.system(size: 13.5))
+                            .foregroundStyle(Theme.sub)
+                            .lineLimit(showDetails ? nil : 4)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
-                Spacer(minLength: 0)
-                Text(item.time)
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(Theme.muted)
+            }
+            if item.kind == .ask, let command = item.command, !command.isEmpty {
+                // What the bot wants to run, so Allow is an informed tap.
+                HStack(alignment: .top, spacing: 8) {
+                    Text("$")
+                        .font(Theme.mono(12))
+                        .foregroundStyle(Theme.goldBright)
+                    Text(command)
+                        .font(Theme.mono(12))
+                        .foregroundStyle(Theme.commandText)
+                        .lineLimit(4)
+                        .textSelection(.enabled)
+                    Spacer(minLength: 0)
+                }
+                .padding(10)
+                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.black.opacity(0.35)))
+                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Theme.goldBright.opacity(0.18), lineWidth: 1))
+                .accessibilityLabel("Command: \(command)")
             }
             actions
             if showDetails, item.kind == .error, let details = item.details, !details.isEmpty {
@@ -331,19 +400,61 @@ private struct InboxCard: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(RoundedRectangle(cornerRadius: 10).fill(Color.black.opacity(0.35)))
                     .textSelection(.enabled)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .padding(14)
-        .glassCard(radius: 18, tint: item.fresh ? 0x4ADE80 : nil, strength: 0.1, border: borderColor)
+        .padding(.vertical, 14)
+        .padding(.leading, 18)
+        .padding(.trailing, 14)
+        .glassCard(radius: 18, tint: tintHex, strength: item.unread ? 0.14 : 0.07, border: borderColor)
+        .overlay(alignment: .leading) {
+            // The kind's color down the left edge: gold needs you, red is a problem, green is done.
+            Capsule()
+                .fill(LinearGradient(colors: [kindColor, kindColor.opacity(0.35)], startPoint: .top, endPoint: .bottom))
+                .frame(width: 4)
+                .padding(.vertical, 12)
+                .padding(.leading, 6)
+                .opacity(item.unread || item.kind.needsYou ? 1 : 0.45)
+                .accessibilityHidden(true)
+        }
+        .opacity(item.unread || item.kind.needsYou ? 1 : 0.86)
         .contentShape(Rectangle())
         .onTapGesture { store.markRead(item.id) }
+        .contextMenu { menu }
+        .transition(.asymmetric(insertion: .move(edge: .top).combined(with: .opacity), removal: .scale(scale: 0.96).combined(with: .opacity)))
     }
 
-    private var badgeColor: Color {
+    private var kindColor: Color {
         switch item.kind {
         case .ask, .choice: return Theme.goldBright
         case .error: return Theme.redSoft
         case .done: return Theme.green
+        }
+    }
+
+    private var tintHex: UInt32 {
+        switch item.kind {
+        case .ask, .choice: return 0xF5C84B
+        case .error: return 0xF87171
+        case .done: return 0x4ADE80
+        }
+    }
+
+    private var kindIcon: String {
+        switch item.kind {
+        case .ask: return "hand.raised.fill"
+        case .choice: return "questionmark"
+        case .error: return "exclamationmark"
+        case .done: return "checkmark"
+        }
+    }
+
+    private var kindLabel: String {
+        switch item.kind {
+        case .ask: return "Needs your OK"
+        case .choice: return "Question"
+        case .error: return "Problem"
+        case .done: return "Done"
         }
     }
 
@@ -352,6 +463,23 @@ private struct InboxCard: View {
         case .ask, .choice: return Theme.goldBright.opacity(0.35)
         case .error: return Theme.red.opacity(0.35)
         case .done: return nil
+        }
+    }
+
+    /// Long press: the same actions, plus reading it without answering.
+    @ViewBuilder
+    private var menu: some View {
+        if item.unread {
+            Button("Mark as read", systemImage: "envelope.open") { store.markRead(item.id) }
+        }
+        if let bot = store.bot(item.botID) {
+            Button("Open chat with \(bot.name)", systemImage: "bubble.left.and.bubble.right") {
+                store.markRead(item.id)
+                store.openChat(bot.id)
+            }
+        }
+        if !item.kind.needsYou {
+            Button("Clear", systemImage: "xmark.circle", role: .destructive) { store.clearInbox(item.id) }
         }
     }
 
@@ -381,6 +509,14 @@ private struct InboxCard: View {
             .disabled(busy)
         case .error:
             HStack(spacing: 8) {
+                if item.botID == Bot.chiefID {
+                    Button(store.isBusy("chief.retry") ? "Retrying…" : "Try again") {
+                        store.markRead(item.id)
+                        store.retryChief()
+                    }
+                    .buttonStyle(GhostButtonStyle(height: 40, expand: false, foreground: Theme.redText, border: Theme.red.opacity(0.5), fontSize: 14, sidePadding: 14))
+                    .disabled(store.isBusy("chief.retry"))
+                }
                 if store.chiefNeedsUpdate {
                     Button(store.isUpdatingClaudeCode ? "Updating…" : "Update Claude Code") { store.runUpdate() }
                         .buttonStyle(FilledButtonStyle(fill: Theme.gold, foreground: Theme.darkInk, height: 40))
@@ -418,5 +554,30 @@ private struct InboxCard: View {
         case .chat:
             store.openChat(item.botID)
         }
+    }
+}
+
+/// The unread dot. On something that needs you it breathes, so it catches the eye.
+private struct UnreadDot: View {
+    let color: Color
+    let pulse: Bool
+    @State private var on = false
+
+    var body: some View {
+        Circle()
+            .fill(color)
+            .frame(width: 8, height: 8)
+            .background(
+                Circle()
+                    .fill(color.opacity(0.35))
+                    .frame(width: 16, height: 16)
+                    .scaleEffect(pulse && on ? 1 : 0.5)
+                    .opacity(pulse ? (on ? 0 : 0.9) : 0)
+            )
+            .onAppear {
+                guard pulse else { return }
+                withAnimation(.easeOut(duration: 1.4).repeatForever(autoreverses: false)) { on = true }
+            }
+            .accessibilityLabel("Unread")
     }
 }

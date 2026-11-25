@@ -244,7 +244,9 @@ struct PairingClient {
         }
     }
 
-    private func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+    /// Sends a request and turns "couldn't connect" into `PairingError.cantReach`.
+    /// Squall Uno's calls (UnoClient.swift) use it too, so every call works the same way.
+    func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         let result: (Data, URLResponse)
         do {
             result = try await session.data(for: request)

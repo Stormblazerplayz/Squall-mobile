@@ -20,11 +20,14 @@ struct StateSnapshot: Decodable {
     var claudeCode: ClaudeCodeDTO?
     /// Squall on the computer itself. Older desktops don't send it.
     var desktop: DesktopInfo?
+    /// The shared To do list. Older desktops don't send it.
+    var todo: TodoListDTO?
     /// The plan's usage and today's jobs. Older desktops don't send it.
     var usage: UsageDTO?
 
     private enum CodingKeys: String, CodingKey {
         case version, paused, typing, bots, chats, groups, inbox, routines, work, handoffs, claudeCode, desktop, usage
+        case todo
     }
 
     init(from decoder: Decoder) throws {
@@ -40,6 +43,7 @@ struct StateSnapshot: Decodable {
         handoffs = c.lossyArray(HandoffDTO.self, forKey: .handoffs)
         claudeCode = try? c.decodeIfPresent(ClaudeCodeDTO.self, forKey: .claudeCode)
         desktop = (try? c.decodeIfPresent(DesktopInfo.self, forKey: .desktop)) ?? nil
+        todo = (try? c.decodeIfPresent(TodoListDTO.self, forKey: .todo)) ?? nil
         usage = (try? c.decodeIfPresent(UsageDTO.self, forKey: .usage)) ?? nil
         let rawChats = (try? c.decodeIfPresent([String: [Lossy<MessageDTO>]].self, forKey: .chats)) ?? [:]
         var cleanChats: [String: [MessageDTO]] = [:]
@@ -75,6 +79,61 @@ struct DesktopInfo: Decodable, Equatable {
         if updating { return "\(version) · updating" }
         if let latest, !latest.isEmpty, latest != version { return "\(version) · \(latest) is ready" }
         return version
+    }
+}
+
+/// `"todo": {"items": [...]}` in the state: Squall's shared To do list.
+struct TodoListDTO: Decodable {
+    var items: [TodoItemDTO]
+
+    private enum CodingKeys: String, CodingKey {
+        case items
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        items = c.lossyArray(TodoItemDTO.self, forKey: .items)
+    }
+
+    var model: TodoList {
+        var seen = Set<String>()
+        return TodoList(items: items.compactMap { dto in
+            guard let item = dto.model, seen.insert(item.id).inserted else { return nil }
+            return item
+        })
+    }
+}
+
+struct TodoItemDTO: Decodable {
+    var id: String
+    var text: String?
+    var status: String?
+    var by: String?
+    var who: String?
+    var botId: String?
+    var needs: String?
+    var needsBy: String?
+    var at: String?
+    var doneAt: String?
+
+    /// Nil for an item with no words, which the phone can't show.
+    var model: TodoItem? {
+        let words = (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !id.isEmpty, !words.isEmpty else { return nil }
+        let state = TodoItem.Status(rawValue: status ?? "todo") ?? .todo
+        let reason = needs?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return TodoItem(
+            id: id,
+            text: words,
+            status: state,
+            by: by?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "",
+            who: who?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "",
+            botID: (botId?.isEmpty ?? true) ? nil : botId,
+            needs: state == .done || reason.isEmpty ? nil : reason,
+            needsBy: (needsBy?.isEmpty ?? true) ? nil : needsBy,
+            addedAt: SyncText.date(at),
+            doneAt: SyncText.date(doneAt)
+        )
     }
 }
 
@@ -145,7 +204,8 @@ struct MessageDTO: Decodable {
             text: text ?? "",
             text2: (text2?.isEmpty ?? true) ? nil : text2,
             chips: chips ?? [],
-            time: SyncText.clock(at: at, fallback: time)
+            time: SyncText.clock(at: at, fallback: time),
+            at: SyncText.date(at)
         )
     }
 }
@@ -210,7 +270,7 @@ struct RoutineDTO: Decodable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, botId, task, days, minutes, isOn, pingWhenDone, askBeforePush, skipIfBusy, run
+        case id, botId, task, days, minutes, isOn, pingWhenDone, askBeforePush, skipIfBusy, run, lastRun
         case repeatMode = "repeat"
     }
 
@@ -225,6 +285,8 @@ struct RoutineDTO: Decodable {
     var askBeforePush: Bool?
     var skipIfBusy: Bool?
     var run: RunDTO?
+    /// "2026-11-25": the day it last ran or was skipped. Older desktops don't send it.
+    var lastRun: String?
 
     var model: Routine {
         let mode = Routine.Repeat(rawValue: repeatMode ?? "daily") ?? .daily
@@ -247,7 +309,8 @@ struct RoutineDTO: Decodable {
             pingWhenDone: pingWhenDone ?? true,
             askBeforePush: askBeforePush ?? true,
             skipIfBusy: skipIfBusy ?? false,
-            run: routineRun
+            run: routineRun,
+            lastRun: lastRun.flatMap { $0.range(of: #"^\d{4}-\d{2}-\d{2}$"#, options: .regularExpression) != nil ? $0 : nil }
         )
     }
 }

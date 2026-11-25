@@ -190,7 +190,13 @@ Answer `200` with one JSON object. Every field is optional and anything unknown 
   ],
   "handoffs": [{"id": "h1", "from": "chief", "to": "bot-a", "what": "Fix the build", "at": "2026-11-14T14:54:00Z"}],
   "claudeCode": {"version": "2.1.0", "latest": "2.1.0", "needsUpdate": false, "updating": null},
-  "desktop": {"version": "1.4.0", "latest": "1.5.0", "updating": false}
+  "desktop": {"version": "1.4.0", "latest": "1.5.0", "updating": false},
+  "todo": {"items": [
+    {"id": "td1", "text": "Fix the jump sound", "status": "doing", "by": "Storm", "who": "Builder", "botId": "bot-a",
+     "at": "2026-11-14T14:50:00Z"},
+    {"id": "td2", "text": "Pick the menu music", "status": "todo", "by": "Chief", "needs": "Which song do you want?", "needsBy": "chief"},
+    {"id": "td3", "text": "Back up the saves", "status": "done", "who": "Builder", "botId": "bot-a", "doneAt": "2026-11-14T13:00:00Z"}
+  ]}
 }
 ```
 
@@ -202,11 +208,12 @@ Answer `200` with one JSON object. Every field is optional and anything unknown 
 | `bots` | Chief must have `id` `chief`. `color` is `#RRGGBB`. `status` is `working`, `idle`, `napping`, `waiting`, `handed` or `paused`. `unread` is a count. `progress` is 0 to 1. |
 | `chats` | Messages per chat id: a bot's id, or a group's id. `kind` is `me`, `bot`, `system`, `error` (with `count`) or `handoff` (with `fromName`, `fromColor`, `note`). `at` is an ISO 8601 time, or send `time` as ready-made text. |
 | `inbox` | `kind` is `ask` (Allow / Deny, optional `command`), `choice` (with `options`), `error` (optional `details`) or `done` (with `openLabel`, and `opens` `chat` or `live` plus `workId`). |
-| `routines` | `repeat` is `daily`, `weekdays` or `custom`. `days` has 7 entries, Monday first. `minutes` is minutes after midnight. `run` is there only while it's running. |
+| `routines` | `repeat` is `daily`, `weekdays` or `custom`. `days` has 7 entries, Monday first. `minutes` is minutes after midnight. `run` is there only while it's running. `lastRun` (optional, `"2026-11-25"`) is the day it last ran or was skipped, on the computer's clock: it doesn't run again that day. |
 | `work` | Jobs bots are doing. `state` is `working`, `waiting`, `paused`, `done` or `stopped`. Step `state` is `done`, `now` or `todo`. Line `kind` is `cmd`, `ok`, `warn`, `err`, `dim`, `text`, `add` or `del`. `askId` points at the Inbox item the job waits on. |
 | `handoffs` | Recent work passed between bots, newest first. |
 | `claudeCode` | The Claude Code version Chief uses. `updating` is 0 to 1 while an update runs. |
 | `desktop` | Optional. Squall desktop's own `version`, the newest on GitHub Releases as `latest` (once it has checked), and `updating` while it installs one. Settings > Computer shows it as "1.4.0 · 1.5.0 is ready" or "1.4.0 · updating". |
+| `todo` | Optional. Squall's shared To do list (the To do pane on the computer). Open items in list order, then the newest finished ones. `status` is `todo`, `doing` or `done`. `by` is who added it, `who` is who's on it (`botId` when that's a bot). `needs` says why a bot is waiting on you, and `needsBy` is the bot to answer. Leave `todo` out and the phone says to update Squall on the computer. |
 | `usage` | Optional. The plan's usage, for **Plan usage** (see below). Older desktops leave it out and the screen says to update Squall. |
 
 #### `usage`
@@ -270,12 +277,65 @@ Answer `200` with `{"ok": true}`. When something new was made, add its id: `{"ok
 | `routine.save` | `routine` (same shape as in the state, with `id`) | Make or change a routine. |
 | `routine.toggle` | `routineId`, `isOn` | Turn a routine on or off. |
 | `routine.delete` | `routineId` | Delete a routine. |
-| `routine.skip` | `routineId` | Skip the run going on now (from the Lock Screen). |
+| `routine.skip` | `routineId` | Skip today's run (from Routines, or from the Lock Screen while it runs). |
 | `claudeCode.update` | | Update Claude Code on the computer. |
 | `settings.save` | `settings` (the phone's Chief, safety and notification settings) | Keep the desktop's rules in sync. |
+| `todo.add` | `text`, optional `botId` | Add to the To do list. With `botId`, that bot is told to do it now and it's marked doing. Reply with its `id`. |
+| `todo.set` | `itemId`, `status` (`todo`, `doing`, `done`) | Tick it off, start it, or put it back. |
+| `todo.give` | `itemId`, `botId` | Tell a bot to do that item now. |
+| `todo.delete` | `itemId` | Take it off the list. |
+| `todo.clearDone` | | Remove every finished item. |
 | `usage.settings` | `throttle` (`true`/`false`) and/or `limit` (10 to 100, or `null`) | **Slow the team down to save usage**, and the percent that also slows it down. Send the new state before answering, so the phone's next read shows it. |
 
 If the desktop doesn't know a `type`, answer `{"ok": false, "error": "..."}` or `501`; the phone shows the message.
+
+## Squall Uno
+
+Squall Uno lets every agent (Chief and each bot) use its own small computer inside Squall on the PC, while you watch live on the phone. The PC side is described in full in the desktop repo's `docs/squall-uno.md`; this is what the phone uses. Both calls take the same bearer token as everything else.
+
+The Team tab lists each agent's computer right after the team, with a pulsing red dot while Squall Uno is working on it. Tapping one opens the live view (`squall://uno/<agent id>` opens it too; plain `squall://uno` opens Chief's).
+
+### `POST /api/v1/uno`
+
+The body is `{"op": "...", ...}`. A failed op answers `{"ok": false, "error": "Plain sentence"}` and the phone shows the sentence. An older desktop that doesn't know Squall Uno answers `404` (`{"error": "not_found"}`), and the phone says "Update Squall on your PC to use Squall Uno."
+
+| `op` | Fields | Answer |
+| --- | --- | --- |
+| `state` | `since` (feed number, default 0), `sessionId` (optional) | `{ok, settings, computers[], sessions[] (newest first), events[] (seq > since, oldest first, max 300), lastSeq}` |
+| `start` | `agentId` (`chief` or a bot id), `agentName`, `task` | `{ok, sessionId, computerId}` |
+| `message` | `sessionId`, `text` | `{ok}` (while paused it's read after Resume) |
+| `stop` | `sessionId` | `{ok}` (works while paused) |
+| `stopAll` | | `{ok, stopped}` (paused tasks count) |
+| `pause` | `sessionId` | `{ok}` (the session's state becomes `paused`: the step it's on finishes, then no model calls until `resume`). Not running, or you have the wheel → `{ok: false, error}` |
+| `resume` | `sessionId` | `{ok}` (a `paused` session goes back to `running`). Not running → `{ok: false, error}` |
+| `takeover` | `sessionId` | `{ok}` (the session's state becomes `you`; works while paused) |
+| `input` | `computerId`, `action` (`left_click`, `double_click`, `right_click`, `type`, `key`, `scroll`), `x`, `y`, `text`, `direction` (`up`/`down`) | `{ok}` |
+| `handback` | `sessionId`, `note` (optional) | `{ok}` (back to `paused` if it was paused before you took over) |
+| `saveKey` / `removeKey` | `key` (save only) | `{ok, settings}` |
+| `check` | | `{ok, text}` |
+| `setMaxSteps` | `value` (10 to 300) | `{ok, settings}` |
+| `shots` | `sessionId` | `{ok, shots[]}`: the task's replay pictures, oldest first, without the pictures themselves |
+| `shot` | `sessionId`, `id` | `{ok, shot}` with the picture as base64 `jpeg` (the phone uses the GET below instead) |
+
+Session states are `starting`, `running`, `paused`, `you` (you have the wheel), `done`, `stopped` and `error`; the first four count as active (the task keeps its computer). A paused task shows **Paused** in sky blue, with a still dot instead of the red live one, on the live view, the Uno tab and the Team tab, and the live view's **Pause** button (next to **Stop**) turns into **Resume**. The feed gets `pause` ("Paused by you.") and `resume` ("Resumed.") events from `you`. A paused task has no time limit: it waits until you resume or stop it.
+
+Keys sent with `input` `key` are `Escape`, `Tab`, `Return` and `ctrl+z`. `x` and `y` are the computer's own pixels (its `width` × `height`); the phone maps your tap on the fitted picture back to them. The API key goes to the PC once with `saveKey` and is never kept on the phone; `settings` only carries a short `keyHint`.
+
+The phone asks for `state` about once a second while a Squall Uno screen is open (every 3 seconds while only the Team tab's list shows), passing the newest `lastSeq` it has as `since`, and keeps the last 300 events. If `lastSeq` ever goes down (Squall on the PC restarted), it starts again from 0. Nothing is asked while the app is in the background.
+
+### `GET /api/v1/uno/frame?computer=<id>&after=<seq>`
+
+The newest screen of one computer as `200 image/jpeg`, with `X-Uno-Frame` (its number), `X-Uno-Width`, `X-Uno-Height` and `X-Uno-Cursor` (`x,y`). `204` when there's nothing newer than `after`, `404 {"error": "no_computer"}` when the computer is off. The phone asks about 4 times a second, only while the live view or the take-the-wheel sheet is open.
+
+### `GET /api/v1/uno/shot?session=<id>&id=<n>`
+
+One replay picture as `200 image/jpeg`, with `X-Uno-Step`, `X-Uno-Width`, `X-Uno-Height` and `X-Uno-Cursor` (`x,y`). `404 {"error": "no_shot"}` when the PC no longer keeps it. A shot in the `shots` list is `{id, sessionId, computerId, step, seq, at, kind, text, width, height, cursorX, cursorY, bytes}`; there's one for each screenshot Squall Uno took and one for the screen right after each click, typing or key.
+
+The live view shows them as the **Replay** filmstrip under the controls. It asks for `shots` again each time the task takes a step (and once more 1.6 seconds later, while the task is working), fetches each small picture only when it scrolls into view, and keeps the last 80 in memory. Tapping one opens a full-screen replay you can swipe through or play. The share button there makes an animated GIF of the whole replay on the phone (each picture with its step under it, at most 800 pixels wide) and opens the share sheet, so you can save it to Photos or send it. The PC keeps pictures in memory only, so they're gone after Squall on the PC restarts.
+
+### Big screen
+
+The expand button in the live screen's corner (or a double tap on the screen) opens the **big screen**: the same live picture, mouse, click ripples and motion, filling the phone. Pinch to zoom from 1x to 4x, drag to move around while zoomed in, and double-tap to zoom to 2.5x on that spot (or back to 1x). The picture can't be dragged off the view. Turn the phone sideways for the biggest picture: the rest of the app stays upright. The agent's name, the **Live** / **Paused** pill, **Pause** / **Resume** and **Stop** stay at hand. It asks for frames under its own name, so closing it never stops the live view's screen. No new calls: it uses the same `state` and `frame` requests as the live view.
 
 ## Safety
 

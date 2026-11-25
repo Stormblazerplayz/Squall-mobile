@@ -16,6 +16,13 @@ struct RootView: View {
                     destination(for: route)
                 }
         }
+        .demoBanner()
+        .overlay {
+            if store.isDemo {
+                DemoConfetti()
+            }
+        }
+        .animation(.easeOut(duration: 0.25), value: store.isDemo)
         .tint(store.accent)
         .background {
             KeyCommands()
@@ -30,24 +37,37 @@ struct RootView: View {
             }
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: store.toast)
+        .sheet(isPresented: $store.showDemoTour) {
+            DemoTourSheet()
+                .environmentObject(store)
+        }
         .sheet(isPresented: $store.showNewTeammate) {
             NewTeammateSheet()
+                .demoBanner()
                 .lockCover()
                 .environmentObject(store)
                 .environmentObject(lock)
         }
         .sheet(item: $store.handoffTarget) { target in
             HandoffSheet(botID: target.id)
+                .demoBanner()
                 .lockCover()
                 .environmentObject(store)
                 .environmentObject(lock)
         }
         .fullScreenCover(isPresented: $store.showCall) {
-            CallChiefView()
-                .lockCover()
-                .environmentObject(store)
-                .environmentObject(lock)
-                .environmentObject(pairing)
+            Group {
+                if store.isDemo {
+                    // A pretend call: no mic, nothing sent anywhere.
+                    DemoCallView()
+                } else {
+                    CallChiefView()
+                }
+            }
+            .lockCover()
+            .environmentObject(store)
+            .environmentObject(lock)
+            .environmentObject(pairing)
         }
         .sheet(isPresented: $store.showPairing) {
             PairingView(place: .settings) {
@@ -84,6 +104,8 @@ struct RootView: View {
             BoardView()
         case .routines:
             RoutinesView()
+        case .uno:
+            UnoTabView()
         }
     }
 
@@ -101,6 +123,12 @@ struct RootView: View {
             connected { RoutineEditorView() }.navigationTitle("New routine").pushedScreen()
         case .mission:
             connected { MissionControlView() }.navigationTitle("Mission control").pushedScreen()
+        case .uno(let agentId):
+            connected { UnoLiveView(agentId: agentId) }.navigationTitle("Squall Uno").pushedScreen()
+        case .unoSettings:
+            connected { UnoSettingsView() }.navigationTitle("Squall Uno settings").pushedScreen()
+        case .todo:
+            connected { TodoView() }.navigationTitle("To do").pushedScreen()
         case .usage:
             connected { UsageView() }.navigationTitle("Plan usage").pushedScreen()
         }
@@ -129,7 +157,7 @@ extension View {
     }
 }
 
-/// The bar along the bottom: Team, Chat, Inbox, Board, Routines.
+/// The bar along the bottom: Team, Chat, Inbox, Board, Routines, Squall Uno.
 struct SquallTabBar: View {
     @EnvironmentObject private var store: SquallStore
 
@@ -186,11 +214,11 @@ struct SquallTabBar: View {
         }
         .buttonStyle(.plain)
         .keyboardShortcut(Self.key(for: tab), modifiers: .command)
-        .accessibilityLabel(tab.label)
+        .accessibilityLabel(tab == .uno ? "Squall Uno" : tab.label)
         .accessibilityAddTraits(isOn ? .isSelected : [])
     }
 
-    /// ⌘1 to ⌘5 on a keyboard, in the order of the tabs.
+    /// ⌘1 to ⌘6 on a keyboard, in the order of the tabs.
     private static func key(for tab: AppTab) -> KeyEquivalent {
         let number = (AppTab.allCases.firstIndex(of: tab) ?? 0) + 1
         return KeyEquivalent(Character(String(number)))
@@ -198,7 +226,7 @@ struct SquallTabBar: View {
 }
 
 /// Keyboard shortcuts for iPad (and iPhone with a keyboard). Hold ⌘ to see them all.
-/// The tabs are ⌘1 to ⌘5, on the tab bar itself.
+/// The tabs are ⌘1 to ⌘6, on the tab bar itself.
 private struct KeyCommands: View {
     @EnvironmentObject private var store: SquallStore
 
@@ -224,6 +252,10 @@ private struct KeyCommands: View {
                 store.open(SquallLink.mission)
             }
             .keyboardShortcut("m", modifiers: [.command, .shift])
+            Button("To do") {
+                if store.path.last != .todo { store.path = [.todo] }
+            }
+            .keyboardShortcut("t", modifiers: [.command, .shift])
             Button("Settings") {
                 if store.path.last != .settings { store.path = [.settings] }
             }

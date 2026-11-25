@@ -32,6 +32,8 @@ final class SquallStore: ObservableObject {
     @Published private(set) var retryAt: Date?
     /// True while the app is asking the computer, after it stopped answering.
     @Published private(set) var isRetrying = false
+    /// True while waiting messages are going out (see Outbox).
+    @Published private(set) var flushingOutbox = false
 
     // Team and chats, from the computer
     @Published private(set) var bots: [Bot] = []
@@ -46,10 +48,15 @@ final class SquallStore: ObservableObject {
     @Published private(set) var claudeCode: ClaudeCodeInfo?
     /// Squall on the computer: its version, and whether an update is ready or running.
     @Published private(set) var desktop: DesktopInfo?
+    /// Squall's shared To do list. Nil when this computer's Squall doesn't send one yet.
+    @Published private(set) var todo: TodoList?
     /// The plan's usage and today's jobs, from the computer. Nil when it hasn't sent any (an older Squall).
     @Published private(set) var usage: PlanUsage?
     /// Actions on their way to the computer, so buttons can wait.
     @Published private(set) var busyActions: Set<String> = []
+    /// True in demo mode: a pretend team that lives only on this phone (see DemoWorld).
+    /// Nothing in it is real, saved, or sent to a computer, and every screen says so.
+    @Published private(set) var isDemo = false
 
     // Local screen state
     @Published var picking: String?
@@ -68,6 +75,8 @@ final class SquallStore: ObservableObject {
         didSet { Feedback.quiet = showCall }
     }
     @Published var showPairing = false
+    /// Opens the demo tour on its own the first time someone starts the demo.
+    @Published var showDemoTour = false
 
     // Pop-up message
     @Published var toast: ToastMessage?
@@ -112,6 +121,13 @@ final class SquallStore: ObservableObject {
     private var lastSyncedExact: Date?
     /// Which computer the data in memory came from.
     private var dataComputerKey: String?
+    /// The pretend world while demo mode is on.
+    private var demo: DemoWorld?
+    private var demoTask: Task<Void, Never>?
+    /// Settings and the last chat from before the demo, put back when it ends,
+    /// so nothing done in the demo stays behind.
+    private var settingsBeforeDemo: AppSettings?
+    private var lastChatBeforeDemo: String?
 
     init() {
         let defaults = UserDefaults.standard
@@ -173,17 +189,25 @@ final class SquallStore: ObservableObject {
 
     // MARK: - Talking to the computer
 
-    var isConnected: Bool { link == .connected }
+    /// True when buttons can act: live with the computer, or in demo mode (where they act on pretend data only).
+    var isConnected: Bool { link == .connected || isDemo }
 
     /// Keeps the app up to date with the computer until this task is cancelled.
     /// SquallApp restarts it whenever the paired computer changes.
     func runSync(with pairing: PairingStore) async {
         self.pairing = pairing
         guard pairing.isPaired, let computer = pairing.computer else {
+            if isDemo {
+                // Demo mode keeps going until you leave it or pair.
+                link = .unpaired
+                return
+            }
             forgetEverything()
             link = .unpaired
             return
         }
+        // A real computer: the demo ends and none of it stays.
+        if isDemo { endDemo(quiet: true) }
         let key = SnapshotCache.key(for: computer)
         if key != dataComputerKey {
             // A different computer: nothing from the old one may stay on screen.
@@ -252,8 +276,11 @@ final class SquallStore: ObservableObject {
             if link != .connected {
                 link = .connected
                 if wasOffline { Feedback.play(.connected) }
+                // Messages sent while it wasn't answering go out now.
+                flushOutbox()
             }
             keepCopy(reply.data, for: reply.computer, at: now)
+            SendLater.shared.update(from: reply.data)
         } catch {
             guard !Task.isCancelled, pairing.isPaired else { return }
             failures += 1
@@ -282,6 +309,7 @@ final class SquallStore: ObservableObject {
             }
         }
         updateWidgets(computerName: computer.name, syncedAt: date)
+        HistoryFeed.shared.take(data)
     }
 
     /// Writes the small summary the widgets draw, when it changed or every few minutes.
@@ -359,6 +387,7 @@ final class SquallStore: ObservableObject {
         let newTyping = (snapshot.typing?.isEmpty ?? true) ? nil : snapshot.typing
         let newCode = snapshot.claudeCode?.model
         let newDesktop = snapshot.desktop
+        let newTodo = snapshot.todo?.model
         let newUsage = snapshot.usage?.model
 
         // Only touch what changed, so screens don't redraw every few seconds.
@@ -373,17 +402,44 @@ final class SquallStore: ObservableObject {
         if pausedAll != snapshot.paused { pausedAll = snapshot.paused }
         if claudeCode != newCode { claudeCode = newCode }
         if desktop != newDesktop { desktop = newDesktop }
+        if todo != newTodo { todo = newTodo }
         if usage != newUsage { usage = newUsage }
 
         if !newBots.isEmpty, bot(currentChatID) == nil, groups.first(where: { $0.id == currentChatID }) == nil {
             currentChatID = Bot.chiefID
         }
         if let picking, bot(picking) == nil { self.picking = nil }
+        // A teammate picked from the app icon before the team had loaded.
+        QuickActions.openWaitingChat(in: self)
 
         guard live else { return }
         // Siri learns the bots' names, and Spotlight lists them.
         SiriSync.update(bots: newBots)
         noticeChanges()
+        ReplyAlerts.process(chats: snapshot.chats, bots: newBots, settings: settings, computerKey: dataComputerKey ?? "",
+                            inForeground: UIApplication.shared.applicationState == .active)
+        TeammateWidgetWriter.update(chats: snapshot.chats, bots: newBots)
+        // Snoozes for things answered or cleared somewhere else go away.
+        InboxSnooze.shared.keepOnly(Set(inbox.map(\.id)))
+        // The evening recap waits with today's real numbers (rebuilt every few minutes at most).
+        DailyRecap.update(bots: newBots)
+        // "Tell me when Rex is done" pings once Rex stops working.
+        DoneWatch.shared.update(bots: newBots)
+        // Drafts for teammates who were removed go too.
+        if !newBots.isEmpty {
+            ChatDrafts.shared.keepOnly(Set(newBots.map(\.id)))
+            MessageReminders.shared.keepOnly(chats: Set(newBots.map(\.id)))
+            LastSeen.shared.keepOnly(chats: Set(newBots.map(\.id)))
+            DoneWatch.shared.keepOnly(Set(newBots.map(\.id)))
+            PinnedMessages.shared.keepOnly(chats: Set(newBots.map(\.id)).union(groups.map(\.id)))
+            Outbox.shared.keepOnly(chats: Set(newBots.map(\.id)).union(groups.map(\.id)))
+            MessageReactions.shared.keepOnly(chats: Set(newBots.map(\.id)).union(groups.map(\.id)))
+            ChatWallpapers.shared.keepOnly(chats: Set(newBots.map(\.id)).union(groups.map(\.id)))
+            ChatFavorites.shared.keepOnly(Set(newBots.map(\.id)))
+            TickLists.shared.keepOnly(chats: Set(newBots.map(\.id)).union(groups.map(\.id)))
+            UnreadMarks.shared.keepOnly(chats: Set(newBots.map(\.id)))
+        }
+        InboxWidgetWriter.update(inbox: inbox, bots: newBots)
         LiveActivities.shared.sync(work: work, inbox: inbox, routines: routines, bots: bots, paused: pausedAll)
     }
 
@@ -446,6 +502,22 @@ final class SquallStore: ObservableObject {
         if SquallShared.loadWidget()?.paired != false, SquallShared.saveWidget(.notPaired()) {
             WidgetCenter.shared.reloadTimelines(ofKind: SquallShared.widgetKind)
         }
+        TeammateWidgetWriter.forget()
+        QuickActions.clear()
+        InboxSnooze.shared.clear()
+        DailyRecap.forget()
+        ChatDrafts.shared.clear()
+        MessageReminders.shared.clear()
+        LastSeen.shared.clear()
+        DoneWatch.shared.clear()
+        PinnedMessages.shared.clear()
+        Outbox.shared.clear()
+        MessageReactions.shared.clear()
+        ChatWallpapers.shared.clear()
+        ChatFavorites.shared.clear()
+        TickLists.shared.clear()
+        UnreadMarks.shared.clearAll()
+        InboxWidgetWriter.forget()
     }
 
     /// Takes everything from the computer off the screens.
@@ -463,30 +535,37 @@ final class SquallStore: ObservableObject {
         lastSavedAt = nil
         lastWidget = nil
         lastWidgetAt = nil
+        HistoryFeed.shared.clear()
         if !bots.isEmpty { bots = [] }
         if !messages.isEmpty { messages = [:] }
         if !groups.isEmpty { groups = [] }
         if !inbox.isEmpty { inbox = [] }
         if !routines.isEmpty { routines = [] }
         if !work.isEmpty { work = [] }
+        PhotoTray.shared.clearAll()
         if !handoffs.isEmpty { handoffs = [] }
         typingBotID = nil
         pausedAll = false
         claudeCode = nil
         desktop = nil
+        todo = nil
         usage = nil
         picking = nil
         liveWorkID = nil
         handoffTarget = nil
         showNewTeammate = false
         LiveActivities.shared.stopAll()
+        SendLater.shared.clear()
     }
 
     /// Sends an action, then gets fresh data so the screens show what really happened.
     /// Returns the computer's reply, or nil when it didn't work (a toast says why).
     @discardableResult
     func perform(_ action: SyncAction, busyKey: String? = nil, quiet: Bool = false) async -> SyncActionReply? {
-        guard let pairing, isConnected else {
+        if isDemo {
+            return await performDemo(action, busyKey: busyKey, quiet: quiet)
+        }
+        guard let pairing, link == .connected else {
             if !quiet { _ = requireConnection() }
             return nil
         }
@@ -520,9 +599,9 @@ final class SquallStore: ObservableObject {
         busyActions.contains(key)
     }
 
-    /// True when there's something real to show: live data, or the saved copy from this computer.
+    /// True when there's something to show: live data, the saved copy from this computer, or the demo.
     var hasData: Bool {
-        isConnected || (showingSaved && lastSynced != nil)
+        isDemo || link == .connected || (showingSaved && lastSynced != nil)
     }
 
     /// For buttons that change something: says so and returns false when the computer isn't connected.
@@ -538,6 +617,11 @@ final class SquallStore: ObservableObject {
 
     /// Catches up on Lock Screen buttons pressed while the app was away.
     func handleActivityActions() {
+        // Lock Screen buttons are for the real team, never the demo.
+        guard !isDemo else {
+            _ = SquallActivityBridge.drain()
+            return
+        }
         let activities = LiveActivities.shared
         for action in SquallActivityBridge.drain() {
             switch action {
@@ -559,6 +643,10 @@ final class SquallStore: ObservableObject {
                 }
             case .muteCall, .unmuteCall, .endCall:
                 activityCommand = ActivityCommand(action: action)
+            case .stopTimer:
+                if let chatID = activities.timerChatID {
+                    send(WorkTimers.stopAction(chatID: chatID))
+                }
             }
         }
         activities.refresh()
@@ -594,6 +682,14 @@ final class SquallStore: ObservableObject {
             showCall = true
         case "settings":
             if path.last != .settings { path = [.settings] }
+        case "uno":
+            // squall://uno opens Chief's computer; squall://uno/<bot id> opens that bot's.
+            let agentID = url.pathComponents.first(where: { $0 != "/" }) ?? Bot.chiefID
+            let target = Route.uno(agentID == Bot.chiefID || bot(agentID) != nil ? agentID : Bot.chiefID)
+            tab = .uno
+            if path.last != target { path = [target] }
+        case "todo":
+            if path.last != .todo { path = [.todo] }
         case "usage":
             if path.last != .usage { path = [.usage] }
         default:
@@ -716,6 +812,7 @@ final class SquallStore: ObservableObject {
 
     func openChat(_ id: String) {
         currentChatID = id
+        UnreadMarks.shared.clear(id)
         if bot(id)?.unread != nil, isConnected {
             send(SyncAction(type: "chat.read", fields: ["chatId": .string(id)]))
         }
@@ -729,9 +826,49 @@ final class SquallStore: ObservableObject {
         let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         let id = chatID ?? currentChatID
-        guard requireConnection() else { return }
-        messages[id, default: []].append(ChatMessage(kind: .me, author: ChatMessage.meID, text: text, time: TimeText.now()))
+        // With Undo send on, it waits a few seconds in the chat first (see UndoSend).
+        if UndoSend.isOn, link != .unpaired {
+            UndoSend.shared.hold(text, chatID: id) { [weak self] item in
+                self?.sendNow(item.text, to: item.chatID)
+            }
+            return
+        }
+        sendNow(text, to: id)
+    }
+
+    /// Sends a message straight away, or puts it in the outbox when the computer isn't answering.
+    private func sendNow(_ text: String, to id: String) {
+        guard isConnected else {
+            // Paired but not answering: the message waits on the phone and goes out when the computer is back.
+            if link != .unpaired, Outbox.shared.add(text, chatID: id) {
+                showToast("Your computer isn't answering. This sends when it's back.")
+            } else {
+                _ = requireConnection()
+            }
+            return
+        }
+        messages[id, default: []].append(ChatMessage(kind: .me, author: ChatMessage.meID, text: text, time: TimeText.now(), at: Date()))
         send(SyncAction(type: "chat.send", fields: ["chatId": .string(id), "text": .string(text)]))
+    }
+
+    /// Sends the messages waiting in the outbox, oldest first. Stops at the first one that doesn't go,
+    /// so nothing is sent out of order; the rest try again next time.
+    func flushOutbox() {
+        // Only a real computer, never demo mode, gets them.
+        guard !flushingOutbox, link == .connected, !Outbox.shared.entries.isEmpty else { return }
+        flushingOutbox = true
+        Task { @MainActor in
+            defer { flushingOutbox = false }
+            var sent = 0
+            for entry in Outbox.shared.entries {
+                guard link == .connected else { break }
+                let action = SyncAction(type: "chat.send", fields: ["chatId": .string(entry.chatID), "text": .string(entry.text)])
+                guard await perform(action, busyKey: "outbox", quiet: true) != nil else { break }
+                Outbox.shared.remove(entry.id)
+                sent += 1
+            }
+            if sent > 0 { showToast(Outbox.sentText(sent)) }
+        }
     }
 
     func clearChat(_ id: String) {
@@ -845,7 +982,7 @@ final class SquallStore: ObservableObject {
                 SyncAction(type: "inbox.answer", fields: ["itemId": .string(itemID), "answer": .string(answer)]),
                 busyKey: "inbox.\(itemID)"
             ) != nil else { return }
-            if item?.kind == .ask {
+            if item?.kind == .ask, !isDemo {
                 LiveActivities.shared.approvalAnswered(itemID, allowed: answer == "allow")
             }
             Feedback.play(answer == "deny" ? .denied : (answer == "allow" ? .approved : .sent))
@@ -922,7 +1059,7 @@ final class SquallStore: ObservableObject {
     func setPausedAll(_ paused: Bool) {
         guard requireConnection() else { return }
         pausedAll = paused
-        LiveActivities.shared.setTeamPaused(paused)
+        if !isDemo { LiveActivities.shared.setTeamPaused(paused) }
         send(SyncAction(type: "team.pause", fields: ["paused": .bool(paused)]), busyKey: "team.pause")
     }
 
@@ -956,7 +1093,8 @@ final class SquallStore: ObservableObject {
 
     // MARK: - Routines
 
-    func saveRoutine(_ routine: Routine) {
+    /// Saves a new routine, or an edited one (same id). `onSaved` runs once the computer has it (the edit sheet closes then).
+    func saveRoutine(_ routine: Routine, onSaved: (() -> Void)? = nil) {
         let name = bot(routine.botID)?.name ?? "Your bot"
         let action = SyncAction(type: "routine.save", fields: [
             "routine": .object([
@@ -976,7 +1114,8 @@ final class SquallStore: ObservableObject {
             guard await perform(action, busyKey: "routine.save") != nil else { return }
             if path.last == .newRoutine { path.removeLast() }
             tab = .routines
-            showToast("Saved. \(name) will wake up \(routine.whenText).")
+            onSaved?()
+            showToast(routine.isOn ? "Saved. \(name) will wake up \(routine.whenText)." : "Saved. It's off until you turn it on.")
         }
     }
 
@@ -988,10 +1127,80 @@ final class SquallStore: ObservableObject {
         send(SyncAction(type: "routine.toggle", fields: ["routineId": .string(id), "isOn": .bool(isOn)]))
     }
 
+    /// Skips today's run on the computer; the routine runs again on its next day.
+    func skipRoutine(_ id: String) {
+        guard requireConnection() else { return }
+        if let index = routines.firstIndex(where: { $0.id == id }) {
+            routines[index].lastRun = Routine.dayString(Date())
+        }
+        Task {
+            if await perform(SyncAction(type: "routine.skip", fields: ["routineId": .string(id)]), busyKey: "routine.skip") != nil {
+                showToast("Skipped today's run.")
+            }
+        }
+    }
+
     func deleteRoutine(_ id: String) {
         guard requireConnection() else { return }
         routines.removeAll { $0.id == id }
         send(SyncAction(type: "routine.delete", fields: ["routineId": .string(id)]))
+    }
+
+    // MARK: - To do list
+
+    /// Adds a to-do to the list on the computer. With `botID`, that bot is told to do it right away.
+    /// Returns true when the computer took it.
+    @discardableResult
+    func addTodo(_ raw: String, giveTo botID: String? = nil) async -> Bool {
+        let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty, requireConnection(), todo != nil else { return false }
+        var fields: [String: JSONValue] = ["text": .string(String(text.prefix(300)))]
+        if let botID { fields["botId"] = .string(botID) }
+        guard await perform(SyncAction(type: "todo.add", fields: fields), busyKey: "todo.add") != nil else { return false }
+        if let botID, let bot = bot(botID) {
+            showToast("Added. \(bot.name) is on it.")
+        }
+        return true
+    }
+
+    /// Ticks a to-do off, or opens it again, or marks it as being done now.
+    func setTodo(_ id: String, status: TodoItem.Status) {
+        guard requireConnection(), var list = todo, let index = list.items.firstIndex(where: { $0.id == id }) else { return }
+        list.items[index].status = status
+        if status == .done {
+            list.items[index].doneAt = Date()
+            list.items[index].needs = nil
+        } else {
+            list.items[index].doneAt = nil
+        }
+        todo = list
+        send(SyncAction(type: "todo.set", fields: ["itemId": .string(id), "status": .string(status.rawValue)]), busyKey: "todo.\(id)")
+    }
+
+    /// Hands a to-do to a bot: the bot gets a message about it and it shows as being done.
+    func giveTodo(_ id: String, to botID: String) {
+        guard requireConnection(), let item = todo?.item(id), item.isOpen, let bot = bot(botID) else { return }
+        Task {
+            guard await perform(SyncAction(type: "todo.give", fields: ["itemId": .string(id), "botId": .string(botID)]),
+                                busyKey: "todo.\(id)") != nil else { return }
+            showToast("\(bot.name) is on it.")
+        }
+    }
+
+    /// Takes a to-do off the list.
+    func deleteTodo(_ id: String) {
+        guard requireConnection(), var list = todo else { return }
+        list.items.removeAll { $0.id == id }
+        todo = list
+        send(SyncAction(type: "todo.delete", fields: ["itemId": .string(id)]), busyKey: "todo.\(id)")
+    }
+
+    /// Takes every finished to-do off the list.
+    func clearDoneTodos() {
+        guard requireConnection(), var list = todo else { return }
+        list.items.removeAll { $0.status == .done }
+        todo = list
+        send(SyncAction(type: "todo.clearDone"), busyKey: "todo.clearDone")
     }
 
     // MARK: - Chief
@@ -1045,4 +1254,124 @@ final class SquallStore: ObservableObject {
 struct ActivityCommand: Equatable {
     let id = UUID()
     let action: SquallActivityAction
+}
+
+// MARK: - Demo mode
+
+extension SquallStore {
+    /// True when "Try the demo" can start: no computer paired and no demo running yet.
+    var canStartDemo: Bool {
+        !isDemo && link == .unpaired && pairing?.isPaired != true
+    }
+
+    /// Starts demo mode: a pretend team to play with, only on this phone.
+    /// Only when no computer is paired, so real data and the demo never mix.
+    func startDemo() {
+        guard canStartDemo else {
+            if !isDemo { showToast("The demo is only for when no computer is paired.") }
+            return
+        }
+        settingsBeforeDemo = settings
+        lastChatBeforeDemo = UserDefaults.standard.string(forKey: Prefs.lastChat)
+        clearData()
+        demo = DemoWorld()
+        isDemo = true
+        applyDemo()
+        path = []
+        tab = .team
+        currentChatID = Bot.chiefID
+        Feedback.play(.connected)
+        showToast("Demo mode. Everything here is pretend, so play around!")
+        startDemoClock()
+        if !UserDefaults.standard.bool(forKey: Prefs.demoTourSeen) {
+            Task { @MainActor [weak self] in
+                // Let any closing screen finish first, then show the tour once.
+                try? await Task.sleep(for: .seconds(0.9))
+                guard let self, self.isDemo else { return }
+                self.showDemoTour = true
+            }
+        }
+    }
+
+    /// Leaves demo mode. The pretend team is thrown away and your settings go back to how they were.
+    func endDemo(quiet: Bool = false) {
+        guard isDemo else { return }
+        demoTask?.cancel()
+        demoTask = nil
+        demo = nil
+        isDemo = false
+        clearData()
+        path = []
+        tab = .team
+        showCall = false
+        showDemoTour = false
+        if let saved = settingsBeforeDemo { settings = saved }
+        settingsBeforeDemo = nil
+        currentChatID = Bot.chiefID
+        if let last = lastChatBeforeDemo {
+            UserDefaults.standard.set(last, forKey: Prefs.lastChat)
+        } else {
+            UserDefaults.standard.removeObject(forKey: Prefs.lastChat)
+        }
+        lastChatBeforeDemo = nil
+        if !quiet { showToast("Demo over. Nothing from it was kept.", action: .pair) }
+    }
+
+    /// Does an action in the pretend world, after a short pause like a real computer.
+    fileprivate func performDemo(_ action: SyncAction, busyKey: String?, quiet: Bool) async -> SyncActionReply? {
+        let key = busyKey ?? action.type
+        busyActions.insert(key)
+        defer { busyActions.remove(key) }
+        try? await Task.sleep(for: .milliseconds(250))
+        guard isDemo, var world = demo else { return nil }
+        let outcome = world.handle(action)
+        demo = world
+        applyDemo()
+        if let error = outcome.error {
+            if !quiet { showToast(error) }
+            return nil
+        }
+        return SyncActionReply(ok: true, id: outcome.id, error: nil)
+    }
+
+    /// Moves the pretend world along every second: replies, job steps and so on.
+    private func startDemoClock() {
+        demoTask?.cancel()
+        demoTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1))
+                guard !Task.isCancelled, let self, self.isDemo, var world = self.demo else { return }
+                let neededYou = Set(world.inbox.filter { $0.kind.needsYou }.map(\.id))
+                if world.tick() {
+                    self.demo = world
+                    self.applyDemo()
+                    // Same buzz as the real app when a pretend bot starts waiting on you.
+                    let needsYou = Set(world.inbox.filter { $0.kind.needsYou }.map(\.id))
+                    if !needsYou.subtracting(neededYou).isEmpty { Feedback.play(.needsYou) }
+                }
+            }
+        }
+    }
+
+    /// Puts the pretend world on screen. Never touches the widgets, Siri, the Lock Screen,
+    /// notifications or the saved copy, which are only for real data.
+    private func applyDemo() {
+        guard isDemo, let world = demo else { return }
+        if bots != world.bots { bots = world.bots }
+        if messages != world.messages { messages = world.messages }
+        if groups != world.groups { groups = world.groups }
+        if inbox != world.inbox { inbox = world.inbox }
+        if routines != world.routines { routines = world.routines }
+        if work != world.work { work = world.work }
+        if handoffs != world.handoffs { handoffs = world.handoffs }
+        if typingBotID != world.typing { typingBotID = world.typing }
+        if pausedAll != world.paused { pausedAll = world.paused }
+        if claudeCode != world.claudeCode { claudeCode = world.claudeCode }
+        if usage != world.usage { usage = world.usage }
+        if desktop != nil { desktop = nil }
+        if let picking, bot(picking) == nil { self.picking = nil }
+        if !bots.isEmpty, bot(currentChatID) == nil, group(currentChatID) == nil {
+            currentChatID = Bot.chiefID
+        }
+    }
 }

@@ -169,3 +169,26 @@ struct PauseTeamIntent: LiveActivityIntent {
         return .result()
     }
 }
+
+// MARK: - Work timer
+
+struct StopTimerIntent: LiveActivityIntent {
+    static let title: LocalizedStringResource = "Stop the work timer"
+
+    init() {}
+
+    func perform() async throws -> some IntentResult {
+        var chatID: String?
+        for activity in Activity<WorkTimerActivityAttributes>.activities where activity.activityState == .active {
+            var state = activity.content.state
+            guard !state.ended else { continue }
+            chatID = activity.attributes.chatID
+            state.ended = true
+            state.endNote = "Stopped"
+            await activity.end(ActivityContent(state: state, staleDate: nil), dismissalPolicy: soon())
+        }
+        let id = chatID ?? subject(SquallActivityKeys.timerChat)
+        await deliver("timer.stop", id.map { ["chatId": $0] }, otherwise: .stopTimer)
+        return .result()
+    }
+}

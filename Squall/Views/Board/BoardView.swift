@@ -27,13 +27,17 @@ struct BoardView: View {
                             .foregroundStyle(Theme.sub)
                     }
                     if store.displayBots.isEmpty {
-                        ContentUnavailableView {
-                            Label("No bots yet", systemImage: "person.3")
-                        } description: {
-                            Text("Your team from the computer shows up here.")
-                        }
-                        .foregroundStyle(Theme.sub)
-                        .padding(.top, 40)
+                        EmptyStateCard(
+                            icon: "square.grid.2x2",
+                            title: "The board is empty",
+                            text: "Every bot gets a card here with what it's doing and its steps. Add a teammate to get started.",
+                            buttonTitle: "Add a teammate",
+                            tint: Theme.goldBright,
+                            action: { store.showNewTeammate = true },
+                            secondTitle: "Message Chief",
+                            secondAction: { store.openChat(Bot.chiefID) }
+                        )
+                        .padding(.top, 20)
                     } else {
                         LazyVGrid(columns: isWide ? wideColumns : columns, spacing: isWide ? 12 : 10) {
                             ForEach(store.displayBots) { bot in
@@ -105,12 +109,14 @@ private struct BoardCard: View {
                 Text(bot.status == .idle || bot.status == .napping ? "Nothing in progress right now." : bot.task)
                     .font(.system(size: 12.5))
                     .foregroundStyle(Theme.text)
-                ForEach(bot.log.indices, id: \.self) { index in
-                    Text(bot.log[index])
-                        .font(Theme.mono(11))
-                        .foregroundStyle(bot.log[index].hasPrefix("$") ? Theme.commandText : Theme.sub)
-                        .lineLimit(2)
+                if !bot.log.isEmpty {
+                    StepLog(lines: bot.log, live: bot.status == .working, tint: bot.color)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
                 }
+            } else if let latest = bot.log.last {
+                // Steps closed: just the step it's on now.
+                StepLog(lines: [latest], limit: 1, live: bot.status == .working, tint: bot.color, fontSize: 10.5)
+                    .transition(.opacity)
             }
             Spacer(minLength: 0)
             HStack(spacing: 6) {

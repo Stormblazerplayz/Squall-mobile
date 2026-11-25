@@ -155,27 +155,11 @@ struct PairingView: View {
     }
 
     private var scanFrame: some View {
-        RoundedRectangle(cornerRadius: 22, style: .continuous)
-            .stroke(store.accent.opacity(0.8), lineWidth: 2)
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(Color.white.opacity(0.85), style: StrokeStyle(lineWidth: 3, dash: [26, 140]))
-                    .frame(width: 190, height: 190)
-            )
-            .allowsHitTesting(false)
+        ScannerViewfinder(tint: store.accent, size: 200)
     }
 
     private var busyOverlay: some View {
-        ZStack {
-            Color.black.opacity(0.55)
-            VStack(spacing: 10) {
-                ProgressView().tint(.white)
-                Text("Pairing...")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.white)
-            }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        PairingBusyOverlay(tint: store.accent)
     }
 
     private func cameraMessage(title: String, text: String, showSettings: Bool) -> some View {
@@ -325,10 +309,16 @@ struct PairingView: View {
                 Button(place == .firstRun ? "Let's go" : "Done") { onDone() }
                     .buttonStyle(FilledButtonStyle(fill: store.accent, height: 50))
             } else if place == .firstRun {
-                Button("Skip for now") { onDone() }
-                    .buttonStyle(GhostButtonStyle(height: 46))
-                    .disabled(pairing.busy)
-                Text("You can pair later. Squall shows your team once it's paired.")
+                HStack(spacing: 8) {
+                    Button("Skip for now") { onDone() }
+                        .buttonStyle(GhostButtonStyle(height: 46))
+                    TryDemoButton(height: 46) {
+                        onDone()
+                        store.startDemo()
+                    }
+                }
+                .disabled(pairing.busy)
+                Text("You can pair later. The demo is a pretend team to play with, nothing in it is real.")
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.muted)
                     .multilineTextAlignment(.center)

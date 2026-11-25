@@ -14,6 +14,11 @@ struct SettingsView: View {
     @State private var resetSettingsArmed = false
     @State private var currentIcon: String?
     @State private var changingIcon = false
+    /// Words typed in the search field at the top. Only matching sections show while it has some.
+    @State private var search = ""
+    @AppStorage(UndoSend.key) private var undoSend = false
+    @AppStorage(ChatSounds.key) private var chatSounds = false
+    @AppStorage(BubbleStyle.key) private var bubbleStyle = BubbleStyle.rounded
 
     /// Asset name (nil is the normal icon), name shown, and the small preview image.
     private static let iconChoices: [(asset: String?, title: String, preview: String)] = [
@@ -34,6 +39,7 @@ struct SettingsView: View {
     @AppStorage(Prefs.haptics) private var haptics = true
     @AppStorage(Prefs.sounds) private var sounds = true
     @AppStorage(Prefs.softGlow) private var softGlow = false
+    @AppStorage(Prefs.movingBackground) private var movingBackground = true
     @AppStorage(Prefs.openChat) private var openChat: Prefs.OpenChat = .chief
     @AppStorage(Prefs.defaultRole) private var defaultRole = "Generalist"
     @AppStorage(Prefs.appLock) private var appLock = false
@@ -50,7 +56,10 @@ struct SettingsView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     profile
-                    if sizeClass == .regular {
+                    SettingsSearchField(text: $search, tint: store.accent)
+                    if SettingsSearch.isSearching(search) {
+                        searchResults
+                    } else if sizeClass == .regular {
                         // iPad: two columns of settings side by side.
                         HStack(alignment: .top, spacing: 18) {
                             VStack(alignment: .leading, spacing: 14) { firstColumn }
@@ -89,6 +98,58 @@ struct SettingsView: View {
         }
     }
 
+    /// The sections that match the search, one under the other.
+    @ViewBuilder
+    private var searchResults: some View {
+        let names = SettingsSearch.matches(search)
+        if names.isEmpty {
+            VStack(spacing: 6) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(Theme.muted)
+                Text("No settings match “\(search.trimmingCharacters(in: .whitespacesAndNewlines))”")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(Theme.sub)
+                    .multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 30)
+        } else {
+            ForEach(names, id: \.self) { name in
+                searchSection(name)
+            }
+        }
+    }
+
+    /// One section by its name, with its label (Team model draws its own).
+    @ViewBuilder
+    private func searchSection(_ name: String) -> some View {
+        switch name {
+        case "Team model":
+            TeamModelSection()
+        case "Your team":
+            SectionLabel(text: name)
+            TeamManageSection()
+        default:
+            SectionLabel(text: name)
+            switch name {
+            case "Computer": computerSection
+            case "Look": lookSection
+            case "Chat": chatSection
+            case "Chief": chiefSection
+            case "New teammates": teammateSection
+            case "Plan usage": usageSection
+            case "Safety": safetySection
+            case "Claude Code": claudeCodeSection
+            case "Notifications": notificationSection
+            case "Lock Screen": lockScreenSection
+            case "Privacy": privacySection
+            case "Data": dataSection
+            default: aboutSection
+            }
+        }
+    }
+
     @ViewBuilder
     private var firstColumn: some View {
         SectionLabel(text: "Computer")
@@ -101,12 +162,15 @@ struct SettingsView: View {
         chiefSection
         SectionLabel(text: "New teammates")
         teammateSection
+        SectionLabel(text: "Your team")
+        TeamManageSection()
     }
 
     @ViewBuilder
     private var secondColumn: some View {
         SectionLabel(text: "Plan usage")
         usageSection
+        TeamModelSection()
         SectionLabel(text: "Safety")
         safetySection
         SectionLabel(text: "Claude Code")
@@ -249,6 +313,33 @@ struct SettingsView: View {
                         .foregroundStyle(Theme.muted)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+            } else if store.isDemo {
+                HStack(spacing: 12) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(Theme.demoText)
+                        .frame(width: 40, height: 40)
+                        .background(Circle().fill(Theme.demo.opacity(0.16)))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Demo mode")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(Theme.text)
+                        Text("A pretend team on this phone. Nothing here is real, and nothing is sent to a computer. Settings you change here go back when you leave.")
+                            .font(.system(size: 12.5))
+                            .foregroundStyle(Theme.sub)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 0)
+                }
+                HStack(spacing: 8) {
+                    Button("Leave demo") { store.endDemo() }
+                        .buttonStyle(GhostButtonStyle(height: 40, fontSize: 14, sidePadding: 10))
+                    Button("Pair for real") {
+                        store.endDemo(quiet: true)
+                        store.showPairing = true
+                    }
+                    .buttonStyle(FilledButtonStyle(fill: store.accent, height: 40))
+                }
             } else {
                 HStack(spacing: 12) {
                     Image(systemName: "desktopcomputer")
@@ -269,6 +360,9 @@ struct SettingsView: View {
                 }
                 Button("Pair with computer") { store.showPairing = true }
                     .buttonStyle(FilledButtonStyle(fill: store.accent, height: 42))
+                if store.canStartDemo {
+                    TryDemoButton(height: 40)
+                }
             }
         }
         .padding(14)
@@ -456,25 +550,8 @@ struct SettingsView: View {
 
     private var lookSection: some View {
         card {
-            rowTitle("Accent color")
-            HStack(spacing: 12) {
-                ForEach(Theme.accentChoices.indices, id: \.self) { index in
-                    let choice = Theme.accentChoices[index]
-                    let isOn = choice.hex == store.accentHex
-                    Button {
-                        store.accentHex = choice.hex
-                    } label: {
-                        Circle()
-                            .fill(Color(hex: choice.hex))
-                            .frame(width: 34, height: 34)
-                            .overlay(Circle().stroke(Color.white, lineWidth: isOn ? 2.5 : 0))
-                            .frame(width: 44, height: 44)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(choice.name)
-                    .accessibilityAddTraits(isOn ? .isSelected : [])
-                }
-            }
+            rowTitle("Accent color", "Colors your buttons, switches and glow")
+            AccentPicker(selection: $store.accentHex)
             line
             rowTitle("App icon", "How Squall looks on your Home Screen")
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 76), spacing: 10)], spacing: 12) {
@@ -484,6 +561,10 @@ struct SettingsView: View {
             }
             line
             SwitchRow(title: "Softer glow", subtitle: "Turns the colored background light down", isOn: $softGlow, tint: store.accent)
+            line
+            SwitchRow(title: "Moving background", subtitle: softGlow ? "Off while Softer glow is on" : "The glow drifts slowly and the stars twinkle", isOn: $movingBackground, tint: store.accent)
+                .disabled(softGlow)
+                .opacity(softGlow ? 0.5 : 1)
             line
             SwitchRow(title: "Vibrate", subtitle: "A small buzz when you send, allow something, a bot needs you or a job finishes", isOn: $haptics, tint: store.accent)
             line
@@ -545,15 +626,10 @@ struct SettingsView: View {
         card {
             rowTitle("Message text size")
             PillSegments(
-                options: [
-                    (label: "Small", value: 13.5),
-                    (label: "Normal", value: 15.0),
-                    (label: "Big", value: 17.0),
-                    (label: "Huge", value: 19.0)
-                ],
+                options: ChatTextSizes.steps.map { (label: $0.label, value: $0.size) },
                 selection: $chatTextSize
             )
-            Text("Hey, this is how big messages look.")
+            Text("Hey, this is how big messages look. You can also pinch a chat to change it.")
                 .font(.system(size: chatTextSize))
                 .foregroundStyle(Theme.text)
                 .padding(.horizontal, 12)
@@ -566,11 +642,38 @@ struct SettingsView: View {
             line
             SwitchRow(title: "Send with Return", subtitle: "Handy with an iPad keyboard. Off makes Return start a new line.", isOn: $sendOnReturn, tint: store.accent)
             line
+            SwitchRow(title: "Undo send", subtitle: "Messages wait 5 seconds in the chat with an Undo button before they go", isOn: $undoSend, tint: store.accent)
+            line
+            SwitchRow(title: "Chat sounds", subtitle: "A soft sound when you send and when a reply comes in. A silenced iPhone stays quiet.", isOn: $chatSounds, tint: store.accent)
+            line
             rowTitle("Chat opens on", "What you see when Squall starts")
             PillSegments(
                 options: Prefs.OpenChat.allCases.map { (label: $0.label, value: $0) },
                 selection: $openChat
             )
+            line
+            rowTitle("Bubble shape", "How messages look in a chat")
+            PillSegments(
+                options: BubbleStyle.allCases.map { (label: $0.label, value: $0) },
+                selection: $bubbleStyle
+            )
+            HStack(alignment: .bottom, spacing: 8) {
+                Text("Build passed!")
+                    .font(.system(size: 13.5))
+                    .foregroundStyle(Theme.text)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .bubbleGlass(bubbleStyle, tintHex: Theme.defaultAccentHex, continued: false)
+                Spacer(minLength: 8)
+                Text("Nice, open a PR")
+                    .font(.system(size: 13.5))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(bubbleStyle.shape(mine: true).fill(store.accent))
+            }
+            .animation(.easeInOut(duration: 0.2), value: bubbleStyle)
+            .accessibilityHidden(true)
         }
     }
 
@@ -609,6 +712,12 @@ struct SettingsView: View {
             SwitchRow(title: "When something breaks", subtitle: "Errors get stacked, so one ping per problem", isOn: $store.settings.notifyErrors, tint: store.accent)
             line
             SwitchRow(title: "When work is done", subtitle: "Off keeps your phone quiet", isOn: $store.settings.notifyDone, tint: store.accent)
+            line
+            ReplyPingsRow()
+            line
+            FocusPingsRow()
+            line
+            DailyRecapRow()
             line
             SwitchRow(title: "Play a sound", isOn: $store.settings.notifySound, tint: store.accent)
             line
@@ -709,11 +818,15 @@ struct SettingsView: View {
             SwitchRow(title: "Lock with \(lockMethod)", subtitle: "Asks every time you come back to Squall", isOn: $appLock, tint: store.accent)
             line
             SwitchRow(title: "Hide in app switcher", subtitle: "Covers your chats when you swipe between apps", isOn: $hideInSwitcher, tint: store.accent)
+            line
+            SpotlightRow()
         }
     }
 
     private var dataSection: some View {
         card {
+            BackupRow()
+            line
             ShareLink(item: store.chatExport, preview: SharePreview("Squall chats")) {
                 Label("Export chats", systemImage: "square.and.arrow.up")
             }
