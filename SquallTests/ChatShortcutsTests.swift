@@ -19,7 +19,11 @@ final class ChatShortcutsTests: XCTestCase {
     }
 
     func testListHasEveryShortcut() {
-        XCTAssertEqual(ChatShortcuts.list.count, 6)
+        XCTAssertEqual(ChatShortcuts.list.count, 10)
+        // Every Browse this chat list has a shortcut, with the same key the app uses.
+        for sheet in ChatBrowse.Sheet.allCases {
+            XCTAssertTrue(ChatShortcuts.list.contains { $0.keys == "⌘⇧" + String(sheet.key).uppercased() }, sheet.title)
+        }
         XCTAssertTrue(ChatShortcuts.list.contains { $0.keys == "⌘F" && $0.does == "Find in chat" })
     }
 }

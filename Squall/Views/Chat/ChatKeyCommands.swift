@@ -5,6 +5,7 @@ struct ChatKeyCommands: View {
     @EnvironmentObject private var store: SquallStore
     @ObservedObject private var find = ChatFind.Model.shared
     @ObservedObject private var dayJump = ChatDayJump.Model.shared
+    @ObservedObject private var browse = ChatBrowse.Model.shared
     @Binding var bigEditor: Bool
 
     var body: some View {
@@ -26,6 +27,13 @@ struct ChatKeyCommands: View {
             }
             .keyboardShortcut("d", modifiers: [.command, .shift])
             .disabled(!hasMessages)
+            ForEach(ChatBrowse.Sheet.allCases) { sheet in
+                Button(sheet.title) {
+                    browse.sheet = sheet
+                }
+                .keyboardShortcut(KeyEquivalent(sheet.key), modifiers: [.command, .shift])
+                .disabled(!hasMessages)
+            }
             Button("Full editor") {
                 bigEditor = true
             }

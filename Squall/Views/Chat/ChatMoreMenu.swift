@@ -12,10 +12,7 @@ struct ChatMoreMenu: View {
     let bot: Bot
     @State private var confirmClear = false
     @ObservedObject private var dayJump = ChatDayJump.Model.shared
-    @State private var showStats = false
-    @State private var showLinks = false
-    @State private var showCode = false
-    @State private var showTodos = false
+    @ObservedObject private var browse = ChatBrowse.Model.shared
 
     var body: some View {
         let messages = store.messages(for: bot.id)
@@ -49,25 +46,12 @@ struct ChatMoreMenu: View {
                 } label: {
                     Label("Go to a day", systemImage: "calendar")
                 }
-                Button {
-                    showLinks = true
-                } label: {
-                    Label("Links", systemImage: "link")
-                }
-                Button {
-                    showCode = true
-                } label: {
-                    Label("Code", systemImage: "chevron.left.forwardslash.chevron.right")
-                }
-                Button {
-                    showTodos = true
-                } label: {
-                    Label("To-dos", systemImage: "checklist")
-                }
-                Button {
-                    showStats = true
-                } label: {
-                    Label("Chat stats", systemImage: "chart.bar")
+                ForEach(ChatBrowse.Sheet.allCases) { sheet in
+                    Button {
+                        browse.sheet = sheet
+                    } label: {
+                        Label(sheet.title, systemImage: sheet.symbol)
+                    }
                 }
             } label: {
                 Label("Browse this chat", systemImage: "square.grid.2x2")
@@ -116,17 +100,13 @@ struct ChatMoreMenu: View {
         .sheet(isPresented: $dayJump.showList) {
             ChatDaySheet(bot: bot, messages: store.messages(for: bot.id))
         }
-        .sheet(isPresented: $showStats) {
-            ChatStatsSheet(bot: bot, messages: store.messages(for: bot.id))
-        }
-        .sheet(isPresented: $showLinks) {
-            ChatLinksSheet(bot: bot, messages: store.messages(for: bot.id))
-        }
-        .sheet(isPresented: $showCode) {
-            ChatCodeSheet(bot: bot, messages: store.messages(for: bot.id))
-        }
-        .sheet(isPresented: $showTodos) {
-            ChatTodosSheet(bot: bot, messages: store.messages(for: bot.id))
+        .sheet(item: $browse.sheet) { sheet in
+            switch sheet {
+            case .links: ChatLinksSheet(bot: bot, messages: store.messages(for: bot.id))
+            case .code: ChatCodeSheet(bot: bot, messages: store.messages(for: bot.id))
+            case .todos: ChatTodosSheet(bot: bot, messages: store.messages(for: bot.id))
+            case .stats: ChatStatsSheet(bot: bot, messages: store.messages(for: bot.id))
+            }
         }
     }
 

@@ -78,6 +78,7 @@ Tabs along the bottom:
 - **To-do actions**: copy what's left, share, tick all, or go back to as written, from the To-dos list ([docs](docs/chat-todos.md)).
 - **Link sites**: site chips in Links in this chat show only one site's links ([docs](docs/chat-links.md)).
 - **Code languages**: language chips in Code in this chat show only one language ([docs](docs/chat-code.md)).
+- **Browse shortcuts**: ⌘⇧L, ⌘⇧C, ⌘⇧T and ⌘⇧I open a chat's Links, Code, To-dos and Chat stats ([docs](docs/chat-shortcuts.md)).
 - **Inbox**: things that need you (OKs and questions from your bots), problems and finished work. Allow, Deny, pick, Clear, and filters.
 - **Board**: every bot as a card with Chat, Steps and hand-off. A bot with a job running has Watch live.
 - **Routines**: routines that wake a bot on a schedule, with on/off switches. Long-press one to delete it.
