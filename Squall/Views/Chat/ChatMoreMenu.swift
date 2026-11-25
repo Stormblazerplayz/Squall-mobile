@@ -3,7 +3,7 @@ import UIKit
 import UniformTypeIdentifiers
 import UserNotifications
 
-/// The ••• button at the top of a chat: get a ping when the teammate is done, pick a wallpaper, share the chat as a
+/// The ••• button at the top of a chat: get a ping when the teammate is done, find words in the chat, pick a wallpaper, share the chat as a
 /// Markdown file or a PDF, copy it, or clear it.
 struct ChatMoreMenu: View {
     @EnvironmentObject private var store: SquallStore
@@ -31,6 +31,12 @@ struct ChatMoreMenu: View {
                 }
                 Divider()
             }
+            Button {
+                withAnimation(.easeOut(duration: 0.2)) { ChatFind.Model.shared.open() }
+            } label: {
+                Label("Find in chat", systemImage: "magnifyingglass")
+            }
+            .disabled(messages.isEmpty)
             WallpaperMenu(bot: bot)
             Divider()
             ShareLink(item: transcript, preview: SharePreview(transcript.title, image: Image(systemName: "doc.text"))) {

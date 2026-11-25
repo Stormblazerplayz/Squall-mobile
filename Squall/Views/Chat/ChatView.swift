@@ -20,6 +20,8 @@ struct ChatView: View {
     @State private var newFromID: String?
     /// The full-screen editor for long messages.
     @State private var bigEditor = false
+    /// Find in chat, opened from the ••• menu.
+    @ObservedObject private var find = ChatFind.Model.shared
     @AppStorage(Prefs.showTyping) private var showTyping = true
     @AppStorage(Prefs.sendOnReturn) private var sendOnReturn = false
     @AppStorage(Prefs.haptics) private var haptics = true
@@ -32,6 +34,8 @@ struct ChatView: View {
         let dividers = ChatDays.dividers(list)
         let continued = ChatGrouping.continued(list)
         let isWide = sizeClass == .regular
+        let found = find.isOpen ? ChatFind.matches(list, query: find.query) : []
+        let foundID = find.index.flatMap { found.indices.contains($0) ? found[$0] : nil }
         ZStack {
             GlowBackground(topHex: bot.hex)
             ChatWallpaperLayer(chatID: bot.id, tint: bot.color)
@@ -51,6 +55,10 @@ struct ChatView: View {
                     CatchUpBar(chatID: bot.id, tintHex: bot.hex)
                     PinnedBanner(chatID: bot.id, tint: bot.color)
                         .id(bot.id)
+                    if find.isOpen {
+                        ChatFindBar(find: find, matches: found, tint: bot.color)
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                    }
                     if !isWide {
                         BotStrip()
                     }
@@ -110,6 +118,7 @@ struct ChatView: View {
                             .padding(.horizontal, 16)
                             .padding(.vertical, 8)
                             .readableColumn(780)
+                            .environment(\.findMarkID, foundID)
                         }
                         .scrollIndicators(.hidden)
                         .scrollDismissesKeyboard(.interactively)
@@ -129,6 +138,10 @@ struct ChatView: View {
                         }
                         .onChange(of: bot.id) {
                             seenIDs = Set(list.map(\.id))
+                        }
+                        .onChange(of: foundID) { _, id in
+                            guard let id else { return }
+                            withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo(id, anchor: .center) }
                         }
                         .overlay(alignment: .bottom) {
                             if showJump && !list.isEmpty {
@@ -153,6 +166,10 @@ struct ChatView: View {
             }
         }
         .animation(.easeOut(duration: 0.2), value: showLiveLog)
+        .animation(.easeOut(duration: 0.2), value: find.isOpen)
+        // Find in chat is for the chat it was opened in.
+        .onChange(of: store.currentChat.id) { find.close() }
+        .onDisappear { find.close() }
         .sensoryFeedback(.impact(weight: .light), trigger: sentCount) { _, _ in haptics }
         .onChange(of: draft) { _, new in SavedPrompts.shared.currentDraft = new }
         // Each chat keeps what you typed but didn't send (see ChatDrafts).
@@ -675,8 +692,15 @@ struct MessageView: View {
     @AppStorage(Prefs.showTimes) private var showTimes = true
     @AppStorage(BubbleStyle.key) private var bubbleStyle = BubbleStyle.rounded
     @ObservedObject private var starred = StarredMessages.shared
+    @Environment(\.findMarkID) private var findMarkID
 
     var body: some View {
+        bubble
+            .findMark(findMarkID == message.id, tint: message.kind == .me ? store.accent : author.color)
+    }
+
+    @ViewBuilder
+    private var bubble: some View {
         switch message.kind {
         case .me:
             mine

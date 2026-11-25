@@ -59,6 +59,7 @@ Tabs along the bottom:
 - **Full editor**: long messages open in a full-screen editor with Markdown buttons and a preview ([docs](docs/full-editor.md)).
 - **Chat list**: favorite chats, ordering by latest message, name or team, and Find a chat ([docs](docs/chat-list.md)).
 - **Share as PDF**: save or send a chat as a PDF that looks like Squall ([docs](docs/chat-pdf.md)).
+- **Find in chat**: find words in one chat and step through the matches ([docs](docs/find-in-chat.md)).
 - **Inbox**: things that need you (OKs and questions from your bots), problems and finished work. Allow, Deny, pick, Clear, and filters.
 - **Board**: every bot as a card with Chat, Steps and hand-off. A bot with a job running has Watch live.
 - **Routines**: routines that wake a bot on a schedule, with on/off switches. Long-press one to delete it.
