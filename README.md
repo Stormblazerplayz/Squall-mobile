@@ -73,6 +73,7 @@ Tabs along the bottom:
 - **Copy a table**: press and hold a table in a reply to copy it for a spreadsheet or save it as CSV ([docs](docs/table-copy.md)).
 - **Links in this chat**: every link shared in a chat in one list, from the ••• menu ([docs](docs/chat-links.md)).
 - **Code in this chat**: every code block shared in a chat in one list, from the ••• menu ([docs](docs/chat-code.md)).
+- **To-dos in this chat**: every task-list line in a chat in one list you can tick, from the ••• menu ([docs](docs/chat-todos.md)).
 - **Inbox**: things that need you (OKs and questions from your bots), problems and finished work. Allow, Deny, pick, Clear, and filters.
 - **Board**: every bot as a card with Chat, Steps and hand-off. A bot with a job running has Watch live.
 - **Routines**: routines that wake a bot on a schedule, with on/off switches. Long-press one to delete it.
