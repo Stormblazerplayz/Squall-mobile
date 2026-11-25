@@ -382,6 +382,7 @@ private struct ChatList: View {
     @EnvironmentObject private var store: SquallStore
     @ObservedObject private var drafts = ChatDrafts.shared
     @ObservedObject private var favorites = ChatFavorites.shared
+    @ObservedObject private var unreadMarks = UnreadMarks.shared
     @AppStorage(ChatListOrder.Sort.key) private var sort = ChatListOrder.Sort.recent
     @State private var search = ""
 
@@ -507,13 +508,9 @@ private struct ChatList: View {
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
                 }
-                if let unread = bot.unread, !isOn {
-                    Text(unread)
-                        .font(.system(size: 10.5, weight: .bold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 5)
-                        .frame(minWidth: 18, minHeight: 18)
-                        .background(Capsule().fill(Theme.red))
+                if let badge = UnreadMarks.badge(computer: bot.unread, marked: unreadMarks.isMarked(bot.id), isOpen: isOn) {
+                    UnreadBadge(badge: badge)
+                        .accessibilityLabel(UnreadMarks.accessibility(badge) ?? "")
                 }
             }
             .padding(10)
@@ -538,6 +535,7 @@ private struct ChatList: View {
             } label: {
                 Label(on ? "Remove from favorites" : "Add to favorites", systemImage: on ? "star.slash" : "star")
             }
+            UnreadMenuItem(chatID: bot.id)
         }
     }
 
@@ -554,6 +552,7 @@ private struct BotStrip: View {
     @EnvironmentObject private var store: SquallStore
     @ObservedObject private var drafts = ChatDrafts.shared
     @ObservedObject private var favorites = ChatFavorites.shared
+    @ObservedObject private var unreadMarks = UnreadMarks.shared
 
     var body: some View {
         ScrollView(.horizontal) {
@@ -567,8 +566,12 @@ private struct BotStrip: View {
                             Sphere(bot: bot, size: 36, glow: isOn ? 0.7 : 0.25)
                                 .overlay(Circle().stroke(Color.white.opacity(isOn ? 0.9 : 0), lineWidth: 2).padding(-3))
                                 .overlay(alignment: .topTrailing) {
-                                    // Something typed here and not sent yet.
-                                    if !isOn, drafts.preview(for: bot.id) != nil {
+                                    // New messages first, then something typed here and not sent yet.
+                                    if let badge = UnreadMarks.badge(computer: bot.unread, marked: unreadMarks.isMarked(bot.id), isOpen: isOn) {
+                                        UnreadBadge(badge: badge)
+                                            .offset(x: 5, y: -4)
+                                            .accessibilityLabel(UnreadMarks.accessibility(badge) ?? "")
+                                    } else if !isOn, drafts.preview(for: bot.id) != nil {
                                         Image(systemName: "pencil")
                                             .font(.system(size: 8, weight: .heavy))
                                             .foregroundStyle(Theme.darkInk)
@@ -587,6 +590,11 @@ private struct BotStrip: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Chat with \(bot.name)")
+                    .accessibilityValue(UnreadMarks.accessibility(
+                        UnreadMarks.badge(computer: bot.unread, marked: unreadMarks.isMarked(bot.id), isOpen: isOn)) ?? "")
+                    .contextMenu {
+                        UnreadMenuItem(chatID: bot.id)
+                    }
                 }
             }
             .padding(.horizontal, 16)

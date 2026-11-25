@@ -412,6 +412,7 @@ final class SquallStore: ObservableObject {
             ChatWallpapers.shared.keepOnly(chats: Set(newBots.map(\.id)).union(groups.map(\.id)))
             ChatFavorites.shared.keepOnly(Set(newBots.map(\.id)))
             TickLists.shared.keepOnly(chats: Set(newBots.map(\.id)).union(groups.map(\.id)))
+            UnreadMarks.shared.keepOnly(chats: Set(newBots.map(\.id)))
         }
         InboxWidgetWriter.update(inbox: inbox, bots: newBots)
         LiveActivities.shared.sync(work: work, inbox: inbox, routines: routines, bots: bots, paused: pausedAll)
@@ -490,6 +491,7 @@ final class SquallStore: ObservableObject {
         ChatWallpapers.shared.clear()
         ChatFavorites.shared.clear()
         TickLists.shared.clear()
+        UnreadMarks.shared.clearAll()
         InboxWidgetWriter.forget()
     }
 
@@ -766,6 +768,7 @@ final class SquallStore: ObservableObject {
 
     func openChat(_ id: String) {
         currentChatID = id
+        UnreadMarks.shared.clear(id)
         if bot(id)?.unread != nil, isConnected {
             send(SyncAction(type: "chat.read", fields: ["chatId": .string(id)]))
         }
