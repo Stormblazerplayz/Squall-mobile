@@ -18,6 +18,8 @@ struct ChatMessage: Identifiable, Equatable {
     var text2: String? = nil
     var chips: [String] = []
     var time: String
+    /// When it was sent, from the computer. Nil when the computer doesn't say (an older Squall).
+    var at: Date? = nil
 
     static let meID = "me"
 }

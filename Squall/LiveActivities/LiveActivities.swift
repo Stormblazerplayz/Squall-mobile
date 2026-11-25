@@ -2,7 +2,7 @@ import ActivityKit
 import SwiftUI
 import UIKit
 
-/// Starts and updates the five Live Activities from the app.
+/// Starts and updates the six Live Activities from the app.
 /// Every one is built from real data from the paired computer: you start it with a
 /// Lock Screen button, and each update from the computer moves it along.
 /// They all end when the app loses the computer.
@@ -11,7 +11,7 @@ final class LiveActivities: ObservableObject {
     static let shared = LiveActivities()
 
     enum Kind: String, CaseIterable {
-        case build, approval, routine, call, team
+        case build, approval, routine, call, team, timer
     }
 
     /// Which activities are showing right now, so buttons can say "On Lock Screen".
@@ -22,6 +22,7 @@ final class LiveActivities: ObservableObject {
     private static let approvalKey = SquallActivityKeys.approvalItem
     private static let routineKey = SquallActivityKeys.routine
     private static let teamKey = SquallActivityKeys.teamBots
+    private static let timerKey = SquallActivityKeys.timerChat
 
     private init() {
         refresh()
@@ -34,6 +35,8 @@ final class LiveActivities: ObservableObject {
     /// The routine the routine activity counts.
     var routineID: String? { UserDefaults.standard.string(forKey: Self.routineKey) }
     private var teamBotIDs: [String] { UserDefaults.standard.stringArray(forKey: Self.teamKey) ?? [] }
+    /// The chat whose work timer the timer activity counts down.
+    var timerChatID: String? { UserDefaults.standard.string(forKey: Self.timerKey) }
 
     /// False when Live Activities are off for Squall in the iPhone's Settings (or not on this device).
     var enabled: Bool {
@@ -48,6 +51,7 @@ final class LiveActivities: ObservableObject {
         if Activity<RoutineActivityAttributes>.activities.contains(where: { $0.activityState == .active }) { now.insert(.routine) }
         if Activity<CallActivityAttributes>.activities.contains(where: { $0.activityState == .active }) { now.insert(.call) }
         if Activity<TeamActivityAttributes>.activities.contains(where: { $0.activityState == .active }) { now.insert(.team) }
+        if Activity<WorkTimerActivityAttributes>.activities.contains(where: { $0.activityState == .active }) { now.insert(.timer) }
         if now != running { running = now }
     }
 
@@ -61,6 +65,7 @@ final class LiveActivities: ObservableObject {
             case .routine: await Self.endAll(RoutineActivityAttributes.self)
             case .call: await Self.endAll(CallActivityAttributes.self)
             case .team: await Self.endAll(TeamActivityAttributes.self)
+            case .timer: await Self.endAll(WorkTimerActivityAttributes.self)
             }
             self.refresh()
         }
@@ -69,7 +74,7 @@ final class LiveActivities: ObservableObject {
     /// Takes everything off the Lock Screen, for when the computer is gone.
     /// A call that's still going keeps its own activity until it ends.
     func stopAll() {
-        for kind in [Kind.build, .approval, .routine, .team] where running.contains(kind) {
+        for kind in [Kind.build, .approval, .routine, .team, .timer] where running.contains(kind) {
             stop(kind)
         }
     }
@@ -246,6 +251,46 @@ final class LiveActivities: ObservableObject {
         min(max(Int((progress * 100).rounded()), 0), 100)
     }
 
+    // MARK: - Work timer
+
+    /// Counts down a teammate's work timer on the Lock Screen, or counts up for Continuous.
+    @discardableResult
+    func startTimer(_ timer: WorkTimers.Running, bot: Bot) -> Bool {
+        let attributes = WorkTimerActivityAttributes(
+            botName: bot.name,
+            letter: bot.letter,
+            hex: bot.hex,
+            chatID: timer.chatID,
+            length: WorkTimers.length(timer.minutes ?? 0)
+        )
+        guard begin(.timer, attributes: attributes, state: WorkTimers.activityState(timer)) else { return false }
+        UserDefaults.standard.set(timer.chatID, forKey: Self.timerKey)
+        return true
+    }
+
+    /// Moves the timer activity along: a new end time when the timer starts again, Paused with the team,
+    /// and over once the computer no longer lists the timer.
+    private func syncTimer() {
+        guard running.contains(.timer), let id = timerChatID else { return }
+        let timer = WorkTimers.info(from: HistoryFeed.shared.latest)?.timer(for: id)
+        Task {
+            guard let activity = Self.current(WorkTimerActivityAttributes.self) else { return }
+            let old = activity.content.state
+            guard !old.ended else { return }
+            if let timer {
+                let state = WorkTimers.activityState(timer, fallbackStart: old.startedAt)
+                guard state != old else { return }
+                await activity.update(ActivityContent(state: state, staleDate: nil))
+            } else {
+                var state = old
+                state.ended = true
+                state.endNote = WorkTimers.endNote(until: old.until)
+                await activity.end(ActivityContent(state: state, staleDate: nil), dismissalPolicy: .after(Date().addingTimeInterval(10 * 60)))
+                self.refresh()
+            }
+        }
+    }
+
     // MARK: - By itself
 
     /// Puts a new OK request, or a team that just got to work, on the Lock Screen without
@@ -268,6 +313,7 @@ final class LiveActivities: ObservableObject {
     func sync(work: [LiveWork], inbox: [InboxItem], routines: [Routine], bots: [Bot], paused: Bool) {
         refresh()
         guard !running.isEmpty else { return }
+        syncTimer()
 
         if running.contains(.build), let id = buildWorkID {
             let job = work.first(where: { $0.id == id })

@@ -32,6 +32,8 @@ final class SquallStore: ObservableObject {
     @Published private(set) var retryAt: Date?
     /// True while the app is asking the computer, after it stopped answering.
     @Published private(set) var isRetrying = false
+    /// True while waiting messages are going out (see Outbox).
+    @Published private(set) var flushingOutbox = false
 
     // Team and chats, from the computer
     @Published private(set) var bots: [Bot] = []
@@ -274,6 +276,8 @@ final class SquallStore: ObservableObject {
             if link != .connected {
                 link = .connected
                 if wasOffline { Feedback.play(.connected) }
+                // Messages sent while it wasn't answering go out now.
+                flushOutbox()
             }
             keepCopy(reply.data, for: reply.computer, at: now)
             SendLater.shared.update(from: reply.data)
@@ -305,6 +309,7 @@ final class SquallStore: ObservableObject {
             }
         }
         updateWidgets(computerName: computer.name, syncedAt: date)
+        HistoryFeed.shared.take(data)
     }
 
     /// Writes the small summary the widgets draw, when it changed or every few minutes.
@@ -404,11 +409,37 @@ final class SquallStore: ObservableObject {
             currentChatID = Bot.chiefID
         }
         if let picking, bot(picking) == nil { self.picking = nil }
+        // A teammate picked from the app icon before the team had loaded.
+        QuickActions.openWaitingChat(in: self)
 
         guard live else { return }
         // Siri learns the bots' names, and Spotlight lists them.
         SiriSync.update(bots: newBots)
         noticeChanges()
+        ReplyAlerts.process(chats: snapshot.chats, bots: newBots, settings: settings, computerKey: dataComputerKey ?? "",
+                            inForeground: UIApplication.shared.applicationState == .active)
+        TeammateWidgetWriter.update(chats: snapshot.chats, bots: newBots)
+        // Snoozes for things answered or cleared somewhere else go away.
+        InboxSnooze.shared.keepOnly(Set(inbox.map(\.id)))
+        // The evening recap waits with today's real numbers (rebuilt every few minutes at most).
+        DailyRecap.update(bots: newBots)
+        // "Tell me when Rex is done" pings once Rex stops working.
+        DoneWatch.shared.update(bots: newBots)
+        // Drafts for teammates who were removed go too.
+        if !newBots.isEmpty {
+            ChatDrafts.shared.keepOnly(Set(newBots.map(\.id)))
+            MessageReminders.shared.keepOnly(chats: Set(newBots.map(\.id)))
+            LastSeen.shared.keepOnly(chats: Set(newBots.map(\.id)))
+            DoneWatch.shared.keepOnly(Set(newBots.map(\.id)))
+            PinnedMessages.shared.keepOnly(chats: Set(newBots.map(\.id)).union(groups.map(\.id)))
+            Outbox.shared.keepOnly(chats: Set(newBots.map(\.id)).union(groups.map(\.id)))
+            MessageReactions.shared.keepOnly(chats: Set(newBots.map(\.id)).union(groups.map(\.id)))
+            ChatWallpapers.shared.keepOnly(chats: Set(newBots.map(\.id)).union(groups.map(\.id)))
+            ChatFavorites.shared.keepOnly(Set(newBots.map(\.id)))
+            TickLists.shared.keepOnly(chats: Set(newBots.map(\.id)).union(groups.map(\.id)))
+            UnreadMarks.shared.keepOnly(chats: Set(newBots.map(\.id)))
+        }
+        InboxWidgetWriter.update(inbox: inbox, bots: newBots)
         LiveActivities.shared.sync(work: work, inbox: inbox, routines: routines, bots: bots, paused: pausedAll)
     }
 
@@ -471,6 +502,22 @@ final class SquallStore: ObservableObject {
         if SquallShared.loadWidget()?.paired != false, SquallShared.saveWidget(.notPaired()) {
             WidgetCenter.shared.reloadTimelines(ofKind: SquallShared.widgetKind)
         }
+        TeammateWidgetWriter.forget()
+        QuickActions.clear()
+        InboxSnooze.shared.clear()
+        DailyRecap.forget()
+        ChatDrafts.shared.clear()
+        MessageReminders.shared.clear()
+        LastSeen.shared.clear()
+        DoneWatch.shared.clear()
+        PinnedMessages.shared.clear()
+        Outbox.shared.clear()
+        MessageReactions.shared.clear()
+        ChatWallpapers.shared.clear()
+        ChatFavorites.shared.clear()
+        TickLists.shared.clear()
+        UnreadMarks.shared.clearAll()
+        InboxWidgetWriter.forget()
     }
 
     /// Takes everything from the computer off the screens.
@@ -488,6 +535,7 @@ final class SquallStore: ObservableObject {
         lastSavedAt = nil
         lastWidget = nil
         lastWidgetAt = nil
+        HistoryFeed.shared.clear()
         if !bots.isEmpty { bots = [] }
         if !messages.isEmpty { messages = [:] }
         if !groups.isEmpty { groups = [] }
@@ -595,6 +643,10 @@ final class SquallStore: ObservableObject {
                 }
             case .muteCall, .unmuteCall, .endCall:
                 activityCommand = ActivityCommand(action: action)
+            case .stopTimer:
+                if let chatID = activities.timerChatID {
+                    send(WorkTimers.stopAction(chatID: chatID))
+                }
             }
         }
         activities.refresh()
@@ -760,6 +812,7 @@ final class SquallStore: ObservableObject {
 
     func openChat(_ id: String) {
         currentChatID = id
+        UnreadMarks.shared.clear(id)
         if bot(id)?.unread != nil, isConnected {
             send(SyncAction(type: "chat.read", fields: ["chatId": .string(id)]))
         }
@@ -773,9 +826,49 @@ final class SquallStore: ObservableObject {
         let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         let id = chatID ?? currentChatID
-        guard requireConnection() else { return }
-        messages[id, default: []].append(ChatMessage(kind: .me, author: ChatMessage.meID, text: text, time: TimeText.now()))
+        // With Undo send on, it waits a few seconds in the chat first (see UndoSend).
+        if UndoSend.isOn, link != .unpaired {
+            UndoSend.shared.hold(text, chatID: id) { [weak self] item in
+                self?.sendNow(item.text, to: item.chatID)
+            }
+            return
+        }
+        sendNow(text, to: id)
+    }
+
+    /// Sends a message straight away, or puts it in the outbox when the computer isn't answering.
+    private func sendNow(_ text: String, to id: String) {
+        guard isConnected else {
+            // Paired but not answering: the message waits on the phone and goes out when the computer is back.
+            if link != .unpaired, Outbox.shared.add(text, chatID: id) {
+                showToast("Your computer isn't answering. This sends when it's back.")
+            } else {
+                _ = requireConnection()
+            }
+            return
+        }
+        messages[id, default: []].append(ChatMessage(kind: .me, author: ChatMessage.meID, text: text, time: TimeText.now(), at: Date()))
         send(SyncAction(type: "chat.send", fields: ["chatId": .string(id), "text": .string(text)]))
+    }
+
+    /// Sends the messages waiting in the outbox, oldest first. Stops at the first one that doesn't go,
+    /// so nothing is sent out of order; the rest try again next time.
+    func flushOutbox() {
+        // Only a real computer, never demo mode, gets them.
+        guard !flushingOutbox, link == .connected, !Outbox.shared.entries.isEmpty else { return }
+        flushingOutbox = true
+        Task { @MainActor in
+            defer { flushingOutbox = false }
+            var sent = 0
+            for entry in Outbox.shared.entries {
+                guard link == .connected else { break }
+                let action = SyncAction(type: "chat.send", fields: ["chatId": .string(entry.chatID), "text": .string(entry.text)])
+                guard await perform(action, busyKey: "outbox", quiet: true) != nil else { break }
+                Outbox.shared.remove(entry.id)
+                sent += 1
+            }
+            if sent > 0 { showToast(Outbox.sentText(sent)) }
+        }
     }
 
     func clearChat(_ id: String) {

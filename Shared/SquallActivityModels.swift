@@ -100,6 +100,29 @@ struct TeamActivityAttributes: ActivityAttributes {
     var members: [Member]
 }
 
+// MARK: - Work timer
+
+/// A teammate on a work timer: the time left (or how long it's been going, for Continuous) and Stop.
+struct WorkTimerActivityAttributes: ActivityAttributes {
+    struct ContentState: Codable, Hashable {
+        var startedAt: Date
+        /// nil for Continuous.
+        var until: Date?
+        var paused: Bool
+        var ended: Bool
+        /// Why it ended, like "Time's up" or "Stopped".
+        var endNote: String
+    }
+
+    var botName: String
+    var letter: String
+    var hex: UInt32
+    /// The chat the timer runs in, so Stop and the link know which one.
+    var chatID: String
+    /// "1 h", "Continuous".
+    var length: String
+}
+
 // MARK: - Lock Screen buttons talking to the app
 
 /// What a Lock Screen or Dynamic Island button asked for.
@@ -109,6 +132,7 @@ enum SquallActivityAction: String, Codable, CaseIterable {
     case skipRoutine
     case muteCall, unmuteCall, endCall
     case pauseTeam, resumeTeam
+    case stopTimer
 }
 
 /// The buttons run App Intents. They update the Live Activity straight away,

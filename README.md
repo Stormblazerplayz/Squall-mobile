@@ -22,6 +22,80 @@ Tabs along the bottom:
 
 - **Team**: a hello with live counts (working, needs you, done today), Chief's card (message Chief, see its steps), quick actions (new teammate, new group, call Chief, routines), **Recent activity** from your team, and the team list with unread badges and progress bars. Long-press a bot, then tap the glowing Chief card to hand its work to Chief.
 - **Chat**: one-on-one chat with any bot, with replies from your computer, Chief's errors with Try again, a strip to jump between bots, reply chips, the Live switch and a call button.
+- **Team**: Chief's card (message Chief, see its steps), quick actions (new teammate, new group, routines) and the team list with unread badges. Long-press a bot, then tap the glowing Chief card to hand its work to Chief.
+- **Chat**: one-on-one chat with any bot, with replies from your computer, Chief's errors with Try again, a strip to jump between bots, reply chips, the Live switch and a call button. Bot replies are formatted the way Claude wrote them: headings, lists, task lists, quotes, tables, links, and code blocks with a Copy button. Long-press a reply to copy it, with or without the formatting.
+- **Saved prompts**: messages you send a lot, one tap away from the book at the top of every chat. `{name}` and `{today}` fill in by themselves (see [docs/saved-prompts.md](docs/saved-prompts.md)).
+- **Back up this phone**: Settings > Data saves your stars, saved prompts and settings to one file and restores them on any phone (see [docs/backup.md](docs/backup.md)).
+- **Answer at once**: when several OKs are waiting, look them over in one list and Allow (with Face ID) or Deny the ones you tick (see [docs/answer-many.md](docs/answer-many.md)).
+- **Quick actions**: press and hold the app icon for the Inbox, Chief, a call or your last two teammates (see [docs/quick-actions.md](docs/quick-actions.md)).
+- **Focus filter**: pick which pings get through during an iOS Focus, like only Chief or only what needs you (see [docs/focus-filter.md](docs/focus-filter.md)).
+- **Snooze**: hide something in the Inbox for an hour, until this evening or until tomorrow, and get pinged when it's back (see [docs/inbox-snooze.md](docs/inbox-snooze.md)).
+- **Evening recap**: one ping a day with what your team did today, only when something happened (see [docs/daily-recap.md](docs/daily-recap.md)).
+- **Chat drafts**: what you typed but didn't send stays in each chat, with a pencil on the teammate (see [docs/chat-drafts.md](docs/chat-drafts.md)).
+- **Inbox widget**: what needs you and what broke on the Home Screen, with Allow and Deny right there (see [docs/inbox-widget.md](docs/inbox-widget.md)).
+- **Ask with a saved prompt**: a Shortcuts action that sends a saved prompt to Chief or any bot and reads you the answer (see [docs/saved-prompt-shortcuts.md](docs/saved-prompt-shortcuts.md)).
+- **Remind me**: press and hold any message to get pinged about it later, with a bell on the chat while one is coming (see [docs/message-reminders.md](docs/message-reminders.md)).
+- **Real days in chats**: a line where each day starts (Today, Yesterday, Monday, Nov 23) and a Jump to latest pill that counts new messages while you read older ones (see [docs/chat-days.md](docs/chat-days.md)).
+- **iPhone Search**: starred messages and saved prompts show up in Search; a prompt opens Chief's chat ready to send (see [docs/spotlight-content.md](docs/spotlight-content.md)).
+- **Code colors**: code in chats is colored like an editor, with line numbers, red and green diffs, and a Wrap button (see [docs/code-colors.md](docs/code-colors.md)).
+- **Reply with quote and Forward to**: press and hold a message to quote it in your reply or pass it to another teammate's chat (see [docs/quote-forward.md](docs/quote-forward.md)).
+- **Links in chats**: bare links are tappable, and replies show a card for each link, with localhost links copied instead (see [docs/chat-links.md](docs/chat-links.md)).
+- **Read aloud**: press and hold a reply to hear it, with code mentioned instead of read out and a Stop button by the name (see [docs/read-aloud.md](docs/read-aloud.md)).
+- **Share a chat**: the ••• button in a chat shares or copies the whole chat as Markdown, with real dates and times (see [docs/chat-export.md](docs/chat-export.md)).
+- **Slash for saved prompts**: type / in a chat to pick a saved prompt, and keep typing to search them (see [docs/slash-prompts.md](docs/slash-prompts.md)).
+- **Long replies fold**: a reply over about 24 lines starts folded with Show more, so a big log doesn't fill the chat (see [docs/long-replies.md](docs/long-replies.md)).
+- **Quick replies**: when a teammate ends with a quick question, tap Yes, No or one of its options to answer (see [docs/quick-replies.md](docs/quick-replies.md)).
+- **Pinch to change text size**: pinch a chat to make messages Small, Normal, Big or Huge (see [docs/pinch-text-size.md](docs/pinch-text-size.md)).
+- **New messages line**: opening a chat shows a line above what came in since you last looked, with how many (see [docs/new-messages.md](docs/new-messages.md)).
+- **Send again**: press and hold your own message to send it again, or edit it first (see [docs/send-again.md](docs/send-again.md)).
+- **Grouped replies**: back-to-back replies from one teammate show one picture and name, so a burst reads as one (see [docs/grouped-replies.md](docs/grouped-replies.md)).
+- **Tell me when a teammate is done**: one ping when a busy teammate stops working, from the chat's ••• menu (see [docs/done-watch.md](docs/done-watch.md)).
+- **Swipe to reply**: swipe a message right to quote it in your reply (see [docs/swipe-to-reply.md](docs/swipe-to-reply.md)).
+- **Pin a message**: keep one message at the top of its chat, with Copy and Unpin (see [docs/pinned-message.md](docs/pinned-message.md)).
+- **Messages wait when the computer is away**: they show as waiting and send by themselves once it's back (see [docs/outbox.md](docs/outbox.md)).
+- **Working now card**: the bottom of a chat shows the teammate's current job step and progress; tap to watch live (see [docs/work-now.md](docs/work-now.md)).
+- **Search in Settings**: type a word and only the matching settings show (see [docs/settings-search.md](docs/settings-search.md)).
+- **Select messages**: pick many messages to copy, share or star at once (see [docs/select-messages.md](docs/select-messages.md)).
+- **Undo send**: an optional 5 second wait with an Undo button before a message goes (see [docs/undo-send.md](docs/undo-send.md)).
+- **Share as picture**: press and hold a message to share it as a picture card with the teammate's color and name ([docs](docs/share-picture.md)).
+- **Message reactions**: press and hold a message to react with an emoji, which shows on the bubble ([docs](docs/reactions.md)).
+- **Translate and Message info**: press and hold a message to translate it or see when it was sent and how long it is ([docs](docs/message-info.md)).
+- **Chat wallpaper**: dots, grid, waves, stars or stripes behind a chat, in the teammate's color ([docs](docs/chat-wallpaper.md)).
+- **Bubble shape**: Round, Tails or Square message bubbles, in Settings under Chat ([docs](docs/bubble-shape.md)).
+- **Big emoji**: a message that's only one to three emoji shows big ([docs](docs/big-emoji.md)).
+- **@mentions**: @Rex shows bold in chats and opens Rex's chat on a tap ([docs](docs/mentions.md)).
+- **@ name picker**: type @ in the message box to pick a teammate's name ([docs](docs/mentions.md#picking-a-name)).
+- **Chat sounds**: an optional soft sound when you send and when a reply comes in ([docs](docs/chat-sounds.md)).
+- **Full editor**: long messages open in a full-screen editor with Markdown buttons and a preview ([docs](docs/full-editor.md)).
+- **Chat list**: favorite chats, ordering by latest message, name or team, and Find a chat ([docs](docs/chat-list.md)).
+- **Share as PDF**: save or send a chat as a PDF that looks like Squall ([docs](docs/chat-pdf.md)).
+- **Find in chat**: find words in one chat and step through the matches ([docs](docs/find-in-chat.md)).
+- **Copy code**: copy just the code from a reply, or save a block as a file ([docs](docs/copy-code.md)).
+- **Tick task lists**: tap a line in a reply's task list to tick it, with "2 of 5 done" ([docs](docs/tick-lists.md)).
+- **All done confetti**: ticking the last task in a reply sets off a little burst ([docs](docs/tick-lists.md)).
+- **Go to a day**: jump to any day in a chat from a list of days ([docs](docs/go-to-day.md)).
+- **Unread counts and Mark as unread**: red counts on the teammate row, and a dot for chats you mark ([docs](docs/unread-marks.md)).
+- **Fold parts of a reply**: tap a heading in a long reply to fold what's under it ([docs](docs/fold-sections.md)).
+- **Chat keyboard shortcuts**: ⌘F, ⌘⇧D, ⌘E and ⌘⌥↑↓ to move between chats ([docs](docs/chat-shortcuts.md)).
+- **Chat stats**: who talks more, words, code, busiest hour and the longest reply in one chat ([docs](docs/chat-stats.md)).
+- **Find highlights**: Find in chat lights up the words you typed in gold ([docs](docs/find-in-chat.md)).
+- **Heading menu**: press and hold a heading in a long reply to copy that part, show only it, or fold and open all ([docs](docs/fold-sections.md)).
+- **Copy a table**: press and hold a table in a reply to copy it for a spreadsheet or save it as CSV ([docs](docs/table-copy.md)).
+- **Links in this chat**: every link shared in a chat in one list, from the ••• menu ([docs](docs/chat-links.md)).
+- **Code in this chat**: every code block shared in a chat in one list, from the ••• menu ([docs](docs/chat-code.md)).
+- **To-dos in this chat**: every task-list line in a chat in one list you can tick, from the ••• menu ([docs](docs/chat-todos.md)).
+- **Tidier ••• menu**: a chat's ••• menu folds its lists into Browse this chat and its sharing into Share chat ([docs](docs/chat-export.md)).
+- **To-do actions**: copy what's left, share, tick all, or go back to as written, from the To-dos list ([docs](docs/chat-todos.md)).
+- **Link sites**: site chips in Links in this chat show only one site's links ([docs](docs/chat-links.md)).
+- **Code languages**: language chips in Code in this chat show only one language ([docs](docs/chat-code.md)).
+- **Browse shortcuts**: ⌘⇧L, ⌘⇧C, ⌘⇧T and ⌘⇧I open a chat's Links, Code, To-dos and Chat stats ([docs](docs/chat-shortcuts.md)).
+- **Stats tiles for lists**: Chat stats shows how many links, code blocks and to-dos a chat has, and opens each list ([docs](docs/chat-stats.md)).
+- **Copy all links**: copy or share every link shown in Links in this chat ([docs](docs/chat-links.md)).
+- **Copy all code**: copy or share every code block shown in Code in this chat ([docs](docs/chat-code.md)).
+- **Problems in this chat**: every error a teammate hit in a chat in one list, ready to copy ([docs](docs/chat-problems.md)).
+- **Ask to fix it**: from Problems, put an ask and the error in the message box, ready to send ([docs](docs/chat-problems.md)).
+- **Problems tile opens the list**: tap Problems in Chat stats to see each one ([docs](docs/chat-stats.md)).
+- **Copy all problems**: copy or share every problem in a chat at once ([docs](docs/chat-problems.md)).
 - **Inbox**: things that need you (OKs and questions from your bots), problems and finished work. Allow, Deny, pick, Clear, and filters.
 - **Board**: every bot as a card with Chat, Steps and hand-off. A bot with a job running has Watch live.
 - **Routines**: an **Up next** card with a live countdown (and Skip today), a **Today** timeline of the day's runs with a line for now, and every routine as a card with its days, time and an on/off switch. Tap a routine to change it; its menu has Skip today, Turn off and Delete (which asks first).
@@ -67,7 +141,7 @@ Asking, starting a task, approving and declining need your iPhone or iPad unlock
 
 ## Notifications
 
-Squall pings you when a bot needs your OK or an answer, when something breaks, and (if you turn it on) when work is done. It follows Settings > Notifications: which pings, sound, quiet hours and muted bots. An OK request has **Allow** and **Deny** right on the notification (Allow asks for Face ID first). The app icon's badge counts what needs you.
+Squall pings you when a bot needs your OK or an answer, when something breaks, and (if you turn it on) when work is done. It follows Settings > Notifications: which pings, sound, quiet hours and muted bots. An OK request has **Allow** and **Deny** right on the notification (Allow asks for Face ID first). The app icon's badge counts what needs you. When a teammate replies in a one-on-one chat while Squall is closed, you get a ping with a **Reply** box (see [docs/reply-pings.md](docs/reply-pings.md)).
 
 Squall checks the computer while it's open, for a little while after you leave it, and now and then in the background when iOS allows, so a ping can come a few minutes late. Nothing pings for old news when you first pair.
 
@@ -87,6 +161,8 @@ The **Uno** tab shows every teammate's own computer inside Squall. Give one a ta
 
 Add the **Squall team** widget to the Home Screen (small or medium) or the Lock Screen. It shows what needs you, who's working and when it last synced. Tap it to open the Inbox or Team. With no data it says so, and after Unpair it says "Not paired".
 
+The **Squall teammate** widget shows one teammate you pick (long-press the widget, then Edit Widget): what they're doing and the last message in your chat. Tap it to open that chat. It comes in small and medium for the Home Screen and two Lock Screen sizes (see [docs/teammate-widget.md](docs/teammate-widget.md)).
+
 On the Home Screen it has a **Pause / Resume** button, and the medium one shows **Allow** and **Deny** for the first OK request (only while its data is fresh). The buttons send straight to your computer, even when Squall is closed, and the widget changes only after the computer says yes.
 
 The app hands the widget its data through a shared Keychain group (`<team>.<bundle id>.shared`), which needs no setup. If you also turn on **App Groups** for both App IDs at developer.apple.com and add `group.<bundle id>`, the GitHub build signs with that too and uses it first.
@@ -97,13 +173,14 @@ A small buzz and sound when you allow something, a bot needs you, a job finishes
 
 ## Live Activities
 
-Five Live Activities show on the Lock Screen and in the Dynamic Island. Tap the **Lock Screen** button on a screen to start one, then lock your phone:
+Six Live Activities show on the Lock Screen and in the Dynamic Island. Tap the **Lock Screen** button on a screen to start one, then lock your phone:
 
 - **A bot at work** (Live work): the job's steps fill in, with Pause and Watch live.
 - **Chief needs your OK** (Inbox, on an ask): Allow or Deny right from the Lock Screen.
 - **A routine running** (Routines, while one runs): counts up, with Skip today.
 - **Call with Chief** (Call Chief): starts by itself when a call connects, with a timer, captions, Mute and End. Calls keep going when you leave the app or lock the phone.
 - **Whole team** (Mission control): four bots with bars, and Pause all.
+- **Work timer** (a chat's timer, while one runs): counts down to the end with a bar that empties, or counts up for Continuous, with Stop and Open chat.
 
 With **Show on Lock Screen by itself** (Settings > Lock Screen, on at first), a new OK request and a team that just started working go on the Lock Screen without a tap while Squall is open. The Lock Screen buttons send straight to your computer, even if Squall was closed.
 

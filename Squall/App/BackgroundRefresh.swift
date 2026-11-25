@@ -55,6 +55,13 @@ enum BackgroundRefresh {
                 computerKey: SnapshotCache.key(for: computer),
                 inForeground: false
             )
+            ReplyAlerts.process(
+                chats: snapshot.chats,
+                bots: snapshot.bots.map(\.model),
+                settings: AppSettings.saved,
+                computerKey: SnapshotCache.key(for: computer),
+                inForeground: false
+            )
             let data = reply.data
             let from = reply.computer
             Task.detached(priority: .utility) {

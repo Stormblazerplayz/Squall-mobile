@@ -41,7 +41,7 @@ final class SquallAlerts: NSObject, ObservableObject, UNUserNotificationCenterDe
         let deny = UNNotificationAction(identifier: AlertIDs.denyAction, title: "Deny", options: [.destructive])
         let ask = UNNotificationCategory(identifier: AlertIDs.askCategory, actions: [allow, deny], intentIdentifiers: [], options: [])
         let item = UNNotificationCategory(identifier: AlertIDs.itemCategory, actions: [], intentIdentifiers: [], options: [])
-        center.setNotificationCategories([ask, item])
+        center.setNotificationCategories([ask, item, ReplyAlerts.notificationCategory])
         Task { await refreshPermission() }
     }
 
@@ -79,7 +79,8 @@ final class SquallAlerts: NSObject, ObservableObject, UNUserNotificationCenterDe
         let seen = Set(seenList ?? [])
         defaults.set(computerKey, forKey: Self.computerKey)
         defaults.set(Array(current.prefix(500)), forKey: Self.seenKey)
-        updateBadge(inbox.filter { $0.kind.needsYou }.count)
+        // Snoozed things don't count until they wake.
+        updateBadge(inbox.filter { $0.kind.needsYou && !InboxSnooze.shared.isSnoozed($0.id) }.count)
 
         guard sameComputer, seenList != nil else { return }
 
@@ -100,6 +101,9 @@ final class SquallAlerts: NSObject, ObservableObject, UNUserNotificationCenterDe
 
     private func post(_ item: InboxItem, botName: String, settings: AppSettings) {
         guard !settings.mutedBots.contains(item.botID) else { return }
+        // A Focus filter can hold some pings back (see FocusRules).
+        let focus = FocusRules.current
+        guard focus.allows(FocusRules.ping(for: item.kind), from: item.botID) else { return }
         let content = UNMutableNotificationContent()
         content.categoryIdentifier = AlertIDs.itemCategory
         switch item.kind {
@@ -124,9 +128,9 @@ final class SquallAlerts: NSObject, ObservableObject, UNUserNotificationCenterDe
         content.body = body
         content.threadIdentifier = item.botID
         content.userInfo = [AlertIDs.itemKey: item.id, AlertIDs.routeKey: "inbox"]
-        let quiet = settings.quietHours && Self.isQuietTime(settings)
+        let quiet = (settings.quietHours && Self.isQuietTime(settings)) || focus.silent
         if quiet {
-            // Quiet hours: it still lands in Notification Center, without lighting up the phone.
+            // Quiet hours or a silent Focus: it still lands in Notification Center, without lighting up the phone.
             content.interruptionLevel = .passive
         } else if settings.notifySound {
             content.sound = .default
@@ -157,6 +161,7 @@ final class SquallAlerts: NSObject, ObservableObject, UNUserNotificationCenterDe
         let defaults = UserDefaults.standard
         defaults.removeObject(forKey: Self.seenKey)
         defaults.removeObject(forKey: Self.computerKey)
+        ReplyAlerts.forget()
         center.removeAllDeliveredNotifications()
         lastBadge = nil
         updateBadge(0)
@@ -173,7 +178,18 @@ final class SquallAlerts: NSObject, ObservableObject, UNUserNotificationCenterDe
         let itemID = info[AlertIDs.itemKey] as? String
         let route = info[AlertIDs.routeKey] as? String
         let action = response.actionIdentifier
-        if action == AlertIDs.allowAction || action == AlertIDs.denyAction {
+        if action == ReplyAlerts.replyAction {
+            // The Reply box on a teammate's reply: send the words straight to that chat.
+            guard let chatID = info[ReplyAlerts.chatKey] as? String,
+                  let typed = (response as? UNTextInputNotificationResponse)?.userText,
+                  let text = ReplyAlerts.message(typed) else { return }
+            do {
+                try await SquallDirect.send("chat.send", ["chatId": chatID, "text": text])
+            } catch {
+                let reason = (error as? SquallDirect.Failure)?.message ?? error.localizedDescription
+                await Self.tell(title: "Your reply wasn't sent", body: "\(reason) Open Squall to send it.")
+            }
+        } else if action == AlertIDs.allowAction || action == AlertIDs.denyAction {
             guard let itemID else { return }
             let allow = action == AlertIDs.allowAction
             do {

@@ -1,4 +1,6 @@
+import Combine
 import SwiftUI
+import UIKit
 
 /// One-on-one chat with a bot.
 struct ChatView: View {
@@ -6,6 +8,22 @@ struct ChatView: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var draft = ""
     @State private var sentCount = 0
+    /// True while the end of the chat is on screen. New messages only pull the chat down then.
+    @State private var atBottom = true
+    /// When the end of the chat last went off screen. A new message can push it off for a moment, so that doesn't count.
+    @State private var leftBottomAt: Date?
+    /// The jump button, shown once you've really scrolled up.
+    @State private var showJump = false
+    /// The messages that were there when you scrolled up, so the button can count what's new.
+    @State private var seenIDs = Set<String>()
+    /// Where the "New messages" line goes: the first message that came in since you last had this chat open.
+    @State private var newFromID: String?
+    /// The full-screen editor for long messages.
+    @State private var bigEditor = false
+    /// Find in chat, opened from the ••• menu.
+    @ObservedObject private var find = ChatFind.Model.shared
+    /// Go to a day, picked in the ••• menu.
+    @ObservedObject private var dayJump = ChatDayJump.Model.shared
     @AppStorage(Prefs.showTyping) private var showTyping = true
     @AppStorage(Prefs.sendOnReturn) private var sendOnReturn = false
     @AppStorage(Prefs.haptics) private var haptics = true
@@ -18,9 +36,14 @@ struct ChatView: View {
     var body: some View {
         let bot = store.currentChat
         let list = store.messages(for: bot.id)
+        let dividers = ChatDays.dividers(list)
+        let continued = ChatGrouping.continued(list)
         let isWide = sizeClass == .regular
+        let found = find.isOpen ? ChatFind.matches(list, query: find.query) : []
+        let foundID = find.index.flatMap { found.indices.contains($0) ? found[$0] : nil }
         ZStack {
             GlowBackground(topHex: bot.hex)
+            ChatWallpaperLayer(chatID: bot.id, tint: bot.color)
             HStack(spacing: 0) {
                 if isWide {
                     // iPad: every chat in a column beside the conversation.
@@ -33,6 +56,14 @@ struct ChatView: View {
                 }
                 VStack(spacing: 0) {
                     ChatHeader(bot: bot, showLiveLog: $showLiveLog)
+                    WorkTimerBanner(chatID: bot.id)
+                    CatchUpBar(chatID: bot.id, tintHex: bot.hex)
+                    PinnedBanner(chatID: bot.id, tint: bot.color)
+                        .id(bot.id)
+                    if find.isOpen {
+                        ChatFindBar(find: find, matches: found, tint: bot.color)
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                    }
                     if !isWide {
                         BotStrip()
                     }
@@ -45,12 +76,18 @@ struct ChatView: View {
                     ScrollViewReader { proxy in
                         ScrollView {
                             LazyVStack(spacing: 12) {
-                                DayDivider(text: "TODAY")
                                 if list.isEmpty && store.typingBotID != bot.id {
                                     emptyState(bot)
                                 }
                                 ForEach(list) { message in
-                                    MessageView(message: message, bot: bot) { chip in
+                                    // A line where a new day starts, from the message's real time.
+                                    if let day = dividers[message.id] {
+                                        DayDivider(text: day)
+                                    }
+                                    if message.id == newFromID {
+                                        NewMessagesLine(count: NewMessages.count(list, from: message.id))
+                                    }
+                                    MessageView(message: message, bot: bot, chatID: bot.id, continued: continued.contains(message.id)) { chip in
                                         store.send(chip)
                                     }
                                     .background(
@@ -60,14 +97,40 @@ struct ChatView: View {
                                     )
                                     .animation(.easeOut(duration: 0.5), value: flashID)
                                 }
+                                if let last = list.last, last.kind == .bot, last.chips.isEmpty, store.typingBotID != bot.id {
+                                    // A quick question at the end of the chat gets tap-to-send answers.
+                                    QuickReplyRow(text: last.text + (last.text2.map { "\n" + $0 } ?? ""),
+                                                  tint: store.bot(last.author)?.color ?? bot.color) { reply in
+                                        store.send(reply)
+                                    }
+                                }
+                                OutboxBubbles(chatID: bot.id)
+                                UndoSendBubbles(chatID: bot.id)
+                                WorkNowCard(bot: bot)
                                 if showTyping && store.typingBotID == bot.id {
                                     TypingRow(bot: bot)
                                 }
                                 Color.clear.frame(height: 1).id("bottom")
+                                    .onAppear {
+                                        atBottom = true
+                                        leftBottomAt = nil
+                                        showJump = false
+                                    }
+                                    .onDisappear {
+                                        atBottom = false
+                                        leftBottomAt = Date()
+                                        seenIDs = Set(list.map(\.id))
+                                        Task { @MainActor in
+                                            try? await Task.sleep(for: .milliseconds(400))
+                                            if !atBottom { showJump = true }
+                                        }
+                                    }
                             }
                             .padding(.horizontal, 16)
                             .padding(.vertical, 8)
                             .readableColumn(780)
+                            .environment(\.findMarkID, foundID ?? dayJump.flashID)
+                            .environment(\.findTerms, find.isOpen ? ChatFind.terms(find.query) : [])
                         }
                         .scrollIndicators(.hidden)
                         .scrollDismissesKeyboard(.interactively)
@@ -79,23 +142,118 @@ struct ChatView: View {
                             jumpIfAsked(proxy, botID: bot.id)
                         }
                         .onChange(of: list.count) {
+                            // Reading older messages isn't interrupted: the chat only follows when you're at the end or
+                            // you just sent something. Otherwise the jump button counts what came in.
+                            guard ChatDays.shouldFollow(atBottom: atBottom, leftBottomAt: leftBottomAt, newest: list.last) else { return }
                             withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
                         }
                         .onChange(of: store.typingBotID) {
+                            guard ChatDays.shouldFollow(atBottom: atBottom, leftBottomAt: leftBottomAt, newest: nil) else { return }
                             withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
                         }
                         .onChange(of: bot.id) {
                             proxy.scrollTo("bottom", anchor: .bottom)
                             jumpIfAsked(proxy, botID: bot.id)
                         }
+                        .onChange(of: bot.id) {
+                            seenIDs = Set(list.map(\.id))
+                        }
+                        .onChange(of: foundID) { _, id in
+                            guard let id else { return }
+                            withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo(id, anchor: .center) }
+                        }
+                        .onChange(of: dayJump.request) { _, request in
+                            guard let request, request.chatID == bot.id else { return }
+                            dayJump.request = nil
+                            Task { @MainActor in
+                                // Once the list of days has gone away.
+                                try? await Task.sleep(for: .milliseconds(350))
+                                withAnimation(.easeOut(duration: 0.3)) { proxy.scrollTo(request.messageID, anchor: .top) }
+                                dayJump.flash(request.messageID)
+                            }
+                        }
+                        .overlay(alignment: .bottom) {
+                            if showJump && !list.isEmpty {
+                                let unseen = ChatDays.unseen(seen: seenIDs, new: list)
+                                JumpToLatestButton(count: unseen, tint: bot.color) {
+                                    withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
+                                }
+                                .padding(.bottom, 10)
+                                .transition(.move(edge: .bottom).combined(with: .opacity))
+                            }
+                        }
+                        .animation(.easeOut(duration: 0.2), value: showJump)
+                        .pinchToResizeText(tint: bot.color)
                     }
+                    SelectionBar(chatID: bot.id)
+                    SlashPromptBar(draft: $draft, botName: bot.name, tint: bot.color)
+                    MentionPickerBar(draft: $draft, bots: store.bots, tint: bot.color)
+                    BigEditorHint(draft: draft, tint: bot.color) { bigEditor = true }
                     inputBar(bot)
                 }
                 .readableColumn(isWide ? .infinity : Theme.readableWidth)
             }
         }
         .animation(.easeOut(duration: 0.2), value: showLiveLog)
+        .animation(.easeOut(duration: 0.2), value: find.isOpen)
+        .background { ChatKeyCommands(bigEditor: $bigEditor) }
+        // Find in chat is for the chat it was opened in.
+        .onChange(of: store.currentChat.id) { find.close() }
+        .onDisappear { find.close() }
         .sensoryFeedback(.impact(weight: .light), trigger: sentCount) { _, _ in haptics }
+        .onChange(of: draft) { _, new in SavedPrompts.shared.currentDraft = new }
+        // Each chat keeps what you typed but didn't send (see ChatDrafts).
+        .onChange(of: draft) { _, new in ChatDrafts.shared.set(new, for: store.currentChat.id) }
+        .onChange(of: store.currentChat.id) { _, new in draft = ChatDrafts.shared.text(for: new) }
+        .onAppear {
+            if draft.isEmpty { draft = ChatDrafts.shared.text(for: store.currentChat.id) }
+        }
+        // "New messages": the line is worked out when a chat opens, and where you left off is kept as you read.
+        .onAppear { openNewLine(store.currentChat.id) }
+        .onChange(of: store.currentChat.id) { old, new in
+            LastSeen.shared.set(NewMessages.lastToRemember(store.messages(for: old)), for: old)
+            openNewLine(new)
+        }
+        .onChange(of: NewMessages.key(chatID: store.currentChat.id, lastID: store.messages(for: store.currentChat.id).last?.id)) { old, new in
+            switch NewMessages.change(from: old, to: new) {
+            case .firstLoad: openNewLine(store.currentChat.id)
+            case .more: if atBottom { rememberSeen() }
+            case .otherChat: break
+            }
+        }
+        .onChange(of: sentCount) { newFromID = nil }
+        .sheet(isPresented: $bigEditor) {
+            BigEditorSheet(draft: $draft, botName: store.currentChat.name, tint: store.currentChat.color) {
+                sendDraft()
+            }
+        }
+        // Chat sounds (Settings, Chat): one when you send, one when a reply comes in here.
+        .onChange(of: sentCount) { ChatSounds.play(.sent) }
+        .onChange(of: ChatSounds.snapshot(chatID: store.currentChat.id, messages: store.messages(for: store.currentChat.id))) { old, new in
+            let newest = store.messages(for: new.chatID).last
+            if let sound = ChatSounds.sound(from: old, to: new, newest: newest) { ChatSounds.play(sound) }
+        }
+        .onDisappear { rememberSeen() }
+        .onReceive(SavedPrompts.shared.$insert) { request in
+            // A saved prompt picked from the header goes into the message box; what you'd typed stays in front of it.
+            guard let request, request.chatID == store.currentChatID else { return }
+            SavedPrompts.shared.insert = nil
+            let typed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+            draft = typed.isEmpty ? request.text : typed + "\n" + request.text
+            inputFocused = true
+        }
+    }
+
+    /// Puts the "New messages" line above what came in since you last had this chat open, then counts it all as seen.
+    private func openNewLine(_ chatID: String) {
+        let list = store.messages(for: chatID)
+        newFromID = NewMessages.firstNew(list, lastSeen: LastSeen.shared.id(for: chatID))
+        LastSeen.shared.set(NewMessages.lastToRemember(list), for: chatID)
+    }
+
+    private func rememberSeen() {
+        let id = store.currentChat.id
+        LastSeen.shared.set(NewMessages.lastToRemember(store.messages(for: id)), for: id)
     }
 
     private func emptyState(_ bot: Bot) -> some View {
@@ -251,6 +409,7 @@ private struct ChatHeader: View {
                         .font(.system(size: 16.5, weight: .bold))
                         .foregroundStyle(Theme.textBright)
                     StatusPill(status: bot.status)
+                    DoneWatchBadge(bot: bot)
                 }
                 Text(bot.task)
                     .font(.system(size: 12))
@@ -293,23 +452,11 @@ private struct ChatHeader: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(store.work(for: bot.id) != nil ? "Watch \(bot.name) work live" : "Show live work")
-            Button {
-                confirmClear = true
-            } label: {
-                Image(systemName: "trash")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Theme.sub)
-                    .frame(width: 36, height: 44)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Clear chat")
-            .confirmationDialog("Clear this chat?", isPresented: $confirmClear, titleVisibility: .visible) {
-                Button("Clear chat with \(bot.name)", role: .destructive) {
-                    store.clearChat(bot.id)
-                }
-            } message: {
-                Text("\(bot.name) keeps its memory. Only the messages go away.")
-            }
+            SavedPromptsButton(bot: bot)
+            StarredButton(bot: bot)
+            RemindersButton(bot: bot)
+            WorkTimerButton(bot: bot)
+            ChatMoreMenu(bot: bot)
         }
         .padding(.horizontal, 10)
         .padding(.top, 4)
@@ -319,29 +466,94 @@ private struct ChatHeader: View {
 /// iPad only: a column listing every chat, next to the open conversation.
 private struct ChatList: View {
     @EnvironmentObject private var store: SquallStore
+    @ObservedObject private var drafts = ChatDrafts.shared
+    @ObservedObject private var favorites = ChatFavorites.shared
+    @ObservedObject private var unreadMarks = UnreadMarks.shared
+    @AppStorage(ChatListOrder.Sort.key) private var sort = ChatListOrder.Sort.recent
+    @State private var search = ""
 
     var body: some View {
+        let sections = ChatListOrder.sections(store.displayBots, favorites: favorites.ids, sort: sort, query: search) { id in
+            store.messages(for: id).last?.at
+        }
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text("Chats")
                     .font(.system(size: 24, weight: .bold))
                     .foregroundStyle(Theme.textBright)
                 Spacer()
+                Menu {
+                    Picker("Order", selection: $sort) {
+                        ForEach(ChatListOrder.Sort.allCases) { option in
+                            Text(option.title).tag(option)
+                        }
+                    }
+                } label: {
+                    Image(systemName: "arrow.up.arrow.down")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Theme.sub)
+                        .frame(width: 36, height: 36)
+                        .contentShape(Rectangle())
+                }
+                .accessibilityLabel("Order chats")
                 IconButton(systemName: "person.3", label: "New group") {
                     store.path.append(.group)
                 }
             }
             .padding(.horizontal, 16)
             .padding(.top, 8)
+            .padding(.bottom, 6)
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Theme.muted)
+                TextField("", text: $search, prompt: Text("Find a chat").foregroundStyle(Theme.muted))
+                    .font(.system(size: 14))
+                    .foregroundStyle(Theme.text)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                if !search.isEmpty {
+                    Button {
+                        search = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(Theme.muted)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Clear")
+                }
+            }
+            .padding(.horizontal, 10)
+            .frame(height: 34)
+            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Theme.field))
+            .padding(.horizontal, 12)
             .padding(.bottom, 8)
             ScrollView {
-                VStack(spacing: 6) {
-                    ForEach(store.displayBots) { bot in
-                        row(bot)
+                LazyVStack(alignment: .leading, spacing: 6) {
+                    if sections.isEmpty, !search.isEmpty {
+                        Text("No chat matches \u{201C}\(search)\u{201D}.")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Theme.muted)
+                            .padding(.horizontal, 8)
+                            .padding(.top, 8)
+                    }
+                    ForEach(sections) { section in
+                        if !section.title.isEmpty {
+                            Text(section.title.uppercased())
+                                .font(.system(size: 11, weight: .bold))
+                                .tracking(0.8)
+                                .foregroundStyle(Theme.muted)
+                                .padding(.horizontal, 8)
+                                .padding(.top, 6)
+                        }
+                        ForEach(section.bots) { bot in
+                            row(bot)
+                        }
                     }
                 }
                 .padding(.horizontal, 10)
                 .padding(.bottom, 12)
+                .animation(.easeInOut(duration: 0.25), value: sections)
             }
             .scrollIndicators(.hidden)
         }
@@ -363,6 +575,12 @@ private struct ChatList: View {
                             .foregroundStyle(Theme.textBright)
                             .lineLimit(1)
                         Circle().fill(bot.status.dot).frame(width: 7, height: 7)
+                        if favorites.contains(bot.id) {
+                            Image(systemName: "star.fill")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(Theme.goldBright)
+                                .accessibilityLabel("Favorite")
+                        }
                         Spacer(minLength: 0)
                         if let last {
                             Text(last.time)
@@ -376,13 +594,9 @@ private struct ChatList: View {
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
                 }
-                if let unread = bot.unread, !isOn {
-                    Text(unread)
-                        .font(.system(size: 10.5, weight: .bold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 5)
-                        .frame(minWidth: 18, minHeight: 18)
-                        .background(Capsule().fill(Theme.red))
+                if let badge = UnreadMarks.badge(computer: bot.unread, marked: unreadMarks.isMarked(bot.id), isOpen: isOn) {
+                    UnreadBadge(badge: badge)
+                        .accessibilityLabel(UnreadMarks.accessibility(badge) ?? "")
                 }
             }
             .padding(10)
@@ -400,22 +614,36 @@ private struct ChatList: View {
         .buttonStyle(.plain)
         .accessibilityLabel("Chat with \(bot.name)")
         .accessibilityAddTraits(isOn ? .isSelected : [])
+        .contextMenu {
+            let on = favorites.contains(bot.id)
+            Button {
+                withAnimation { _ = favorites.toggle(bot.id) }
+            } label: {
+                Label(on ? "Remove from favorites" : "Add to favorites", systemImage: on ? "star.slash" : "star")
+            }
+            UnreadMenuItem(chatID: bot.id)
+        }
     }
 
     private func preview(_ message: ChatMessage?, bot: Bot) -> String {
+        if bot.id != store.currentChatID, let draft = drafts.preview(for: bot.id) { return "Draft: \(draft)" }
         guard let message, !message.text.isEmpty else { return bot.task }
-        return message.author == ChatMessage.meID ? "You: \(message.text)" : message.text
+        let words = Markdown.plain(message.text).replacingOccurrences(of: "\n", with: " ")
+        return message.author == ChatMessage.meID ? "You: \(words)" : words
     }
 }
 
 /// Row of every bot so you can jump between chats.
 private struct BotStrip: View {
     @EnvironmentObject private var store: SquallStore
+    @ObservedObject private var drafts = ChatDrafts.shared
+    @ObservedObject private var favorites = ChatFavorites.shared
+    @ObservedObject private var unreadMarks = UnreadMarks.shared
 
     var body: some View {
         ScrollView(.horizontal) {
             HStack(spacing: 12) {
-                ForEach(store.displayBots) { bot in
+                ForEach(ChatListOrder.favoritesFirst(store.displayBots, favorites: favorites.ids)) { bot in
                     let isOn = bot.id == store.currentChatID
                     Button {
                         store.openChat(bot.id)
@@ -423,6 +651,22 @@ private struct BotStrip: View {
                         VStack(spacing: 4) {
                             Sphere(bot: bot, size: 36, glow: isOn ? 0.7 : 0.25)
                                 .overlay(Circle().stroke(Color.white.opacity(isOn ? 0.9 : 0), lineWidth: 2).padding(-3))
+                                .overlay(alignment: .topTrailing) {
+                                    // New messages first, then something typed here and not sent yet.
+                                    if let badge = UnreadMarks.badge(computer: bot.unread, marked: unreadMarks.isMarked(bot.id), isOpen: isOn) {
+                                        UnreadBadge(badge: badge)
+                                            .offset(x: 5, y: -4)
+                                            .accessibilityLabel(UnreadMarks.accessibility(badge) ?? "")
+                                    } else if !isOn, drafts.preview(for: bot.id) != nil {
+                                        Image(systemName: "pencil")
+                                            .font(.system(size: 8, weight: .heavy))
+                                            .foregroundStyle(Theme.darkInk)
+                                            .frame(width: 15, height: 15)
+                                            .background(Circle().fill(Theme.goldBright))
+                                            .offset(x: 4, y: -4)
+                                            .accessibilityLabel("Draft")
+                                    }
+                                }
                             Text(bot.name)
                                 .font(.system(size: 10.5, weight: .semibold))
                                 .foregroundStyle(isOn ? Theme.textBright : Theme.muted)
@@ -432,6 +676,11 @@ private struct BotStrip: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Chat with \(bot.name)")
+                    .accessibilityValue(UnreadMarks.accessibility(
+                        UnreadMarks.badge(computer: bot.unread, marked: unreadMarks.isMarked(bot.id), isOpen: isOn)) ?? "")
+                    .contextMenu {
+                        UnreadMenuItem(chatID: bot.id)
+                    }
                 }
             }
             .padding(.horizontal, 16)
@@ -467,6 +716,36 @@ private struct LiveLogPanel: View {
         .padding(12)
         .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.black.opacity(0.35)))
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Theme.cardBorder, lineWidth: 1))
+    }
+}
+
+/// The pill over the bottom of a chat while you're scrolled up: jumps to the newest message, with a count of new ones.
+private struct JumpToLatestButton: View {
+    let count: Int
+    let tint: Color
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.down")
+                    .font(.system(size: 12.5, weight: .bold))
+                Text(ChatDays.jumpLabel(count))
+                    .font(.system(size: 13, weight: .semibold))
+                    .contentTransition(.numericText())
+            }
+            .foregroundStyle(count > 0 ? .white : Theme.text)
+            .padding(.horizontal, 14)
+            .frame(height: 34)
+            .background(
+                Capsule().fill(count > 0 ? AnyShapeStyle(tint) : AnyShapeStyle(.ultraThinMaterial))
+            )
+            .overlay(Capsule().stroke(Color.white.opacity(0.14), lineWidth: 1))
+            .shadow(color: .black.opacity(0.35), radius: 10, y: 4)
+        }
+        .buttonStyle(.plain)
+        .animation(.easeOut(duration: 0.2), value: count)
+        .accessibilityLabel(count > 0 ? "Jump to \(ChatDays.jumpLabel(count))" : "Jump to the latest message")
     }
 }
 
@@ -510,16 +789,36 @@ struct MessageView: View {
     let message: ChatMessage
     /// Bot to use when the message has no author we know.
     let bot: Bot
+    /// The chat it's in, for Summary under long messages. nil leaves that out.
+    var chatID: String? = nil
+    /// True when it follows another reply from the same teammate (see ChatGrouping): no picture or name, and closer up.
+    var continued = false
     var onChip: (String) -> Void = { _ in }
     @AppStorage(Prefs.chatTextSize) private var textSize = 15.0
     @AppStorage(Prefs.showTimes) private var showTimes = true
+    @AppStorage(BubbleStyle.key) private var bubbleStyle = BubbleStyle.rounded
+    @ObservedObject private var starred = StarredMessages.shared
+    @Environment(\.findMarkID) private var findMarkID
+    @Environment(\.findTerms) private var findTerms
 
     var body: some View {
+        bubble
+            .findMark(findMarkID == message.id, tint: message.kind == .me ? store.accent : author.color)
+    }
+
+    @ViewBuilder
+    private var bubble: some View {
         switch message.kind {
         case .me:
             mine
+                .swipeToReply(message, chatID: chatID, authorName: "You", tint: store.accent)
+                .selectableMessage(message, chatID: chatID, tint: store.accent)
+                .mentionTaps()
         case .bot:
             theirs
+                .swipeToReply(message, chatID: chatID, authorName: author.name, tint: author.color)
+                .selectableMessage(message, chatID: chatID, tint: author.color)
+                .mentionTaps()
         case .error(let count):
             ErrorBubble(message: message, count: count)
         case .handoff(let fromName, let fromHex, let note):
@@ -538,20 +837,52 @@ struct MessageView: View {
         store.bot(message.author) ?? bot
     }
 
+    private var isStarred: Bool {
+        guard let chatID else { return false }
+        return starred.isStarred(chatID: chatID, messageID: message.id)
+    }
+
+    private var starMark: some View {
+        Image(systemName: "star.fill")
+            .font(.system(size: 10, weight: .bold))
+            .foregroundStyle(Theme.goldBright)
+            .accessibilityLabel("Starred")
+    }
+
     private var mine: some View {
         HStack {
             Spacer(minLength: 50)
             VStack(alignment: .trailing, spacing: 3) {
-                Text(message.text)
-                    .font(.system(size: textSize))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(store.accent))
-                if showTimes {
-                    Text(message.time)
-                        .font(.system(size: 11))
-                        .foregroundStyle(Theme.muted)
+                Group {
+                    if let jumbo = JumboEmoji.count(of: message) {
+                        // Only emoji: big and with no bubble, like a texting app.
+                        Text(JumboEmoji.text(message.text))
+                            .font(.system(size: JumboEmoji.size(for: jumbo)))
+                            .padding(.vertical, 2)
+                            .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            .transition(.scale(scale: 0.4).combined(with: .opacity))
+                    } else {
+                        Text(ChatFind.highlighted(ChatLinks.mine(message.text, mentions: Mentions.targets(store.bots)), terms: findTerms))
+                            .font(.system(size: textSize))
+                            .foregroundStyle(.white)
+                            .tint(.white)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                            .background(bubbleStyle.shape(mine: true).fill(store.accent))
+                            .contentShape(.contextMenuPreview, bubbleStyle.shape(mine: true))
+                    }
+                }
+                .messageMenu(message, chatID: chatID, authorName: "You")
+                .reactionBadge(chatID: chatID, messageID: message.id, tint: store.accent, trailing: true)
+                if showTimes || isStarred {
+                    HStack(spacing: 4) {
+                        if isStarred { starMark }
+                        if showTimes {
+                            Text(message.time)
+                                .font(.system(size: 11))
+                                .foregroundStyle(Theme.muted)
+                        }
+                    }
                 }
             }
         }
@@ -560,34 +891,57 @@ struct MessageView: View {
     private var theirs: some View {
         let who = author
         return HStack(alignment: .top, spacing: 8) {
-            Sphere(bot: who, size: 28)
+            if continued {
+                Color.clear.frame(width: 28, height: 1)
+            } else {
+                Sphere(bot: who, size: 28)
+            }
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
-                    Text(who.name)
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(who.nameColor)
+                    if !continued {
+                        Text(who.name)
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(who.nameColor)
+                    }
                     if showTimes {
                         Text(message.time)
                             .font(.system(size: 11))
                             .foregroundStyle(Theme.muted)
                     }
+                    if isStarred { starMark }
+                    if let chatID { ReadingMark(id: ReadAloud.id(chatID: chatID, messageID: message.id), tint: who.color) }
                 }
-                Text(message.text)
-                    .font(.system(size: textSize))
-                    .foregroundStyle(Theme.text)
-                if let text2 = message.text2 {
-                    Text(text2)
-                        .font(.system(size: textSize))
-                        .foregroundStyle(Theme.text)
+                FoldedReply(id: "\(chatID ?? "")/\(message.id)", text: message.text + (message.text2.map { "\n\n" + $0 } ?? ""),
+                            size: textSize, tint: who.color) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        if let jumbo = JumboEmoji.count(of: message) {
+                            Text(JumboEmoji.text(message.text))
+                                .font(.system(size: JumboEmoji.size(for: jumbo)))
+                        } else {
+                            MarkdownText(text: message.text, size: textSize, tint: who.color)
+                                .environment(\.tickListKey, chatID.map { TickLists.key(chatID: $0, messageID: message.id) })
+                        }
+                        if let text2 = message.text2 {
+                            MarkdownText(text: text2, size: textSize, tint: who.color)
+                                .environment(\.tickListKey, chatID.map { TickLists.key(chatID: $0, messageID: message.id, part: 2) })
+                        }
+                    }
+                }
+                LinkCards(text: message.text + (message.text2.map { "\n\n" + $0 } ?? ""), tint: who.color)
+                if let chatID, ChatSummaries.canSummarize(message) {
+                    MessageSummary(chatID: chatID, messageID: message.id, tint: who.color)
                 }
                 if !message.chips.isEmpty {
                     FlowChips(chips: message.chips, tint: who.color, onTap: onChip)
                 }
             }
             .padding(12)
-            .glassCard(radius: 16, tint: who.hex, strength: 0.1)
+            .bubbleGlass(bubbleStyle, tintHex: who.hex, continued: continued)
+            .messageMenu(message, chatID: chatID, authorName: who.name)
+            .reactionBadge(chatID: chatID, messageID: message.id, tint: who.color, trailing: false)
             Spacer(minLength: 20)
         }
+        .padding(.top, continued ? -6 : 0)
     }
 
     private func handoff(fromName: String, fromHex: UInt32, note: String) -> some View {
@@ -602,9 +956,7 @@ struct MessageView: View {
                 Spacer()
                 Text(message.time).font(.system(size: 11)).foregroundStyle(Theme.muted)
             }
-            Text(message.text)
-                .font(.system(size: 14.5))
-                .foregroundStyle(Theme.text)
+            MarkdownText(text: message.text, size: 14.5, tint: Theme.gold)
             if !note.isEmpty {
                 Text("Note: \(note)")
                     .font(.system(size: 13.5))

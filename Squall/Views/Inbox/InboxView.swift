@@ -6,6 +6,7 @@ struct InboxView: View {
     @State private var filter: InboxItem.Filter = .all
     @State private var openDetails: Set<String> = []
     @State private var selectedID: String?
+    @ObservedObject private var snooze = InboxSnooze.shared
     @Environment(\.horizontalSizeClass) private var sizeClass
 
     var body: some View {
@@ -37,6 +38,12 @@ struct InboxView: View {
                     .font(.system(size: 28, weight: .bold))
                     .foregroundStyle(Theme.textBright)
                 Spacer()
+                ClipboardButton()
+                    .padding(.trailing, 4)
+                NotesButton()
+                    .padding(.trailing, 4)
+                HistoryButton()
+                    .padding(.trailing, 4)
                 Button(store.unreadInboxCount == 0 ? "All read" : "Mark all read") {
                     store.markAllRead()
                 }
@@ -51,7 +58,7 @@ struct InboxView: View {
     }
 
     private var summary: String {
-        let needs = store.waitingOnYouCount
+        let needs = items(for: .needs).count
         let unread = store.unreadInboxCount
         let needsText = needs == 1 ? "1 thing needs you" : "\(needs) things need you"
         return "\(needsText) · \(unread) unread"
@@ -61,12 +68,14 @@ struct InboxView: View {
         items(for: filter).count
     }
 
+    /// Snoozed things wait at the bottom instead (see SnoozedSection).
     private func items(for filter: InboxItem.Filter) -> [InboxItem] {
+        let awake = snooze.awake(store.inbox)
         switch filter {
-        case .all: return store.inbox
-        case .needs: return store.inbox.filter { $0.kind.needsYou }
-        case .problems: return store.inbox.filter { $0.kind == .error }
-        case .done: return store.inbox.filter {
+        case .all: return awake
+        case .needs: return awake.filter { $0.kind.needsYou }
+        case .problems: return awake.filter { $0.kind == .error }
+        case .done: return awake.filter {
             if case .done = $0.kind { return true }
             return false
         }
@@ -92,6 +101,7 @@ struct InboxView: View {
             emptyState
                 .padding(.top, 20)
         } else {
+            if filter == .all || filter == .needs { AnswerManyBar() }
             section("Needs you", dot: Theme.goldBright, items: shown.filter { $0.kind.needsYou })
             section("Problems", dot: Theme.redSoft, items: shown.filter { $0.kind == .error })
             section("Done", dot: Theme.green, items: shown.filter {
@@ -99,6 +109,7 @@ struct InboxView: View {
                 return false
             })
         }
+        SnoozedSection()
     }
 
     /// Nothing in this filter: say what shows up here and what to do next.
@@ -134,6 +145,8 @@ struct InboxView: View {
                 InboxCard(item: item, showDetails: openDetails.contains(item.id)) {
                     toggleDetails(item.id)
                 }
+                // Press and hold to snooze it.
+                .contextMenu { SnoozeMenuItems(item: item) }
             }
         }
     }
@@ -160,6 +173,7 @@ struct InboxView: View {
                         emptyState
                             .padding(.top, 20)
                     } else {
+                        if filter == .all || filter == .needs { AnswerManyBar() }
                         listSection("Needs you", dot: Theme.goldBright, items: shown.filter { $0.kind.needsYou }, selected: selected?.id)
                         listSection("Problems", dot: Theme.redSoft, items: shown.filter { $0.kind == .error }, selected: selected?.id)
                         listSection("Done", dot: Theme.green, items: shown.filter {
@@ -167,6 +181,7 @@ struct InboxView: View {
                             return false
                         }, selected: selected?.id)
                     }
+                    SnoozedSection()
                 }
                 .padding(20)
             }
@@ -213,6 +228,7 @@ struct InboxView: View {
                     selectedID = item.id
                     store.markRead(item.id)
                 }
+                .contextMenu { SnoozeMenuItems(item: item) }
             }
         }
     }

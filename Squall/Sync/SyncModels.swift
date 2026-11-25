@@ -204,7 +204,8 @@ struct MessageDTO: Decodable {
             text: text ?? "",
             text2: (text2?.isEmpty ?? true) ? nil : text2,
             chips: chips ?? [],
-            time: SyncText.clock(at: at, fallback: time)
+            time: SyncText.clock(at: at, fallback: time),
+            at: SyncText.date(at)
         )
     }
 }

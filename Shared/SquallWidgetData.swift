@@ -103,6 +103,29 @@ enum SquallShared {
         return saved
     }
 
+    // MARK: - Other shared files
+
+    /// Every saved copy of a shared file: the App Group folder's first, then the Keychain's.
+    static func loadCopies(file: String, account: String) -> [Data] {
+        var copies: [Data] = []
+        if let url = groupFolder?.appendingPathComponent(file), let data = try? Data(contentsOf: url) {
+            copies.append(data)
+        }
+        if let data = readKeychain(account: account) { copies.append(data) }
+        return copies
+    }
+
+    /// Saves a shared file both ways. Returns false when neither worked.
+    @discardableResult
+    static func saveCopies(_ data: Data, file: String, account: String) -> Bool {
+        var saved = false
+        if let url = groupFolder?.appendingPathComponent(file), (try? data.write(to: url, options: [.atomic])) != nil {
+            saved = true
+        }
+        if writeKeychain(data, account: account) { saved = true }
+        return saved
+    }
+
     // MARK: - Shared Keychain item
 
     private static func plistValue(_ key: String) -> String {
@@ -147,18 +170,18 @@ enum SquallShared {
         return String(group[..<dot])
     }
 
-    private static func keychainQuery(group: String) -> [String: Any] {
+    private static func keychainQuery(group: String, account: String = keychainAccount) -> [String: Any] {
         [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: keychainService,
-            kSecAttrAccount as String: keychainAccount,
+            kSecAttrAccount as String: account,
             kSecAttrAccessGroup as String: group
         ]
     }
 
-    private static func readKeychain() -> Data? {
+    private static func readKeychain(account: String = keychainAccount) -> Data? {
         guard let group = keychainGroup else { return nil }
-        var query = keychainQuery(group: group)
+        var query = keychainQuery(group: group, account: account)
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
         var result: AnyObject?
@@ -166,9 +189,9 @@ enum SquallShared {
         return result as? Data
     }
 
-    private static func writeKeychain(_ data: Data) -> Bool {
+    private static func writeKeychain(_ data: Data, account: String = keychainAccount) -> Bool {
         guard let group = keychainGroup else { return false }
-        let query = keychainQuery(group: group)
+        let query = keychainQuery(group: group, account: account)
         let update: [String: Any] = [kSecValueData as String: data]
         let status = SecItemUpdate(query as CFDictionary, update as CFDictionary)
         if status == errSecSuccess { return true }

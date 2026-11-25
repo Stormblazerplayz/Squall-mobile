@@ -37,8 +37,10 @@ struct SquallApp: App {
             }
             // A bot picked in Spotlight opens its chat.
             .onContinueUserActivity(CSSearchableItemActionType) { activity in
-                guard let id = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String,
-                      let botID = SiriSync.botID(fromSpotlightID: id),
+                guard let id = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String else { return }
+                // A starred message or saved prompt from Search (see SpotlightContent).
+                if SpotlightContent.open(spotlightID: id, store: store) { return }
+                guard let botID = SiriSync.botID(fromSpotlightID: id),
                       let url = URL(string: "squall://chat/\(botID)") else { return }
                 store.open(url)
             }
@@ -54,11 +56,17 @@ struct SquallApp: App {
             switch phase {
             case .background:
                 lock.appLeft()
+                // Reading a reply aloud stops when you leave Squall.
+                ReadAloud.shared.stop()
                 cameFromBackground = true
                 // No Squall Uno screens or state while the app is away.
                 uno.setActive(false)
                 // Ask iOS to let Squall check the computer again in a while.
                 BackgroundRefresh.schedule()
+                // Press and hold the app icon: Inbox, Chief and the teammates you talked to last.
+                QuickActions.update(store: store)
+                // Starred messages and saved prompts in iPhone Search, or out of it while App Lock is on.
+                SpotlightContent.update(store: store)
             case .active:
                 // Catch up on anything pressed on the Lock Screen while away, and on the computer.
                 store.handleActivityActions()
@@ -67,6 +75,8 @@ struct SquallApp: App {
                 store.refreshNow()
                 uno.setActive(true)
                 Task { await SquallAlerts.shared.refreshPermission() }
+                // Keeps starred messages and saved prompts in iPhone Search (starts once).
+                SpotlightContent.start(store: store)
                 // Only ask on the way back in, so cancelling Face ID doesn't loop.
                 if cameFromBackground {
                     cameFromBackground = false
