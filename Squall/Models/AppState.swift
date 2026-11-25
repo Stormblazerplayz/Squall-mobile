@@ -37,6 +37,7 @@ enum Route: Hashable {
     case group
     case newRoutine
     case mission
+    case usage
 }
 
 enum ToastAction: Equatable {

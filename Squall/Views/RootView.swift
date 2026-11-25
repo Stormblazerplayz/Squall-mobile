@@ -101,6 +101,8 @@ struct RootView: View {
             connected { RoutineEditorView() }.navigationTitle("New routine").pushedScreen()
         case .mission:
             connected { MissionControlView() }.navigationTitle("Mission control").pushedScreen()
+        case .usage:
+            connected { UsageView() }.navigationTitle("Plan usage").pushedScreen()
         }
     }
 

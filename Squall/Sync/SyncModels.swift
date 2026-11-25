@@ -20,9 +20,11 @@ struct StateSnapshot: Decodable {
     var claudeCode: ClaudeCodeDTO?
     /// Squall on the computer itself. Older desktops don't send it.
     var desktop: DesktopInfo?
+    /// The plan's usage and today's jobs. Older desktops don't send it.
+    var usage: UsageDTO?
 
     private enum CodingKeys: String, CodingKey {
-        case version, paused, typing, bots, chats, groups, inbox, routines, work, handoffs, claudeCode, desktop
+        case version, paused, typing, bots, chats, groups, inbox, routines, work, handoffs, claudeCode, desktop, usage
     }
 
     init(from decoder: Decoder) throws {
@@ -38,6 +40,7 @@ struct StateSnapshot: Decodable {
         handoffs = c.lossyArray(HandoffDTO.self, forKey: .handoffs)
         claudeCode = try? c.decodeIfPresent(ClaudeCodeDTO.self, forKey: .claudeCode)
         desktop = (try? c.decodeIfPresent(DesktopInfo.self, forKey: .desktop)) ?? nil
+        usage = (try? c.decodeIfPresent(UsageDTO.self, forKey: .usage)) ?? nil
         let rawChats = (try? c.decodeIfPresent([String: [Lossy<MessageDTO>]].self, forKey: .chats)) ?? [:]
         var cleanChats: [String: [MessageDTO]] = [:]
         for (key, list) in rawChats {
