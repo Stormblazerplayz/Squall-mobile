@@ -227,7 +227,7 @@ enum RequestAnswerFlow {
 /// "Approve a request in Squall": allows the OK a bot is waiting on, after you confirm.
 struct ApproveRequestIntent: AppIntent {
     static let title: LocalizedStringResource = "Approve a request"
-    static let description = IntentDescription("Allows the OK a bot is waiting on. Siri reads it to you and asks before sending.")
+    static let description = IntentDescription("Allows the OK a bot is waiting on. Reads it to you and asks before sending.")
     static let openAppWhenRun = false
     static let authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
 
@@ -254,7 +254,7 @@ struct ApproveRequestIntent: AppIntent {
 /// "Decline a request in Squall": denies the OK a bot is waiting on, after you confirm.
 struct DeclineRequestIntent: AppIntent {
     static let title: LocalizedStringResource = "Decline a request"
-    static let description = IntentDescription("Denies the OK a bot is waiting on. Siri reads it to you and asks before sending.")
+    static let description = IntentDescription("Denies the OK a bot is waiting on. Reads it to you and asks before sending.")
     static let openAppWhenRun = false
     static let authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
 
@@ -281,7 +281,7 @@ struct DeclineRequestIntent: AppIntent {
 /// The older "Approve Chief's request" action, kept so Shortcuts people already made keep working.
 struct ApproveChiefIntent: AppIntent {
     static let title: LocalizedStringResource = "Approve Chief's request"
-    static let description = IntentDescription("Allows the OK that Chief is waiting on. Siri reads it to you and asks before sending.")
+    static let description = IntentDescription("Allows the OK that Chief is waiting on. Reads it to you and asks before sending.")
     static let openAppWhenRun = false
     static let isDiscoverable = false
     static let authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
