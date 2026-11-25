@@ -470,6 +470,7 @@ final class SquallStore: ObservableObject {
         if !inbox.isEmpty { inbox = [] }
         if !routines.isEmpty { routines = [] }
         if !work.isEmpty { work = [] }
+        PhotoTray.shared.clearAll()
         if !handoffs.isEmpty { handoffs = [] }
         typingBotID = nil
         pausedAll = false

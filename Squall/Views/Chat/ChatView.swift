@@ -11,6 +11,7 @@ struct ChatView: View {
     @AppStorage(Prefs.haptics) private var haptics = true
     @State private var showLiveLog = false
     @FocusState private var inputFocused: Bool
+    @ObservedObject private var tray = PhotoTray.shared
 
     var body: some View {
         let bot = store.currentChat
@@ -100,7 +101,9 @@ struct ChatView: View {
     private func inputBar(_ bot: Bot) -> some View {
         VStack(spacing: 0) {
             LaterStrip(chatID: bot.id)
+            PhotoStrip(chatID: bot.id)
             HStack(spacing: 8) {
+                PhotoPickButton(chatID: bot.id)
                 TextField("", text: $draft, prompt: Text("Message \(bot.name)...").foregroundStyle(Theme.muted), axis: .vertical)
                     .lineLimit(1...4)
                     .font(.system(size: 15))
@@ -140,11 +143,25 @@ struct ChatView: View {
     }
 
     private var canSend: Bool {
-        !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let id = store.currentChatID
+        if tray.has(id) { return !tray.sending.contains(id) }
+        return !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private func sendDraft() {
         guard canSend else { return }
+        let id = store.currentChatID
+        if tray.has(id) {
+            // Photos go with the words in one message; the words stay in the box until the computer takes them.
+            let words = draft
+            Task {
+                if await tray.send(id, text: words, store: store) {
+                    if draft == words { draft = "" }
+                    sentCount += 1
+                }
+            }
+            return
+        }
         store.send(draft)
         draft = ""
         sentCount += 1
