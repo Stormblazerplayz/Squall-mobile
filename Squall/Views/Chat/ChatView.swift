@@ -212,6 +212,7 @@ private struct ChatHeader: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(store.work(for: bot.id) != nil ? "Watch \(bot.name) work live" : "Show live work")
+            StarredButton(bot: bot)
             WorkTimerButton(bot: bot)
             Button {
                 confirmClear = true
@@ -228,7 +229,7 @@ private struct ChatHeader: View {
                     store.clearChat(bot.id)
                 }
             } message: {
-                Text("\(bot.name) keeps its memory. Only the messages go away.")
+                Text("\(bot.name) keeps its memory. Only the messages go away, and starred ones stay in Starred.")
             }
         }
         .padding(.horizontal, 10)
@@ -436,6 +437,7 @@ struct MessageView: View {
     var onChip: (String) -> Void = { _ in }
     @AppStorage(Prefs.chatTextSize) private var textSize = 15.0
     @AppStorage(Prefs.showTimes) private var showTimes = true
+    @ObservedObject private var starred = StarredMessages.shared
 
     var body: some View {
         switch message.kind {
@@ -461,6 +463,18 @@ struct MessageView: View {
         store.bot(message.author) ?? bot
     }
 
+    private var isStarred: Bool {
+        guard let chatID else { return false }
+        return starred.isStarred(chatID: chatID, messageID: message.id)
+    }
+
+    private var starMark: some View {
+        Image(systemName: "star.fill")
+            .font(.system(size: 10, weight: .bold))
+            .foregroundStyle(Theme.goldBright)
+            .accessibilityLabel("Starred")
+    }
+
     private var mine: some View {
         HStack {
             Spacer(minLength: 50)
@@ -471,10 +485,16 @@ struct MessageView: View {
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
                     .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(store.accent))
-                if showTimes {
-                    Text(message.time)
-                        .font(.system(size: 11))
-                        .foregroundStyle(Theme.muted)
+                    .messageMenu(message, chatID: chatID, authorName: "You")
+                if showTimes || isStarred {
+                    HStack(spacing: 4) {
+                        if isStarred { starMark }
+                        if showTimes {
+                            Text(message.time)
+                                .font(.system(size: 11))
+                                .foregroundStyle(Theme.muted)
+                        }
+                    }
                 }
             }
         }
@@ -494,6 +514,7 @@ struct MessageView: View {
                             .font(.system(size: 11))
                             .foregroundStyle(Theme.muted)
                     }
+                    if isStarred { starMark }
                 }
                 MarkdownText(text: message.text, size: textSize, tint: who.color)
                 if let text2 = message.text2 {
@@ -508,18 +529,7 @@ struct MessageView: View {
             }
             .padding(12)
             .glassCard(radius: 16, tint: who.hex, strength: 0.1)
-            .contextMenu {
-                Button {
-                    UIPasteboard.general.string = message.text2.map { message.text + "\n\n" + $0 } ?? message.text
-                } label: {
-                    Label("Copy", systemImage: "doc.on.doc")
-                }
-                Button {
-                    UIPasteboard.general.string = Markdown.plain(message.text2.map { message.text + "\n\n" + $0 } ?? message.text)
-                } label: {
-                    Label("Copy as plain text", systemImage: "text.alignleft")
-                }
-            }
+            .messageMenu(message, chatID: chatID, authorName: who.name)
             Spacer(minLength: 20)
         }
     }
