@@ -31,6 +31,7 @@ struct ChatView: View {
                 VStack(spacing: 0) {
                     ChatHeader(bot: bot, showLiveLog: $showLiveLog)
                     WorkTimerBanner(chatID: bot.id)
+                    CatchUpBar(chatID: bot.id, tintHex: bot.hex)
                     if !isWide {
                         BotStrip()
                     }
@@ -48,7 +49,7 @@ struct ChatView: View {
                                     emptyState(bot)
                                 }
                                 ForEach(list) { message in
-                                    MessageView(message: message, bot: bot) { chip in
+                                    MessageView(message: message, bot: bot, chatID: bot.id) { chip in
                                         store.send(chip)
                                     }
                                 }
@@ -428,6 +429,8 @@ struct MessageView: View {
     let message: ChatMessage
     /// Bot to use when the message has no author we know.
     let bot: Bot
+    /// The chat it's in, for Summary under long messages. nil leaves that out.
+    var chatID: String? = nil
     var onChip: (String) -> Void = { _ in }
     @AppStorage(Prefs.chatTextSize) private var textSize = 15.0
     @AppStorage(Prefs.showTimes) private var showTimes = true
@@ -497,6 +500,9 @@ struct MessageView: View {
                     Text(text2)
                         .font(.system(size: textSize))
                         .foregroundStyle(Theme.text)
+                }
+                if let chatID, ChatSummaries.canSummarize(message) {
+                    MessageSummary(chatID: chatID, messageID: message.id, tint: who.color)
                 }
                 if !message.chips.isEmpty {
                     FlowChips(chips: message.chips, tint: who.color, onTap: onChip)
