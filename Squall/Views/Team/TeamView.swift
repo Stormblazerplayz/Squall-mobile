@@ -26,19 +26,25 @@ struct TeamView: View {
                         // iPad: Chief on the left, the whole team in a grid on the right.
                         HStack(alignment: .top, spacing: 18) {
                             VStack(spacing: 18) {
-                                ChiefCard(showSteps: $showChiefSteps)
-                                quickActions
+                                TeamPulseCard().appearIn(0)
+                                ChiefCard(showSteps: $showChiefSteps).appearIn(1)
+                                quickActions.appearIn(2)
                                 usageCard
                             }
                             .frame(width: 380)
-                            teamSection
-                                .frame(maxWidth: .infinity)
+                            VStack(spacing: 18) {
+                                RecentActivityCard().appearIn(1)
+                                teamSection.appearIn(2)
+                            }
+                            .frame(maxWidth: .infinity)
                         }
                     } else {
-                        ChiefCard(showSteps: $showChiefSteps)
-                        quickActions
+                        TeamPulseCard().appearIn(0)
+                        ChiefCard(showSteps: $showChiefSteps).appearIn(1)
+                        quickActions.appearIn(2)
                         usageCard
-                        teamSection
+                        RecentActivityCard().appearIn(3)
+                        teamSection.appearIn(4)
                     }
                 }
                 .padding(.horizontal, isWide ? 24 : 16)
@@ -81,6 +87,9 @@ struct TeamView: View {
             QuickAction(icon: "person.3", title: "New group") {
                 store.path.append(.group)
             }
+            QuickAction(icon: "phone.fill", title: "Call Chief") {
+                store.showCall = true
+            }
             QuickAction(icon: "clock", title: "Routines") {
                 store.tab = .routines
             }
@@ -110,12 +119,14 @@ struct TeamView: View {
                     .background(Capsule().fill(Theme.field))
             }
             if store.teammates.isEmpty {
-                Text("No teammates yet. Tap Teammate to add one.")
-                    .font(.system(size: 13.5))
-                    .foregroundStyle(Theme.sub)
-                    .padding(12)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .glassCard(radius: 16)
+                EmptyStateCard(
+                    icon: "person.badge.plus",
+                    title: "Build your team",
+                    text: "Teammates are AI helpers that Chief can hand jobs to, like a coder or a tester. Add your first one.",
+                    buttonTitle: "Add a teammate",
+                    tint: Theme.goldBright,
+                    action: { store.showNewTeammate = true }
+                )
             } else {
                 Text("Long-press a bot, then drop it on Chief to hand off its work.")
                     .font(.system(size: 12.5))
@@ -193,6 +204,7 @@ private struct ChiefCard: View {
                 .foregroundStyle(Theme.goldBright)
                 .shadow(color: Theme.gold.opacity(0.6), radius: 8)
             Sphere(bot: chief, size: 92, glow: picked == nil ? 0.45 : 0.85)
+                .breathing(chief.status == .working && picked == nil)
             HStack(spacing: 8) {
                 Text("Chief")
                     .font(.system(size: 22, weight: .bold))
@@ -204,7 +216,7 @@ private struct ChiefCard: View {
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(Theme.goldText)
             } else {
-                Text(chief.task)
+                Text(chief.task.isEmpty ? "Ready when you are. Send Chief a job and the team gets to work." : chief.task)
                     .font(.system(size: 13.5))
                     .foregroundStyle(Theme.sub)
                     .multilineTextAlignment(.center)
@@ -311,6 +323,7 @@ private struct TeamRow: View {
     var body: some View {
         HStack(spacing: 12) {
             Sphere(bot: bot, size: 44)
+                .breathing(bot.status == .working)
                 .overlay(alignment: .topTrailing) {
                     if let unread = bot.unread {
                         Text(unread)
@@ -327,15 +340,24 @@ private struct TeamRow: View {
                     Text(bot.name)
                         .font(.system(size: 15.5, weight: .semibold))
                         .foregroundStyle(Theme.textBright)
-                    Circle().fill(bot.status.dot).frame(width: 7, height: 7)
+                    PulsingDot(color: bot.status.dot, size: 7, active: bot.status.isBusy)
                     Text(bot.status.label)
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(bot.status.foreground)
                 }
-                Text(bot.task)
+                Text(taskLine)
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.sub)
                     .lineLimit(1)
+                if bot.status.isBusy, bot.progress > 0 {
+                    ProgressView(value: min(max(bot.progress, 0), 1))
+                        .progressViewStyle(.linear)
+                        .tint(bot.color)
+                        .frame(maxWidth: 220)
+                        .padding(.top, 2)
+                        .animation(.easeInOut(duration: 0.5), value: bot.progress)
+                        .accessibilityLabel("\(Int((min(max(bot.progress, 0), 1) * 100).rounded())) percent done")
+                }
             }
             Spacer(minLength: 0)
             Image(systemName: "chevron.right")
@@ -363,6 +385,20 @@ private struct TeamRow: View {
         .accessibilityHint("Opens the chat")
         .accessibilityAction(named: "Hand off to Chief") {
             store.startHandoff(bot.id)
+        }
+    }
+
+    /// What the bot is doing, or a friendly line when the computer sent nothing.
+    private var taskLine: String {
+        let task = bot.task.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !task.isEmpty { return task }
+        switch bot.status {
+        case .working: return "Working on something"
+        case .waiting: return "Waiting for your OK"
+        case .napping: return "Napping. Message to wake it up"
+        case .paused: return "Paused"
+        case .handed: return "Work handed to Chief"
+        case .idle: return bot.role.isEmpty ? "Free for a job" : "\(bot.role) · free for a job"
         }
     }
 }

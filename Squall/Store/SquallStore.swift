@@ -50,6 +50,9 @@ final class SquallStore: ObservableObject {
     @Published private(set) var usage: PlanUsage?
     /// Actions on their way to the computer, so buttons can wait.
     @Published private(set) var busyActions: Set<String> = []
+    /// True in demo mode: a pretend team that lives only on this phone (see DemoWorld).
+    /// Nothing in it is real, saved, or sent to a computer, and every screen says so.
+    @Published private(set) var isDemo = false
 
     // Local screen state
     @Published var picking: String?
@@ -112,6 +115,13 @@ final class SquallStore: ObservableObject {
     private var lastSyncedExact: Date?
     /// Which computer the data in memory came from.
     private var dataComputerKey: String?
+    /// The pretend world while demo mode is on.
+    private var demo: DemoWorld?
+    private var demoTask: Task<Void, Never>?
+    /// Settings and the last chat from before the demo, put back when it ends,
+    /// so nothing done in the demo stays behind.
+    private var settingsBeforeDemo: AppSettings?
+    private var lastChatBeforeDemo: String?
 
     init() {
         let defaults = UserDefaults.standard
@@ -173,17 +183,25 @@ final class SquallStore: ObservableObject {
 
     // MARK: - Talking to the computer
 
-    var isConnected: Bool { link == .connected }
+    /// True when buttons can act: live with the computer, or in demo mode (where they act on pretend data only).
+    var isConnected: Bool { link == .connected || isDemo }
 
     /// Keeps the app up to date with the computer until this task is cancelled.
     /// SquallApp restarts it whenever the paired computer changes.
     func runSync(with pairing: PairingStore) async {
         self.pairing = pairing
         guard pairing.isPaired, let computer = pairing.computer else {
+            if isDemo {
+                // Demo mode keeps going until you leave it or pair.
+                link = .unpaired
+                return
+            }
             forgetEverything()
             link = .unpaired
             return
         }
+        // A real computer: the demo ends and none of it stays.
+        if isDemo { endDemo(quiet: true) }
         let key = SnapshotCache.key(for: computer)
         if key != dataComputerKey {
             // A different computer: nothing from the old one may stay on screen.
@@ -486,7 +504,10 @@ final class SquallStore: ObservableObject {
     /// Returns the computer's reply, or nil when it didn't work (a toast says why).
     @discardableResult
     func perform(_ action: SyncAction, busyKey: String? = nil, quiet: Bool = false) async -> SyncActionReply? {
-        guard let pairing, isConnected else {
+        if isDemo {
+            return await performDemo(action, busyKey: busyKey, quiet: quiet)
+        }
+        guard let pairing, link == .connected else {
             if !quiet { _ = requireConnection() }
             return nil
         }
@@ -520,9 +541,9 @@ final class SquallStore: ObservableObject {
         busyActions.contains(key)
     }
 
-    /// True when there's something real to show: live data, or the saved copy from this computer.
+    /// True when there's something to show: live data, the saved copy from this computer, or the demo.
     var hasData: Bool {
-        isConnected || (showingSaved && lastSynced != nil)
+        isDemo || link == .connected || (showingSaved && lastSynced != nil)
     }
 
     /// For buttons that change something: says so and returns false when the computer isn't connected.
@@ -538,6 +559,11 @@ final class SquallStore: ObservableObject {
 
     /// Catches up on Lock Screen buttons pressed while the app was away.
     func handleActivityActions() {
+        // Lock Screen buttons are for the real team, never the demo.
+        guard !isDemo else {
+            _ = SquallActivityBridge.drain()
+            return
+        }
         let activities = LiveActivities.shared
         for action in SquallActivityBridge.drain() {
             switch action {
@@ -845,7 +871,7 @@ final class SquallStore: ObservableObject {
                 SyncAction(type: "inbox.answer", fields: ["itemId": .string(itemID), "answer": .string(answer)]),
                 busyKey: "inbox.\(itemID)"
             ) != nil else { return }
-            if item?.kind == .ask {
+            if item?.kind == .ask, !isDemo {
                 LiveActivities.shared.approvalAnswered(itemID, allowed: answer == "allow")
             }
             Feedback.play(answer == "deny" ? .denied : (answer == "allow" ? .approved : .sent))
@@ -922,7 +948,7 @@ final class SquallStore: ObservableObject {
     func setPausedAll(_ paused: Bool) {
         guard requireConnection() else { return }
         pausedAll = paused
-        LiveActivities.shared.setTeamPaused(paused)
+        if !isDemo { LiveActivities.shared.setTeamPaused(paused) }
         send(SyncAction(type: "team.pause", fields: ["paused": .bool(paused)]), busyKey: "team.pause")
     }
 
@@ -1045,4 +1071,115 @@ final class SquallStore: ObservableObject {
 struct ActivityCommand: Equatable {
     let id = UUID()
     let action: SquallActivityAction
+}
+
+// MARK: - Demo mode
+
+extension SquallStore {
+    /// True when "Try the demo" can start: no computer paired and no demo running yet.
+    var canStartDemo: Bool {
+        !isDemo && link == .unpaired && pairing?.isPaired != true
+    }
+
+    /// Starts demo mode: a pretend team to play with, only on this phone.
+    /// Only when no computer is paired, so real data and the demo never mix.
+    func startDemo() {
+        guard canStartDemo else {
+            if !isDemo { showToast("The demo is only for when no computer is paired.") }
+            return
+        }
+        settingsBeforeDemo = settings
+        lastChatBeforeDemo = UserDefaults.standard.string(forKey: Prefs.lastChat)
+        clearData()
+        demo = DemoWorld()
+        isDemo = true
+        applyDemo()
+        path = []
+        tab = .team
+        currentChatID = Bot.chiefID
+        Feedback.play(.connected)
+        showToast("Demo mode. Everything here is pretend, so play around!")
+        startDemoClock()
+    }
+
+    /// Leaves demo mode. The pretend team is thrown away and your settings go back to how they were.
+    func endDemo(quiet: Bool = false) {
+        guard isDemo else { return }
+        demoTask?.cancel()
+        demoTask = nil
+        demo = nil
+        isDemo = false
+        clearData()
+        path = []
+        tab = .team
+        showCall = false
+        if let saved = settingsBeforeDemo { settings = saved }
+        settingsBeforeDemo = nil
+        currentChatID = Bot.chiefID
+        if let last = lastChatBeforeDemo {
+            UserDefaults.standard.set(last, forKey: Prefs.lastChat)
+        } else {
+            UserDefaults.standard.removeObject(forKey: Prefs.lastChat)
+        }
+        lastChatBeforeDemo = nil
+        if !quiet { showToast("Demo over. Nothing from it was kept.", action: .pair) }
+    }
+
+    /// Does an action in the pretend world, after a short pause like a real computer.
+    fileprivate func performDemo(_ action: SyncAction, busyKey: String?, quiet: Bool) async -> SyncActionReply? {
+        let key = busyKey ?? action.type
+        busyActions.insert(key)
+        defer { busyActions.remove(key) }
+        try? await Task.sleep(for: .milliseconds(250))
+        guard isDemo, var world = demo else { return nil }
+        let outcome = world.handle(action)
+        demo = world
+        applyDemo()
+        if let error = outcome.error {
+            if !quiet { showToast(error) }
+            return nil
+        }
+        return SyncActionReply(ok: true, id: outcome.id, error: nil)
+    }
+
+    /// Moves the pretend world along every second: replies, job steps and so on.
+    private func startDemoClock() {
+        demoTask?.cancel()
+        demoTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1))
+                guard !Task.isCancelled, let self, self.isDemo, var world = self.demo else { return }
+                let neededYou = Set(world.inbox.filter { $0.kind.needsYou }.map(\.id))
+                if world.tick() {
+                    self.demo = world
+                    self.applyDemo()
+                    // Same buzz as the real app when a pretend bot starts waiting on you.
+                    let needsYou = Set(world.inbox.filter { $0.kind.needsYou }.map(\.id))
+                    if !needsYou.subtracting(neededYou).isEmpty { Feedback.play(.needsYou) }
+                }
+            }
+        }
+    }
+
+    /// Puts the pretend world on screen. Never touches the widgets, Siri, the Lock Screen,
+    /// notifications or the saved copy, which are only for real data.
+    private func applyDemo() {
+        guard isDemo, let world = demo else { return }
+        if bots != world.bots { bots = world.bots }
+        if messages != world.messages { messages = world.messages }
+        if groups != world.groups { groups = world.groups }
+        if inbox != world.inbox { inbox = world.inbox }
+        if routines != world.routines { routines = world.routines }
+        if work != world.work { work = world.work }
+        if handoffs != world.handoffs { handoffs = world.handoffs }
+        if typingBotID != world.typing { typingBotID = world.typing }
+        if pausedAll != world.paused { pausedAll = world.paused }
+        if claudeCode != world.claudeCode { claudeCode = world.claudeCode }
+        if usage != world.usage { usage = world.usage }
+        if desktop != nil { desktop = nil }
+        if let picking, bot(picking) == nil { self.picking = nil }
+        if !bots.isEmpty, bot(currentChatID) == nil, group(currentChatID) == nil {
+            currentChatID = Bot.chiefID
+        }
+    }
 }

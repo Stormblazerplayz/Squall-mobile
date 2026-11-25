@@ -325,10 +325,16 @@ struct PairingView: View {
                 Button(place == .firstRun ? "Let's go" : "Done") { onDone() }
                     .buttonStyle(FilledButtonStyle(fill: store.accent, height: 50))
             } else if place == .firstRun {
-                Button("Skip for now") { onDone() }
-                    .buttonStyle(GhostButtonStyle(height: 46))
-                    .disabled(pairing.busy)
-                Text("You can pair later. Squall shows your team once it's paired.")
+                HStack(spacing: 8) {
+                    Button("Skip for now") { onDone() }
+                        .buttonStyle(GhostButtonStyle(height: 46))
+                    TryDemoButton(height: 46) {
+                        onDone()
+                        store.startDemo()
+                    }
+                }
+                .disabled(pairing.busy)
+                Text("You can pair later. The demo is a pretend team to play with, nothing in it is real.")
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.muted)
                     .multilineTextAlignment(.center)

@@ -16,6 +16,8 @@ struct RootView: View {
                     destination(for: route)
                 }
         }
+        .demoBanner()
+        .animation(.easeOut(duration: 0.25), value: store.isDemo)
         .tint(store.accent)
         .background {
             KeyCommands()
@@ -32,22 +34,31 @@ struct RootView: View {
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: store.toast)
         .sheet(isPresented: $store.showNewTeammate) {
             NewTeammateSheet()
+                .demoBanner()
                 .lockCover()
                 .environmentObject(store)
                 .environmentObject(lock)
         }
         .sheet(item: $store.handoffTarget) { target in
             HandoffSheet(botID: target.id)
+                .demoBanner()
                 .lockCover()
                 .environmentObject(store)
                 .environmentObject(lock)
         }
         .fullScreenCover(isPresented: $store.showCall) {
-            CallChiefView()
-                .lockCover()
-                .environmentObject(store)
-                .environmentObject(lock)
-                .environmentObject(pairing)
+            Group {
+                if store.isDemo {
+                    // A pretend call: no mic, nothing sent anywhere.
+                    DemoCallView()
+                } else {
+                    CallChiefView()
+                }
+            }
+            .lockCover()
+            .environmentObject(store)
+            .environmentObject(lock)
+            .environmentObject(pairing)
         }
         .sheet(isPresented: $store.showPairing) {
             PairingView(place: .settings) {

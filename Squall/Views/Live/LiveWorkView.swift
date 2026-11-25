@@ -62,27 +62,22 @@ struct LiveWorkView: View {
     // MARK: Nothing running
 
     private var emptyState: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "dot.radiowaves.left.and.right")
-                .font(.system(size: 34, weight: .semibold))
-                .foregroundStyle(Theme.sub)
-                .frame(width: 84, height: 84)
-                .background(Circle().fill(Theme.field))
-                .accessibilityHidden(true)
-            Text("Nothing running right now")
-                .font(.system(size: 20, weight: .bold))
-                .foregroundStyle(Theme.textBright)
-            Text("When a bot starts a job on your computer, you can watch it here.")
-                .font(.system(size: 14))
-                .foregroundStyle(Theme.sub)
-                .multilineTextAlignment(.center)
-            Button("Back to the team") {
+        EmptyStateCard(
+            icon: "dot.radiowaves.left.and.right",
+            title: "Nothing running right now",
+            text: "When a bot starts a job, you can watch every step, command and file change here, live.",
+            buttonTitle: "Give Chief a job",
+            tint: Theme.green,
+            action: {
+                store.path = []
+                store.openChat(Bot.chiefID)
+            },
+            secondTitle: "Back to the team",
+            secondAction: {
                 if !store.path.isEmpty { store.path.removeLast() }
                 store.tab = .team
             }
-            .buttonStyle(GhostButtonStyle(height: 44, expand: false))
-            .padding(.top, 4)
-        }
+        )
         .padding(24)
         .readableColumn(460)
     }

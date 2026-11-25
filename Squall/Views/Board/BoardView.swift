@@ -27,13 +27,17 @@ struct BoardView: View {
                             .foregroundStyle(Theme.sub)
                     }
                     if store.displayBots.isEmpty {
-                        ContentUnavailableView {
-                            Label("No bots yet", systemImage: "person.3")
-                        } description: {
-                            Text("Your team from the computer shows up here.")
-                        }
-                        .foregroundStyle(Theme.sub)
-                        .padding(.top, 40)
+                        EmptyStateCard(
+                            icon: "square.grid.2x2",
+                            title: "The board is empty",
+                            text: "Every bot gets a card here with what it's doing and its steps. Add a teammate to get started.",
+                            buttonTitle: "Add a teammate",
+                            tint: Theme.goldBright,
+                            action: { store.showNewTeammate = true },
+                            secondTitle: "Message Chief",
+                            secondAction: { store.openChat(Bot.chiefID) }
+                        )
+                        .padding(.top, 20)
                     } else {
                         LazyVGrid(columns: isWide ? wideColumns : columns, spacing: isWide ? 12 : 10) {
                             ForEach(store.displayBots) { bot in
