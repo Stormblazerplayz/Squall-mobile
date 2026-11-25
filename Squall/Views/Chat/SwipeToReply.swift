@@ -4,7 +4,8 @@ import SwiftUI
 /// with a tick when letting go will reply.
 private struct SwipeToReply: ViewModifier {
     let message: ChatMessage
-    let chatID: String
+    /// nil when the message isn't shown in a chat, so there's no message box to reply in.
+    let chatID: String?
     let authorName: String
     let tint: Color
 
@@ -15,7 +16,7 @@ private struct SwipeToReply: ViewModifier {
     @ViewBuilder
     func body(content: Content) -> some View {
         let words = StarredMessages.words(of: message)
-        if words.isEmpty || !(message.kind == .me || message.kind == .bot) {
+        if words.isEmpty || chatID == nil || !(message.kind == .me || message.kind == .bot) {
             content
         } else {
             content
@@ -56,6 +57,7 @@ private struct SwipeToReply: ViewModifier {
     }
 
     private func reply(_ words: String) {
+        guard let chatID else { return }
         let quote = QuoteReply.quote(words, author: authorName, mine: message.kind == .me)
         SavedPrompts.shared.insert = SavedPrompts.Insert(chatID: chatID, text: quote)
     }
@@ -63,7 +65,7 @@ private struct SwipeToReply: ViewModifier {
 
 extension View {
     /// Swipe right to reply with a quote. Only your messages and teammates' replies that have words can be swiped.
-    func swipeToReply(_ message: ChatMessage, chatID: String, authorName: String, tint: Color) -> some View {
+    func swipeToReply(_ message: ChatMessage, chatID: String?, authorName: String, tint: Color) -> some View {
         modifier(SwipeToReply(message: message, chatID: chatID, authorName: authorName, tint: tint))
     }
 }
