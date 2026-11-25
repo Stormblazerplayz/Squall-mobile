@@ -14,6 +14,9 @@ struct RoutineEditorView: View {
     @State private var skipIfBusy = false
 
     private let ideas = ["Check my build", "Tidy my notes", "Look for bugs", "Write a daily recap"]
+    private let quickTimes: [(label: String, minutes: Int)] = [
+        ("Morning", 9 * 60), ("Lunch", 12 * 60 + 30), ("Evening", 18 * 60), ("Night", 21 * 60)
+    ]
 
     var body: some View {
         ZStack {
@@ -99,11 +102,13 @@ struct RoutineEditorView: View {
                 ForEach(store.teammates.isEmpty ? [store.chief] : store.teammates) { teammate in
                     let isOn = teammate.id == botID
                     Button {
-                        botID = teammate.id
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) { botID = teammate.id }
                     } label: {
                         VStack(spacing: 5) {
                             Sphere(bot: teammate, size: 42, glow: isOn ? 0.7 : 0.2)
                                 .overlay(Circle().stroke(Color.white.opacity(isOn ? 0.9 : 0), lineWidth: 2).padding(-3))
+                                .scaleEffect(isOn ? 1.1 : 0.92)
+                                .opacity(isOn ? 1 : 0.7)
                             Text(teammate.name)
                                 .font(.system(size: 11.5, weight: .semibold))
                                 .foregroundStyle(isOn ? Theme.textBright : Theme.muted)
@@ -130,33 +135,50 @@ struct RoutineEditorView: View {
             HStack(spacing: 6) {
                 ForEach(0..<7, id: \.self) { index in
                     Button {
-                        days[index].toggle()
-                        repeatMode = matchingMode(for: days)
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.65)) {
+                            days[index].toggle()
+                            repeatMode = matchingMode(for: days)
+                        }
                     } label: {
                         Text(Routine.dayShort[index])
                             .font(.system(size: 14, weight: .bold))
                             .foregroundStyle(days[index] ? Theme.textBright : Theme.muted)
                             .frame(maxWidth: .infinity, minHeight: 40)
-                            .background(Circle().fill(days[index] ? store.accent.opacity(0.55) : Theme.field))
+                            .background(
+                                Circle()
+                                    .fill(days[index] ? (bot?.color ?? store.accent).opacity(0.6) : Theme.field)
+                                    .shadow(color: (bot?.color ?? store.accent).opacity(days[index] ? 0.45 : 0), radius: 6)
+                            )
+                            .scaleEffect(days[index] ? 1 : 0.9)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(Routine.dayFull[index])
                     .accessibilityAddTraits(days[index] ? .isSelected : [])
                 }
             }
-            HStack(spacing: 12) {
-                stepButton("minus", label: "30 minutes earlier") { minutes = (minutes + 24 * 60 - 30) % (24 * 60) }
-                VStack(spacing: 2) {
-                    Text(TimeText.time(minutes: minutes))
-                        .font(.system(size: 26, weight: .bold, design: .rounded))
-                        .foregroundStyle(Theme.textBright)
-                        .monospacedDigit()
-                    Text(partOfDay)
-                        .font(.system(size: 12))
-                        .foregroundStyle(Theme.sub)
-                }
+            RoutineTimeDial(minutes: $minutes, tint: bot?.color ?? store.accent)
                 .frame(maxWidth: .infinity)
-                stepButton("plus", label: "30 minutes later") { minutes = (minutes + 30) % (24 * 60) }
+                .padding(.vertical, 4)
+            HStack(spacing: 8) {
+                ForEach(quickTimes, id: \.minutes) { quick in
+                    Button(quick.label) {
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { minutes = quick.minutes }
+                    }
+                    .buttonStyle(ChipButtonStyle(isOn: minutes == quick.minutes, tint: bot?.color ?? store.accent, minHeight: 34))
+                }
+            }
+            .frame(maxWidth: .infinity)
+            HStack(spacing: 12) {
+                stepButton("minus", label: "15 minutes earlier") {
+                    withAnimation { minutes = (minutes + 24 * 60 - 15) % (24 * 60) }
+                }
+                Text("Drag the dot around the dial")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.muted)
+                    .frame(maxWidth: .infinity)
+                stepButton("plus", label: "15 minutes later") {
+                    withAnimation { minutes = (minutes + 15) % (24 * 60) }
+                }
             }
         }
         .padding(14)
