@@ -5,3 +5,4 @@ Tap ••• at the top of a chat and pick **Browse this chat** > **Code** to s
 - Tap a block to copy its code.
 - Press and hold for Copy code, Save code as a file, or Go to message.
 - Search by language (like "python") or by any words in the code.
+- When a chat has code in two or more languages, a row of language chips shows how many blocks each has. Tap one to see only that language.

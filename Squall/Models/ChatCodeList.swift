@@ -50,6 +50,32 @@ enum ChatCodeList {
         }
     }
 
+    struct Language: Equatable, Identifiable {
+        /// "Python", or "Code" for blocks with no language.
+        let name: String
+        let count: Int
+        var id: String { name }
+    }
+
+    /// A block's language as the chips show it.
+    static func languageName(_ entry: Entry) -> String {
+        entry.piece.language.isEmpty ? "Code" : CodePieces.displayName(entry.piece.language)
+    }
+
+    /// The languages in the chat, most blocks first, then by name. "py" and "python" count as one.
+    static func languages(_ entries: [Entry]) -> [Language] {
+        var counts: [String: Int] = [:]
+        for entry in entries { counts[languageName(entry), default: 0] += 1 }
+        return counts.map { Language(name: $0.key, count: $0.value) }
+            .sorted { $0.count != $1.count ? $0.count > $1.count : $0.name < $1.name }
+    }
+
+    /// Only the blocks in one language, or all of them when none is picked.
+    static func only(_ entries: [Entry], language: String?) -> [Entry] {
+        guard let language else { return entries }
+        return entries.filter { languageName($0) == language }
+    }
+
     /// "5 code blocks · 120 lines".
     static func summary(_ entries: [Entry]) -> String {
         let lines = entries.reduce(0) { $0 + $1.piece.lines }

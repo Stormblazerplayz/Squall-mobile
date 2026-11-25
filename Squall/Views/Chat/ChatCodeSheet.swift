@@ -9,10 +9,14 @@ struct ChatCodeSheet: View {
     let bot: Bot
     let messages: [ChatMessage]
     @State private var words = ""
+    /// The language chip that's picked, or nil for every language.
+    @State private var language: String?
 
     var body: some View {
         let all = ChatCodeList.entries(messages)
-        let shown = ChatCodeList.filter(all, words: words)
+        let languages = ChatCodeList.languages(all)
+        let picked = languages.contains(where: { $0.name == language }) ? language : nil
+        let shown = ChatCodeList.filter(ChatCodeList.only(all, language: picked), words: words)
         NavigationStack {
             Group {
                 if all.isEmpty {
@@ -21,6 +25,11 @@ struct ChatCodeSheet: View {
                     empty("No code matches", "Try other words.")
                 } else {
                     List {
+                        if languages.count >= 2 {
+                            languageChips(languages, picked: picked)
+                                .listRowBackground(Color.clear)
+                                .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+                        }
                         Section {
                             ForEach(shown) { entry in
                                 row(entry)
@@ -101,6 +110,51 @@ struct ChatCodeSheet: View {
                 Label("Go to message", systemImage: "text.bubble")
             }
         }
+    }
+
+    /// A row of language chips: All, then each language with how many blocks it has.
+    private func languageChips(_ languages: [ChatCodeList.Language], picked: String?) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                chip("All", count: nil, on: picked == nil) { language = nil }
+                ForEach(languages) { item in
+                    chip(item.name, count: item.count, on: picked == item.name) {
+                        language = picked == item.name ? nil : item.name
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
+        }
+    }
+
+    private func chip(_ title: String, count: Int?, on: Bool, action: @escaping () -> Void) -> some View {
+        Button {
+            withAnimation(.easeOut(duration: 0.15), action)
+        } label: {
+            HStack(spacing: 5) {
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .lineLimit(1)
+                if let count {
+                    Text("\(count)")
+                        .font(.system(size: 11.5, weight: .bold))
+                        .foregroundStyle(on ? Theme.textBright.opacity(0.8) : Theme.muted)
+                }
+            }
+            .foregroundStyle(on ? Theme.textBright : Theme.sub)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(Capsule().fill(on ? bot.color.opacity(0.35) : Color.white.opacity(0.07)))
+            .overlay(Capsule().stroke(on ? bot.color.opacity(0.7) : Color.clear, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(chipLabel(title, count: count))
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+
+    private func chipLabel(_ title: String, count: Int?) -> String {
+        guard let count else { return "All languages" }
+        return "\(title), \(count) \(count == 1 ? "block" : "blocks")"
     }
 
     private func empty(_ title: String, _ detail: String) -> some View {

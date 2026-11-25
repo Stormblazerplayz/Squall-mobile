@@ -30,4 +30,13 @@ final class ChatCodeListTests: XCTestCase {
         XCTAssertEqual(list.first?.preview.count, ChatCodeList.maxPreview)
         XCTAssertTrue(list.first?.preview.hasSuffix("…") ?? false)
     }
+
+    func testLanguages() {
+        var list = ChatCodeList.entries(messages)
+        list += ChatCodeList.entries([ChatMessage(id: "8", kind: .bot, author: "rex", text: "```py\nx = 1\n```\n```\nplain\n```", time: "")])
+        XCTAssertEqual(ChatCodeList.languages(list).map(\.name), ["Python", "Bash", "Code", "Swift"])
+        XCTAssertEqual(ChatCodeList.languages(list).map(\.count), [2, 1, 1, 1])
+        XCTAssertEqual(ChatCodeList.only(list, language: "Python").map(\.id), ["1-0-1", "8-0-1"])
+        XCTAssertEqual(ChatCodeList.only(list, language: nil).count, 5)
+    }
 }
