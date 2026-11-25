@@ -14,13 +14,22 @@ struct MarkdownText: View {
     @Environment(\.tickListKey) private var tickListKey
     @Environment(\.printing) private var printing
     @ObservedObject private var tickLists = TickLists.shared
+    /// Headings folded shut (see MarkdownSections), by their place in the reply.
+    @State private var folded = Set<Int>()
 
     var body: some View {
         let blocks = Markdown.blocks(text)
         let reply = printing ? nil : tickListKey
+        // A page shows everything, so folding is only on screen.
+        let foldable = printing ? Set<Int>() : MarkdownSections.foldable(blocks)
+        let hidden = MarkdownSections.hidden(blocks, folded: folded.intersection(foldable))
         VStack(alignment: .leading, spacing: 8) {
             ForEach(Array(blocks.enumerated()), id: \.offset) { index, block in
-                view(for: block, index: index, reply: reply)
+                if foldable.contains(index), case .heading(let level, let text) = block {
+                    foldingHeading(level: level, text: text, index: index, blocks: blocks)
+                } else if !hidden.contains(index) {
+                    view(for: block, index: index, reply: reply)
+                }
             }
             if let reply {
                 let progress = tickLists.progress(blocks, reply: reply)
@@ -83,6 +92,40 @@ struct MarkdownText: View {
                 .fill(Color.white.opacity(0.12))
                 .frame(height: 1)
                 .padding(.vertical, 2)
+        }
+    }
+
+    /// A heading you can tap to fold its section, with a chevron, and a note of what's folded.
+    @ViewBuilder
+    private func foldingHeading(level: Int, text: String, index: Int, blocks: [MarkdownBlock]) -> some View {
+        let shut = folded.contains(index)
+        // A heading inside a folded bigger section stays out of sight too.
+        if !MarkdownSections.hidden(blocks, folded: folded.subtracting([index])).contains(index) {
+            Button {
+                withAnimation(.easeOut(duration: 0.2)) {
+                    if shut { folded.remove(index) } else { folded.insert(index) }
+                }
+            } label: {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    inline(text, size: headingSize(level), weight: level <= 2 ? .bold : .semibold, color: Theme.textBright)
+                    if shut {
+                        Text(MarkdownSections.foldedNote(blocks, heading: index))
+                            .font(.system(size: 11.5, weight: .medium))
+                            .foregroundStyle(Theme.muted)
+                    }
+                    Spacer(minLength: 6)
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(tint.opacity(0.8))
+                        .rotationEffect(.degrees(shut ? -90 : 0))
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .padding(.top, level <= 2 ? 4 : 2)
+            .accessibilityAddTraits(.isHeader)
+            .accessibilityValue(shut ? "Folded" : "Open")
+            .accessibilityHint(shut ? "Double tap to open this part" : "Double tap to fold this part")
         }
     }
 

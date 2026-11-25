@@ -65,6 +65,7 @@ Tabs along the bottom:
 - **All done confetti**: ticking the last task in a reply sets off a little burst ([docs](docs/tick-lists.md)).
 - **Go to a day**: jump to any day in a chat from a list of days ([docs](docs/go-to-day.md)).
 - **Unread counts and Mark as unread**: red counts on the teammate row, and a dot for chats you mark ([docs](docs/unread-marks.md)).
+- **Fold parts of a reply**: tap a heading in a long reply to fold what's under it ([docs](docs/fold-sections.md)).
 - **Inbox**: things that need you (OKs and questions from your bots), problems and finished work. Allow, Deny, pick, Clear, and filters.
 - **Board**: every bot as a card with Chat, Steps and hand-off. A bot with a job running has Watch live.
 - **Routines**: routines that wake a bot on a schedule, with on/off switches. Long-press one to delete it.
