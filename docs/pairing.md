@@ -315,7 +315,7 @@ The newest screen of one computer as `200 image/jpeg`, with `X-Uno-Frame` (its n
 
 One replay picture as `200 image/jpeg`, with `X-Uno-Step`, `X-Uno-Width`, `X-Uno-Height` and `X-Uno-Cursor` (`x,y`). `404 {"error": "no_shot"}` when the PC no longer keeps it. A shot in the `shots` list is `{id, sessionId, computerId, step, seq, at, kind, text, width, height, cursorX, cursorY, bytes}`; there's one for each screenshot Squall Uno took and one for the screen right after each click, typing or key.
 
-The live view shows them as the **Replay** filmstrip under the controls. It asks for `shots` again each time the task takes a step (and once more 1.6 seconds later, while the task is working), fetches each small picture only when it scrolls into view, and keeps the last 80 in memory. Tapping one opens a full-screen replay you can swipe through or play. The PC keeps pictures in memory only, so they're gone after Squall on the PC restarts.
+The live view shows them as the **Replay** filmstrip under the controls. It asks for `shots` again each time the task takes a step (and once more 1.6 seconds later, while the task is working), fetches each small picture only when it scrolls into view, and keeps the last 80 in memory. Tapping one opens a full-screen replay you can swipe through or play. The share button there makes an animated GIF of the whole replay on the phone (each picture with its step under it, at most 800 pixels wide) and opens the share sheet, so you can save it to Photos or send it. The PC keeps pictures in memory only, so they're gone after Squall on the PC restarts.
 
 ## Safety
 

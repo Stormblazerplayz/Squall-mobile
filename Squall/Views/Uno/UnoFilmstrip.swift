@@ -177,6 +177,7 @@ struct UnoShotThumb: View {
 /// Full-screen replay of a task, one real picture per step. Swipe or use the buttons to move between
 /// steps, or press play to watch it go by. New pictures keep arriving while the task is still working.
 struct UnoReplayView: View {
+    @EnvironmentObject private var pairing: PairingStore
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage(Prefs.haptics) private var haptics = true
@@ -185,6 +186,11 @@ struct UnoReplayView: View {
 
     @State private var selection: Int
     @State private var playing = false
+    /// "3/12" while the GIF is being made, nil otherwise.
+    @State private var saving: String?
+    @State private var saveTask: Task<Void, Never>?
+    @State private var shareFile: UnoShareFile?
+    @State private var saveProblem: String?
 
     init(film: UnoFilm, startId: Int, agentName: String) {
         self.film = film
@@ -224,6 +230,19 @@ struct UnoReplayView: View {
         .preferredColorScheme(.dark)
         .sensoryFeedback(.selection, trigger: selection) { _, _ in haptics && !playing }
         .task(id: playing) { await playLoop() }
+        .sheet(item: $shareFile) { file in
+            UnoShareSheet(items: [file.url])
+                .presentationDetents([.medium, .large])
+        }
+        .alert("Couldn't make the GIF", isPresented: Binding(
+            get: { saveProblem != nil },
+            set: { if !$0 { saveProblem = nil } }
+        )) {
+            Button("OK", role: .cancel) { saveProblem = nil }
+        } message: {
+            Text(saveProblem ?? "")
+        }
+        .onDisappear { saveTask?.cancel() }
         .onChange(of: shots.map(\.id)) { _, ids in
             // The PC drops its oldest pictures to save room; stay on a picture that's still there.
             if !ids.contains(selection), let first = ids.first {
@@ -236,6 +255,7 @@ struct UnoReplayView: View {
         HStack(spacing: 10) {
             Button {
                 playing = false
+                saveTask?.cancel()
                 dismiss()
             } label: {
                 Label("Back to live", systemImage: "chevron.down")
@@ -247,6 +267,7 @@ struct UnoReplayView: View {
             }
             .buttonStyle(.plain)
             Spacer(minLength: 8)
+            shareButton
             VStack(alignment: .trailing, spacing: 1) {
                 Text("\(agentName)'s replay")
                     .font(.system(size: 13, weight: .semibold))
@@ -260,6 +281,59 @@ struct UnoReplayView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
+    }
+
+    private var shareButton: some View {
+        Button {
+            makeGIF()
+        } label: {
+            HStack(spacing: 6) {
+                if let saving {
+                    ProgressView()
+                        .controlSize(.small)
+                        .tint(UnoColors.text)
+                    Text(saving)
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .monospacedDigit()
+                } else {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.system(size: 15, weight: .semibold))
+                }
+            }
+            .foregroundStyle(UnoColors.text)
+            .padding(.horizontal, saving == nil ? 0 : 10)
+            .frame(minWidth: 36, minHeight: 36)
+            .background(Capsule().fill(Color.white.opacity(0.1)))
+        }
+        .buttonStyle(.plain)
+        .disabled(saving != nil || shots.isEmpty)
+        .accessibilityLabel(saving == nil ? "Share the replay as a GIF" : "Making the GIF, \(saving ?? "")")
+    }
+
+    /// Fetches every picture, makes the GIF off the main thread, then opens the share sheet.
+    private func makeGIF() {
+        guard saving == nil, !shots.isEmpty else { return }
+        playing = false
+        saving = "0/\(shots.count)"
+        let name = UnoReplayGIF.fileName(agent: agentName)
+        saveTask = Task { @MainActor in
+            defer { saving = nil }
+            let frames = await film.gifFrames(pairing) { done, total in
+                saving = "\(done)/\(total)"
+            }
+            guard !Task.isCancelled else { return }
+            guard !frames.isEmpty else {
+                saveProblem = "Your PC doesn't keep these pictures anymore."
+                return
+            }
+            let data = await Task.detached(priority: .userInitiated) { UnoReplayGIF.make(frames) }.value
+            guard !Task.isCancelled else { return }
+            guard let data, let url = try? UnoReplayGIF.write(data, name: name) else {
+                saveProblem = "Your phone couldn't write the GIF. Try again."
+                return
+            }
+            shareFile = UnoShareFile(url: url)
+        }
     }
 
     private var bottomBar: some View {
@@ -410,4 +484,21 @@ struct UnoReplayPage: View {
             missing = loaded == nil
         }
     }
+}
+
+/// A file ready to share, as a sheet item.
+struct UnoShareFile: Identifiable {
+    let url: URL
+    var id: String { url.path }
+}
+
+/// The system share sheet (Save Image, Messages, AirDrop, …).
+struct UnoShareSheet: UIViewControllerRepresentable {
+    let items: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
 }
