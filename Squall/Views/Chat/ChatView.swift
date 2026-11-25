@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 import UIKit
 
@@ -83,6 +84,15 @@ struct ChatView: View {
         }
         .animation(.easeOut(duration: 0.2), value: showLiveLog)
         .sensoryFeedback(.impact(weight: .light), trigger: sentCount) { _, _ in haptics }
+        .onChange(of: draft) { _, new in SavedPrompts.shared.currentDraft = new }
+        .onReceive(SavedPrompts.shared.$insert) { request in
+            // A saved prompt picked from the header goes into the message box; what you'd typed stays in front of it.
+            guard let request, request.chatID == store.currentChatID else { return }
+            SavedPrompts.shared.insert = nil
+            let typed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+            draft = typed.isEmpty ? request.text : typed + "\n" + request.text
+            inputFocused = true
+        }
     }
 
     private func emptyState(_ bot: Bot) -> some View {
@@ -212,6 +222,7 @@ private struct ChatHeader: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(store.work(for: bot.id) != nil ? "Watch \(bot.name) work live" : "Show live work")
+            SavedPromptsButton(bot: bot)
             StarredButton(bot: bot)
             WorkTimerButton(bot: bot)
             Button {

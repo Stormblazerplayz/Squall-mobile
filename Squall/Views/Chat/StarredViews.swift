@@ -33,7 +33,7 @@ struct StarredButton: View {
     }
 }
 
-/// Copy, Copy as plain text, Star and Share on a long press of a message. Star needs the chat it's in, so a message
+/// Copy, Copy as plain text, Star, Save as prompt and Share on a long press of a message. Star needs the chat it's in, so a message
 /// shown without one (like in a group) gets the rest.
 struct MessageMenu: ViewModifier {
     let message: ChatMessage
@@ -72,6 +72,18 @@ struct MessageMenu: ViewModifier {
                         store.showToast(now ? "Starred. Find it with the star at the top of the chat." : "Star taken off.")
                     } label: {
                         Label(on ? "Unstar" : "Star", systemImage: on ? "star.slash" : "star")
+                    }
+                }
+                if message.kind == .me {
+                    Button {
+                        if let problem = SavedPrompts.shared.problem(text: words) {
+                            store.showToast(problem)
+                        } else {
+                            SavedPrompts.shared.add(title: "", text: words)
+                            store.showToast("Saved as a prompt. Find it with the book at the top of the chat.")
+                        }
+                    } label: {
+                        Label("Save as prompt", systemImage: "text.book.closed")
                     }
                 }
                 ShareLink(item: words) {
