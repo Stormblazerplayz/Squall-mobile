@@ -586,9 +586,10 @@ struct MessageView: View {
         HStack {
             Spacer(minLength: 50)
             VStack(alignment: .trailing, spacing: 3) {
-                Text(message.text)
+                Text(ChatLinks.mine(message.text))
                     .font(.system(size: textSize))
                     .foregroundStyle(.white)
+                    .tint(.white)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
                     .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(store.accent))
@@ -627,6 +628,7 @@ struct MessageView: View {
                 if let text2 = message.text2 {
                     MarkdownText(text: text2, size: textSize, tint: who.color)
                 }
+                LinkCards(text: message.text + (message.text2.map { "\n\n" + $0 } ?? ""), tint: who.color)
                 if let chatID, ChatSummaries.canSummarize(message) {
                     MessageSummary(chatID: chatID, messageID: message.id, tint: who.color)
                 }

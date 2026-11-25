@@ -65,6 +65,14 @@ struct MessageMenu: ViewModifier {
                         Label("Copy as plain text", systemImage: "text.alignleft")
                     }
                 }
+                if let link = ChatLinks.links(in: words).first {
+                    Button {
+                        UIPasteboard.general.url = link
+                        store.showToast("Link copied.")
+                    } label: {
+                        Label("Copy link", systemImage: "link")
+                    }
+                }
                 if let chatID, StarredMessages.canStar(message) {
                     let on = starred.isStarred(chatID: chatID, messageID: message.id)
                     Button {

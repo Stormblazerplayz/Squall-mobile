@@ -90,9 +90,9 @@ struct MarkdownText: View {
             .fixedSize(horizontal: false, vertical: true)
     }
 
-    /// Inline Markdown with `code` in a monospaced font on a soft background.
+    /// Inline Markdown with `code` in a monospaced font on a soft background, and bare web links made tappable.
     static func styled(_ text: String, size: Double) -> AttributedString {
-        var out = Markdown.inline(text)
+        var out = ChatLinks.linked(Markdown.inline(text))
         let codeRanges = out.runs.compactMap { run -> Range<AttributedString.Index>? in
             guard let intent = run.inlinePresentationIntent, intent.contains(.code) else { return nil }
             return run.range
