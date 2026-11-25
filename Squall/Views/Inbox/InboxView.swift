@@ -37,6 +37,8 @@ struct InboxView: View {
                     .font(.system(size: 28, weight: .bold))
                     .foregroundStyle(Theme.textBright)
                 Spacer()
+                ClipboardButton()
+                    .padding(.trailing, 4)
                 NotesButton()
                     .padding(.trailing, 4)
                 HistoryButton()
