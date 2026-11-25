@@ -623,6 +623,7 @@ struct MessageView: View {
                             .foregroundStyle(Theme.muted)
                     }
                     if isStarred { starMark }
+                    if let chatID { ReadingMark(id: ReadAloud.id(chatID: chatID, messageID: message.id), tint: who.color) }
                 }
                 MarkdownText(text: message.text, size: textSize, tint: who.color)
                 if let text2 = message.text2 {

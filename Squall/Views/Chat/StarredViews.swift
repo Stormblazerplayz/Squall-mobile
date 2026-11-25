@@ -42,6 +42,7 @@ struct MessageMenu: ViewModifier {
 
     @EnvironmentObject private var store: SquallStore
     @ObservedObject private var starred = StarredMessages.shared
+    @ObservedObject private var reader = ReadAloud.shared
 
     @ViewBuilder
     func body(content: Content) -> some View {
@@ -63,6 +64,17 @@ struct MessageMenu: ViewModifier {
                         store.showToast("Copied.")
                     } label: {
                         Label("Copy as plain text", systemImage: "text.alignleft")
+                    }
+                }
+                if message.kind == .bot {
+                    let readID = ReadAloud.id(chatID: chatID ?? "", messageID: message.id)
+                    let reading = reader.isReading(readID)
+                    Button {
+                        if !reader.toggle(id: readID, text: words), !reading {
+                            store.showToast("Nothing to read here.")
+                        }
+                    } label: {
+                        Label(reading ? "Stop reading" : "Read aloud", systemImage: reading ? "stop.circle" : "speaker.wave.2")
                     }
                 }
                 if let link = ChatLinks.links(in: words).first {

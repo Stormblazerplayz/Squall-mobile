@@ -52,6 +52,8 @@ struct SquallApp: App {
             switch phase {
             case .background:
                 lock.appLeft()
+                // Reading a reply aloud stops when you leave Squall.
+                ReadAloud.shared.stop()
                 cameFromBackground = true
                 // Ask iOS to let Squall check the computer again in a while.
                 BackgroundRefresh.schedule()

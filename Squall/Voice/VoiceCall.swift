@@ -228,6 +228,7 @@ final class VoiceCall: ObservableObject {
     }
 
     private func startAudio() throws {
+        ReadAloud.shared.stop()
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetooth])
         try session.setActive(true, options: .notifyOthersOnDeactivation)
