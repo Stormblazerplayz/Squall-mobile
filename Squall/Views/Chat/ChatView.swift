@@ -67,6 +67,13 @@ struct ChatView: View {
                                         store.send(chip)
                                     }
                                 }
+                                if let last = list.last, last.kind == .bot, last.chips.isEmpty, store.typingBotID != bot.id {
+                                    // A quick question at the end of the chat gets tap-to-send answers.
+                                    QuickReplyRow(text: last.text + (last.text2.map { "\n" + $0 } ?? ""),
+                                                  tint: store.bot(last.author)?.color ?? bot.color) { reply in
+                                        store.send(reply)
+                                    }
+                                }
                                 if showTyping && store.typingBotID == bot.id {
                                     TypingRow(bot: bot)
                                 }
