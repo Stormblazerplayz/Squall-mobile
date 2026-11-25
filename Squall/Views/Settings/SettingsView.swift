@@ -34,6 +34,7 @@ struct SettingsView: View {
     @AppStorage(Prefs.haptics) private var haptics = true
     @AppStorage(Prefs.sounds) private var sounds = true
     @AppStorage(Prefs.softGlow) private var softGlow = false
+    @AppStorage(Prefs.movingBackground) private var movingBackground = true
     @AppStorage(Prefs.openChat) private var openChat: Prefs.OpenChat = .chief
     @AppStorage(Prefs.defaultRole) private var defaultRole = "Generalist"
     @AppStorage(Prefs.appLock) private var appLock = false
@@ -484,6 +485,10 @@ struct SettingsView: View {
             }
             line
             SwitchRow(title: "Softer glow", subtitle: "Turns the colored background light down", isOn: $softGlow, tint: store.accent)
+            line
+            SwitchRow(title: "Moving background", subtitle: softGlow ? "Off while Softer glow is on" : "The glow drifts slowly and the stars twinkle", isOn: $movingBackground, tint: store.accent)
+                .disabled(softGlow)
+                .opacity(softGlow ? 0.5 : 1)
             line
             SwitchRow(title: "Vibrate", subtitle: "A small buzz when you send, allow something, a bot needs you or a job finishes", isOn: $haptics, tint: store.accent)
             line

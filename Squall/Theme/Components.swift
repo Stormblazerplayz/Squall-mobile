@@ -2,11 +2,12 @@ import SwiftUI
 
 /// Dark background with the purple and teal glow from the concepts. The glow slowly
 /// drifts like an aurora, with a few faint stars. It holds still when Reduce Motion,
-/// Low Power Mode or "Softer glow" (Settings) is on.
+/// Low Power Mode, "Softer glow" is on or "Moving background" is off (both in Settings).
 struct GlowBackground: View {
     var topHex: UInt32 = 0x7C5CF6
     var bottomHex: UInt32 = 0x20B296
     @AppStorage(Prefs.softGlow) private var softGlow = false
+    @AppStorage(Prefs.movingBackground) private var movingBackground = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
     @State private var lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
@@ -34,8 +35,13 @@ struct GlowBackground: View {
     private var dim: Double { softGlow ? 0.4 : 1.0 }
 
     private var moves: Bool {
-        !reduceMotion && !softGlow && !lowPower && scenePhase == .active
+        movingBackground && !reduceMotion && !softGlow && !lowPower && scenePhase == .active
     }
+}
+
+extension Prefs {
+    /// Settings switch for the slowly drifting background glow. On unless turned off.
+    static let movingBackground = "squall.movingBackground"
 }
 
 /// The glow itself: two big soft lights in the corners, a third that wanders between
