@@ -37,6 +37,10 @@ struct RootView: View {
             }
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: store.toast)
+        .sheet(isPresented: $store.showDemoTour) {
+            DemoTourSheet()
+                .environmentObject(store)
+        }
         .sheet(isPresented: $store.showNewTeammate) {
             NewTeammateSheet()
                 .demoBanner()
