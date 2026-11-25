@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 import UserNotifications
 
 /// The ••• button at the top of a chat: get a ping when the teammate is done, pick a wallpaper, share the chat as a
-/// Markdown file, copy it, or clear it.
+/// Markdown file or a PDF, copy it, or clear it.
 struct ChatMoreMenu: View {
     @EnvironmentObject private var store: SquallStore
     @ObservedObject private var doneWatch = DoneWatch.shared
@@ -35,6 +35,10 @@ struct ChatMoreMenu: View {
             Divider()
             ShareLink(item: transcript, preview: SharePreview(transcript.title, image: Image(systemName: "doc.text"))) {
                 Label("Share chat", systemImage: "square.and.arrow.up")
+            }
+            .disabled(messages.isEmpty)
+            ShareLink(item: pdf(messages), preview: SharePreview(transcript.title, image: Image(systemName: "doc.richtext"))) {
+                Label("Share as PDF", systemImage: "doc.richtext")
             }
             .disabled(messages.isEmpty)
             Button {
@@ -87,6 +91,13 @@ struct ChatMoreMenu: View {
         } else {
             store.showToast("\(current.name) isn't working right now.")
         }
+    }
+
+    private func pdf(_ messages: [ChatMessage]) -> ChatPDF {
+        var people: [String: ChatPDF.Who] = [:]
+        for teammate in store.bots { people[teammate.id] = ChatPDF.Who(name: teammate.name, hex: teammate.hex) }
+        people[bot.id] = ChatPDF.Who(name: bot.name, hex: bot.hex)
+        return ChatPDF(title: "Chat with \(bot.name)", messages: messages, people: people, accentHex: store.accentHex)
     }
 
     /// Every teammate's name by id, so a group chat says who wrote what.

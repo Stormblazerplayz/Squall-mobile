@@ -117,10 +117,13 @@ struct CodeBlockView: View {
     var size: Double = 15
     @State private var copied = false
     @AppStorage(CodeColors.wrapKey) private var wrap = false
+    @Environment(\.printing) private var printing
 
     var body: some View {
         let lines = code.isEmpty ? 1 : code.components(separatedBy: "\n").count
-        let showNumbers = !wrap && lines >= CodeColors.numbersFrom
+        // A page can't scroll sideways, so code on a page always wraps and has no buttons.
+        let wraps = wrap || printing
+        let showNumbers = !wraps && lines >= CodeColors.numbersFrom
         let font = Font.system(size: max(11, size - 2), design: .monospaced)
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
@@ -137,7 +140,7 @@ struct CodeBlockView: View {
                         .foregroundStyle(Theme.muted)
                 }
                 Spacer(minLength: 8)
-                if lines > 1 {
+                if lines > 1, !printing {
                     Button {
                         withAnimation(.easeOut(duration: 0.2)) { wrap.toggle() }
                     } label: {
@@ -150,27 +153,29 @@ struct CodeBlockView: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel(wrap ? "Stop wrapping lines" : "Wrap lines")
                 }
-                Button {
-                    UIPasteboard.general.string = code
-                    withAnimation(.easeOut(duration: 0.15)) { copied = true }
-                    Task {
-                        try? await Task.sleep(for: .seconds(1.6))
-                        withAnimation(.easeOut(duration: 0.15)) { copied = false }
+                if !printing {
+                    Button {
+                        UIPasteboard.general.string = code
+                        withAnimation(.easeOut(duration: 0.15)) { copied = true }
+                        Task {
+                            try? await Task.sleep(for: .seconds(1.6))
+                            withAnimation(.easeOut(duration: 0.15)) { copied = false }
+                        }
+                    } label: {
+                        Label(copied ? "Copied" : "Copy", systemImage: copied ? "checkmark" : "doc.on.doc")
+                            .font(.system(size: 11.5, weight: .semibold))
+                            .foregroundStyle(copied ? Theme.green : Theme.sub)
+                            .frame(minHeight: 28)
+                            .contentShape(Rectangle())
                     }
-                } label: {
-                    Label(copied ? "Copied" : "Copy", systemImage: copied ? "checkmark" : "doc.on.doc")
-                        .font(.system(size: 11.5, weight: .semibold))
-                        .foregroundStyle(copied ? Theme.green : Theme.sub)
-                        .frame(minHeight: 28)
-                        .contentShape(Rectangle())
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(copied ? "Copied" : "Copy code")
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(copied ? "Copied" : "Copy code")
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 3)
             .background(Color.white.opacity(0.05))
-            if wrap {
+            if wraps {
                 Text(CodeColors.styled(code, language: language))
                     .font(font)
                     .fixedSize(horizontal: false, vertical: true)
@@ -214,9 +219,22 @@ struct TableBlockView: View {
     let rows: [[String]]
     var size: Double = 15
     var tint: Color = Color(hex: Theme.defaultAccentHex)
+    @Environment(\.printing) private var printing
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
+        Group {
+            // A page can't scroll sideways, so a table on a page is drawn as it is.
+            if printing {
+                grid.frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) { grid }
+            }
+        }
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(0.04)))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Color.white.opacity(0.1), lineWidth: 1))
+    }
+
+    private var grid: some View {
             Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 7) {
                 GridRow {
                     ForEach(Array(header.enumerated()), id: \.offset) { _, cell in
@@ -242,8 +260,5 @@ struct TableBlockView: View {
                 }
             }
             .padding(10)
-        }
-        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(0.04)))
-        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Color.white.opacity(0.1), lineWidth: 1))
     }
 }
