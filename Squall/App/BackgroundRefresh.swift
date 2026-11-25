@@ -76,6 +76,7 @@ final class SquallAppDelegate: NSObject, UIApplicationDelegate {
     }
 
     /// iPhone stays upright except on Squall Uno's big screen, which can turn sideways (see UnoOrientation).
+    @MainActor
     func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
         UIDevice.current.userInterfaceIdiom == .phone ? UnoOrientation.phoneMask : .all
     }
