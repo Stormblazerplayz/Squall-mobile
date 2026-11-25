@@ -36,7 +36,12 @@ enum Theme {
         ("Blue", 0x2F6FD0),
         ("Teal", 0x0D7D6B),
         ("Orange", 0xB4472F),
-        ("Pink", 0xB23A7A)
+        ("Pink", 0xB23A7A),
+        ("Indigo", 0x4F46E5),
+        ("Sky", 0x0284C7),
+        ("Green", 0x15803D),
+        ("Red", 0xC0392B),
+        ("Violet", 0x8B3FD9)
     ]
 
     /// Widest the main content gets on a big screen (iPad). Phones are narrower, so this never kicks in there.

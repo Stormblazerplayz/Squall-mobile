@@ -456,25 +456,8 @@ struct SettingsView: View {
 
     private var lookSection: some View {
         card {
-            rowTitle("Accent color")
-            HStack(spacing: 12) {
-                ForEach(Theme.accentChoices.indices, id: \.self) { index in
-                    let choice = Theme.accentChoices[index]
-                    let isOn = choice.hex == store.accentHex
-                    Button {
-                        store.accentHex = choice.hex
-                    } label: {
-                        Circle()
-                            .fill(Color(hex: choice.hex))
-                            .frame(width: 34, height: 34)
-                            .overlay(Circle().stroke(Color.white, lineWidth: isOn ? 2.5 : 0))
-                            .frame(width: 44, height: 44)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(choice.name)
-                    .accessibilityAddTraits(isOn ? .isSelected : [])
-                }
-            }
+            rowTitle("Accent color", "Colors your buttons, switches and glow")
+            AccentPicker(selection: $store.accentHex)
             line
             rowTitle("App icon", "How Squall looks on your Home Screen")
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 76), spacing: 10)], spacing: 12) {
