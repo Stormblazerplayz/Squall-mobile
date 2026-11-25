@@ -33,7 +33,7 @@ struct StarredButton: View {
     }
 }
 
-/// Copy, Copy as plain text, Star, Pin, Select, Remind me, Reply with quote, Forward to, Save as prompt, Share and Share as picture on a long press of a
+/// React, Copy, Copy as plain text, Star, Pin, Select, Remind me, Reply with quote, Forward to, Save as prompt, Share and Share as picture on a long press of a
 /// message. Star, Remind me and Reply need the chat it's in, so a message shown without one (like in a group) gets the rest.
 struct MessageMenu: ViewModifier {
     let message: ChatMessage
@@ -53,6 +53,13 @@ struct MessageMenu: ViewModifier {
         } else {
             let plain = Markdown.plain(words)
             content.contextMenu {
+                if let chatID, StarredMessages.canStar(message) {
+                    Menu {
+                        ReactionChoices(chatID: chatID, messageID: message.id)
+                    } label: {
+                        Label("React", systemImage: "face.smiling")
+                    }
+                }
                 Button {
                     UIPasteboard.general.string = words
                     store.showToast("Copied.")

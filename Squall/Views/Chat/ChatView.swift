@@ -633,6 +633,7 @@ struct MessageView: View {
                     .padding(.vertical, 10)
                     .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(store.accent))
                     .messageMenu(message, chatID: chatID, authorName: "You")
+                    .reactionBadge(chatID: chatID, messageID: message.id, tint: store.accent, trailing: true)
                 if showTimes || isStarred {
                     HStack(spacing: 4) {
                         if isStarred { starMark }
@@ -690,6 +691,7 @@ struct MessageView: View {
             .padding(12)
             .glassCard(radius: 16, tint: who.hex, strength: 0.1)
             .messageMenu(message, chatID: chatID, authorName: who.name)
+            .reactionBadge(chatID: chatID, messageID: message.id, tint: who.color, trailing: false)
             Spacer(minLength: 20)
         }
         .padding(.top, continued ? -6 : 0)
