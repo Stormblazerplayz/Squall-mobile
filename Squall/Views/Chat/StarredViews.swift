@@ -33,8 +33,8 @@ struct StarredButton: View {
     }
 }
 
-/// Copy, Copy as plain text, Star, Save as prompt and Share on a long press of a message. Star needs the chat it's in, so a message
-/// shown without one (like in a group) gets the rest.
+/// Copy, Copy as plain text, Star, Remind me, Save as prompt and Share on a long press of a message. Star and Remind me need the
+/// chat it's in, so a message shown without one (like in a group) gets the rest.
 struct MessageMenu: ViewModifier {
     let message: ChatMessage
     let chatID: String?
@@ -73,6 +73,9 @@ struct MessageMenu: ViewModifier {
                     } label: {
                         Label(on ? "Unstar" : "Star", systemImage: on ? "star.slash" : "star")
                     }
+                }
+                if let chatID {
+                    RemindMeMenu(message: message, chatID: chatID, authorName: authorName, store: store)
                 }
                 if message.kind == .me {
                     Button {

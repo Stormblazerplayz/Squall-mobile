@@ -230,6 +230,7 @@ private struct ChatHeader: View {
             .accessibilityLabel(store.work(for: bot.id) != nil ? "Watch \(bot.name) work live" : "Show live work")
             SavedPromptsButton(bot: bot)
             StarredButton(bot: bot)
+            RemindersButton(bot: bot)
             WorkTimerButton(bot: bot)
             Button {
                 confirmClear = true
