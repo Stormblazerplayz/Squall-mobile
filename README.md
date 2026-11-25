@@ -53,6 +53,7 @@ Tabs along the bottom:
 - **Chat wallpaper**: dots, grid, waves, stars or stripes behind a chat, in the teammate's color ([docs](docs/chat-wallpaper.md)).
 - **Bubble shape**: Round, Tails or Square message bubbles, in Settings under Chat ([docs](docs/bubble-shape.md)).
 - **Big emoji**: a message that's only one to three emoji shows big ([docs](docs/big-emoji.md)).
+- **@mentions**: @Rex shows bold in chats and opens Rex's chat on a tap ([docs](docs/mentions.md)).
 - **Inbox**: things that need you (OKs and questions from your bots), problems and finished work. Allow, Deny, pick, Clear, and filters.
 - **Board**: every bot as a card with Chat, Steps and hand-off. A bot with a job running has Watch live.
 - **Routines**: routines that wake a bot on a schedule, with on/off switches. Long-press one to delete it.

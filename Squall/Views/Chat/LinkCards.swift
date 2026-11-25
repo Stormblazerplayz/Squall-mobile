@@ -129,8 +129,9 @@ private struct LinkCardRow: View {
 
 extension ChatLinks {
     /// Your own message with its links tappable and underlined, since they're the same color as the words.
-    static func mine(_ text: String) -> AttributedString {
-        var out = linked(AttributedString(text))
+    /// @mentions of teammates are bold and open their chat.
+    static func mine(_ text: String, mentions: [String: String] = [:]) -> AttributedString {
+        var out = Mentions.linked(linked(AttributedString(text)), targets: mentions)
         let ranges = out.runs.compactMap { run -> Range<AttributedString.Index>? in
             run.link == nil ? nil : run.range
         }

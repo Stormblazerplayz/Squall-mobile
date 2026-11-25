@@ -589,10 +589,12 @@ struct MessageView: View {
             mine
                 .swipeToReply(message, chatID: chatID, authorName: "You", tint: store.accent)
                 .selectableMessage(message, chatID: chatID, tint: store.accent)
+                .mentionTaps()
         case .bot:
             theirs
                 .swipeToReply(message, chatID: chatID, authorName: author.name, tint: author.color)
                 .selectableMessage(message, chatID: chatID, tint: author.color)
+                .mentionTaps()
         case .error(let count):
             ErrorBubble(message: message, count: count)
         case .handoff(let fromName, let fromHex, let note):
@@ -636,7 +638,7 @@ struct MessageView: View {
                             .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 14, style: .continuous))
                             .transition(.scale(scale: 0.4).combined(with: .opacity))
                     } else {
-                        Text(ChatLinks.mine(message.text))
+                        Text(ChatLinks.mine(message.text, mentions: Mentions.targets(store.bots)))
                             .font(.system(size: textSize))
                             .foregroundStyle(.white)
                             .tint(.white)

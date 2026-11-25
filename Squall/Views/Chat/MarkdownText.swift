@@ -9,6 +9,7 @@ struct MarkdownText: View {
     var color: Color = Theme.text
     /// The bot's color, for quote bars, bullets and links.
     var tint: Color = Color(hex: Theme.defaultAccentHex)
+    @Environment(\.mentionTargets) private var mentionTargets
 
     var body: some View {
         let blocks = Markdown.blocks(text)
@@ -84,15 +85,16 @@ struct MarkdownText: View {
 
     private func inline(_ text: String, size: Double? = nil, weight: Font.Weight = .regular, color: Color? = nil) -> some View {
         let fontSize = size ?? self.size
-        return Text(MarkdownText.styled(text, size: fontSize))
+        return Text(MarkdownText.styled(text, size: fontSize, mentions: mentionTargets))
             .font(.system(size: fontSize, weight: weight))
             .foregroundStyle(color ?? self.color)
             .fixedSize(horizontal: false, vertical: true)
     }
 
-    /// Inline Markdown with `code` in a monospaced font on a soft background, and bare web links made tappable.
-    static func styled(_ text: String, size: Double) -> AttributedString {
-        var out = ChatLinks.linked(Markdown.inline(text))
+    /// Inline Markdown with `code` in a monospaced font on a soft background, bare web links made tappable, and
+    /// @mentions of teammates bold and tappable when `mentions` has the team.
+    static func styled(_ text: String, size: Double, mentions: [String: String] = [:]) -> AttributedString {
+        var out = Mentions.linked(ChatLinks.linked(Markdown.inline(text)), targets: mentions)
         let codeRanges = out.runs.compactMap { run -> Range<AttributedString.Index>? in
             guard let intent = run.inlinePresentationIntent, intent.contains(.code) else { return nil }
             return run.range
