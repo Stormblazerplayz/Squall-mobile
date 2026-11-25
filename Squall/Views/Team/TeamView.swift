@@ -30,13 +30,19 @@ struct TeamView: View {
                                 quickActions
                             }
                             .frame(width: 380)
-                            teamSection
-                                .frame(maxWidth: .infinity)
+                            VStack(spacing: 18) {
+                                teamSection
+                                // Each agent's own computer, right after the team.
+                                UnoTeamSection(isWide: true)
+                            }
+                            .frame(maxWidth: .infinity)
                         }
                     } else {
                         ChiefCard(showSteps: $showChiefSteps)
                         quickActions
                         teamSection
+                        // Each agent's own computer, right after the team.
+                        UnoTeamSection()
                     }
                 }
                 .padding(.horizontal, isWide ? 24 : 16)

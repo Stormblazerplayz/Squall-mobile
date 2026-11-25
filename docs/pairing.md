@@ -249,6 +249,38 @@ Answer `200` with `{"ok": true}`. When something new was made, add its id: `{"ok
 
 If the desktop doesn't know a `type`, answer `{"ok": false, "error": "..."}` or `501`; the phone shows the message.
 
+## Squall Uno
+
+Squall Uno lets every agent (Chief and each bot) use its own small computer inside Squall on the PC, while you watch live on the phone. The PC side is described in full in the desktop repo's `docs/squall-uno.md`; this is what the phone uses. Both calls take the same bearer token as everything else.
+
+The Team tab lists each agent's computer right after the team, with a pulsing red dot while Squall Uno is working on it. Tapping one opens the live view (`squall://uno/<agent id>` opens it too; plain `squall://uno` opens Chief's).
+
+### `POST /api/v1/uno`
+
+The body is `{"op": "...", ...}`. A failed op answers `{"ok": false, "error": "Plain sentence"}` and the phone shows the sentence. An older desktop that doesn't know Squall Uno answers `404` (`{"error": "not_found"}`), and the phone says "Update Squall on your PC to use Squall Uno."
+
+| `op` | Fields | Answer |
+| --- | --- | --- |
+| `state` | `since` (feed number, default 0), `sessionId` (optional) | `{ok, settings, computers[], sessions[] (newest first), events[] (seq > since, oldest first, max 300), lastSeq}` |
+| `start` | `agentId` (`chief` or a bot id), `agentName`, `task` | `{ok, sessionId, computerId}` |
+| `message` | `sessionId`, `text` | `{ok}` |
+| `stop` | `sessionId` | `{ok}` |
+| `stopAll` | | `{ok, stopped}` |
+| `takeover` | `sessionId` | `{ok}` (the session's state becomes `you`) |
+| `input` | `computerId`, `action` (`left_click`, `double_click`, `right_click`, `type`, `key`, `scroll`), `x`, `y`, `text`, `direction` (`up`/`down`) | `{ok}` |
+| `handback` | `sessionId`, `note` (optional) | `{ok}` |
+| `saveKey` / `removeKey` | `key` (save only) | `{ok, settings}` |
+| `check` | | `{ok, text}` |
+| `setMaxSteps` | `value` (10 to 300) | `{ok, settings}` |
+
+Keys sent with `input` `key` are `Escape`, `Tab`, `Return` and `ctrl+z`. `x` and `y` are the computer's own pixels (its `width` × `height`); the phone maps your tap on the fitted picture back to them. The API key goes to the PC once with `saveKey` and is never kept on the phone; `settings` only carries a short `keyHint`.
+
+The phone asks for `state` about once a second while a Squall Uno screen is open (every 3 seconds while only the Team tab's list shows), passing the newest `lastSeq` it has as `since`, and keeps the last 300 events. If `lastSeq` ever goes down (Squall on the PC restarted), it starts again from 0. Nothing is asked while the app is in the background.
+
+### `GET /api/v1/uno/frame?computer=<id>&after=<seq>`
+
+The newest screen of one computer as `200 image/jpeg`, with `X-Uno-Frame` (its number), `X-Uno-Width`, `X-Uno-Height` and `X-Uno-Cursor` (`x,y`). `204` when there's nothing newer than `after`, `404 {"error": "no_computer"}` when the computer is off. The phone asks about 4 times a second, only while the live view or the take-the-wheel sheet is open.
+
 ## Safety
 
 - Codes are short-lived, single-use and limited to 5 tries.

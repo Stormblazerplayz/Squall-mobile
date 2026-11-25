@@ -8,6 +8,7 @@ struct SquallApp: App {
     @StateObject private var store = SquallStore()
     @StateObject private var pairing = PairingStore()
     @StateObject private var lock = AppLock()
+    @StateObject private var uno = UnoModel()
     @Environment(\.scenePhase) private var scenePhase
     @State private var cameFromBackground = true
 
@@ -27,6 +28,7 @@ struct SquallApp: App {
             .environmentObject(store)
             .environmentObject(pairing)
             .environmentObject(lock)
+            .environmentObject(uno)
             .preferredColorScheme(.dark)
             .animation(.easeOut(duration: 0.3), value: pairing.setupDone)
             // Links from Live Activities, like squall://live or squall://inbox.
@@ -43,6 +45,8 @@ struct SquallApp: App {
             // All data comes from the paired computer. This keeps asking it for updates,
             // and starts over whenever the phone is paired, re-paired or unpaired.
             .task(id: pairing.computer) {
+                // Squall Uno asks the same computer, only while its screens are open.
+                uno.attach(pairing)
                 await store.runSync(with: pairing)
             }
         }
@@ -51,6 +55,8 @@ struct SquallApp: App {
             case .background:
                 lock.appLeft()
                 cameFromBackground = true
+                // No Squall Uno screens or state while the app is away.
+                uno.setActive(false)
                 // Ask iOS to let Squall check the computer again in a while.
                 BackgroundRefresh.schedule()
             case .active:
@@ -59,6 +65,7 @@ struct SquallApp: App {
                 // And anything Siri or a Shortcut asked for, like "Call Chief".
                 store.handleIntentRequests()
                 store.refreshNow()
+                uno.setActive(true)
                 Task { await SquallAlerts.shared.refreshPermission() }
                 // Only ask on the way back in, so cancelling Face ID doesn't loop.
                 if cameFromBackground {

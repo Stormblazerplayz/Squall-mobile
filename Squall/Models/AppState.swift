@@ -37,6 +37,9 @@ enum Route: Hashable {
     case group
     case newRoutine
     case mission
+    /// Squall Uno's live view of one agent's computer ("chief" or a bot's id).
+    case uno(String)
+    case unoSettings
 }
 
 enum ToastAction: Equatable {

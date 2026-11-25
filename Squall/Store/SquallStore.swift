@@ -589,6 +589,11 @@ final class SquallStore: ObservableObject {
             showCall = true
         case "settings":
             if path.last != .settings { path = [.settings] }
+        case "uno":
+            // squall://uno opens Chief's computer; squall://uno/<bot id> opens that bot's.
+            let agentID = url.pathComponents.first(where: { $0 != "/" }) ?? Bot.chiefID
+            let target = Route.uno(agentID == Bot.chiefID || bot(agentID) != nil ? agentID : Bot.chiefID)
+            if path.last != target { path = [target] }
         default:
             break
         }

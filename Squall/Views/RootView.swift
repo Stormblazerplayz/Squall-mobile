@@ -101,6 +101,10 @@ struct RootView: View {
             connected { RoutineEditorView() }.navigationTitle("New routine").pushedScreen()
         case .mission:
             connected { MissionControlView() }.navigationTitle("Mission control").pushedScreen()
+        case .uno(let agentId):
+            connected { UnoLiveView(agentId: agentId) }.navigationTitle("Squall Uno").pushedScreen()
+        case .unoSettings:
+            connected { UnoSettingsView() }.navigationTitle("Squall Uno settings").pushedScreen()
         }
     }
 

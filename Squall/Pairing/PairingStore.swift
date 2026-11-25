@@ -161,6 +161,27 @@ final class PairingStore: ObservableObject {
         return try await client.action(computer, token: token, action: action)
     }
 
+    // MARK: Squall Uno
+
+    /// Squall Uno's calls. Most answer quickly; starting a computer or checking the key can take a while.
+    private let unoClient = PairingClient(timeout: 10)
+    private let unoSlowClient = PairingClient(timeout: 60)
+
+    /// Sends one Squall Uno op (JSON body) and gives back the answer's JSON. See UnoClient.
+    func unoOp(_ body: Data, slow: Bool = false) async throws -> Data {
+        guard let computer else { throw UnoError.notPaired }
+        guard let token = KeychainStore.read(account: Self.tokenAccount) else { throw PairingError.tokenRejected }
+        let client = slow ? unoSlowClient : unoClient
+        return try await client.unoOp(computer, token: token, body: body)
+    }
+
+    /// The newest frame of a Squall Uno computer's screen, or nil when there's nothing newer than `after`.
+    func unoFrame(computerId: String, after: Int) async throws -> UnoFrame? {
+        guard let computer else { throw UnoError.notPaired }
+        guard let token = KeychainStore.read(account: Self.tokenAccount) else { throw PairingError.tokenRejected }
+        return try await unoClient.unoFrame(computer, token: token, computerId: computerId, after: after)
+    }
+
     /// Forgets the computer on this phone, and asks the computer to forget this phone too.
     func unpair() async {
         guard let computer, !busy else { return }
