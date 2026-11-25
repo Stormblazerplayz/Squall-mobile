@@ -10,10 +10,14 @@ struct ChatLinksSheet: View {
     let bot: Bot
     let messages: [ChatMessage]
     @State private var words = ""
+    /// The site chip that's picked, or nil for every site.
+    @State private var site: String?
 
     var body: some View {
         let all = ChatLinkList.entries(messages)
-        let shown = ChatLinkList.filter(all, words: words)
+        let sites = ChatLinkList.sites(all)
+        let picked = sites.contains(where: { $0.name == site }) ? site : nil
+        let shown = ChatLinkList.filter(ChatLinkList.only(all, site: picked), words: words)
         NavigationStack {
             Group {
                 if all.isEmpty {
@@ -22,6 +26,11 @@ struct ChatLinksSheet: View {
                     empty("No links match", "Try other words.")
                 } else {
                     List {
+                        if sites.count >= 2 {
+                            siteChips(sites, picked: picked)
+                                .listRowBackground(Color.clear)
+                                .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+                        }
                         Section {
                             ForEach(shown) { entry in
                                 row(entry)
@@ -101,6 +110,51 @@ struct ChatLinksSheet: View {
                 Label("Go to message", systemImage: "text.bubble")
             }
         }
+    }
+
+    /// A row of site chips: All, then each site with how many links it has.
+    private func siteChips(_ sites: [ChatLinkList.Site], picked: String?) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                chip("All", count: nil, on: picked == nil) { site = nil }
+                ForEach(sites) { item in
+                    chip(item.name, count: item.count, on: picked == item.name) {
+                        site = picked == item.name ? nil : item.name
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
+        }
+    }
+
+    private func chip(_ title: String, count: Int?, on: Bool, action: @escaping () -> Void) -> some View {
+        Button {
+            withAnimation(.easeOut(duration: 0.15), action)
+        } label: {
+            HStack(spacing: 5) {
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .lineLimit(1)
+                if let count {
+                    Text("\(count)")
+                        .font(.system(size: 11.5, weight: .bold))
+                        .foregroundStyle(on ? Theme.textBright.opacity(0.8) : Theme.muted)
+                }
+            }
+            .foregroundStyle(on ? Theme.textBright : Theme.sub)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(Capsule().fill(on ? bot.color.opacity(0.35) : Color.white.opacity(0.07)))
+            .overlay(Capsule().stroke(on ? bot.color.opacity(0.7) : Color.clear, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(chipLabel(title, count: count))
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+
+    private func chipLabel(_ title: String, count: Int?) -> String {
+        guard let count else { return "All sites" }
+        return "\(title), \(count) \(count == 1 ? "link" : "links")"
     }
 
     private func empty(_ title: String, _ detail: String) -> some View {

@@ -35,4 +35,13 @@ final class ChatLinkListTests: XCTestCase {
         XCTAssertEqual(ChatLinkList.summary(list), "3 links · 2 sites")
         XCTAssertEqual(ChatLinkList.summary([]), "0 links · 0 sites")
     }
+
+    func testSites() {
+        let list = ChatLinkList.entries(messages)
+        XCTAssertEqual(ChatLinkList.sites(list).map(\.name), ["github.com", "localhost:3000"])
+        XCTAssertEqual(ChatLinkList.sites(list).map(\.count), [2, 1])
+        XCTAssertEqual(ChatLinkList.only(list, site: "localhost:3000").map(\.messageID), ["2"])
+        XCTAssertEqual(ChatLinkList.only(list, site: nil).count, 3)
+        XCTAssertEqual(ChatLinkList.sites([]), [])
+    }
 }

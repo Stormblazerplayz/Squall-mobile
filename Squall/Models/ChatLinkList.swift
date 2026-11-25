@@ -45,6 +45,26 @@ enum ChatLinkList {
         }
     }
 
+    struct Site: Equatable, Identifiable {
+        let name: String
+        let count: Int
+        var id: String { name }
+    }
+
+    /// The sites linked to, most links first, then by name.
+    static func sites(_ entries: [Entry]) -> [Site] {
+        var counts: [String: Int] = [:]
+        for entry in entries { counts[entry.card.site, default: 0] += 1 }
+        return counts.map { Site(name: $0.key, count: $0.value) }
+            .sorted { $0.count != $1.count ? $0.count > $1.count : $0.name < $1.name }
+    }
+
+    /// Only the links to one site, or all of them when no site is picked.
+    static func only(_ entries: [Entry], site: String?) -> [Entry] {
+        guard let site else { return entries }
+        return entries.filter { $0.card.site == site }
+    }
+
     /// "4 links · 2 sites".
     static func summary(_ entries: [Entry]) -> String {
         let sites = Set(entries.map(\.card.site)).count
