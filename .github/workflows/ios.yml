@@ -47,6 +47,16 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v4
 
+      - name: Check App Intent descriptions
+        run: |
+          # Apple turns away a build (ITMS-90626) when an App Intent's description says "Siri",
+          # even though the upload itself says it succeeded. Catch it here instead.
+          if grep -rniE 'IntentDescription\([^)]*siri' --include='*.swift' Squall Shared SquallActivities; then
+            echo "::error::An App Intent description above says Siri. Apple rejects those builds (ITMS-90626), so reword it."
+            exit 1
+          fi
+          echo "No App Intent description says Siri."
+
       - name: Check for Apple secrets
         id: signing
         run: |
