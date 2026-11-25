@@ -33,7 +33,7 @@ struct StarredButton: View {
     }
 }
 
-/// Copy, Copy as plain text, Star, Pin, Remind me, Reply with quote, Forward to, Save as prompt and Share on a long press of a
+/// Copy, Copy as plain text, Star, Pin, Select, Remind me, Reply with quote, Forward to, Save as prompt and Share on a long press of a
 /// message. Star, Remind me and Reply need the chat it's in, so a message shown without one (like in a group) gets the rest.
 struct MessageMenu: ViewModifier {
     let message: ChatMessage
@@ -102,6 +102,15 @@ struct MessageMenu: ViewModifier {
                         store.showToast(now ? "Pinned to the top of the chat." : "Unpinned.")
                     } label: {
                         Label(on ? "Unpin" : "Pin", systemImage: on ? "pin.slash" : "pin")
+                    }
+                }
+                if let chatID, ChatSelection.canSelect(message) {
+                    Button {
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            ChatSelection.shared.start(chatID: chatID, messageID: message.id)
+                        }
+                    } label: {
+                        Label("Select", systemImage: "checkmark.circle")
                     }
                 }
                 if let chatID {

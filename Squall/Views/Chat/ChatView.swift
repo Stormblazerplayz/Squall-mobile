@@ -139,6 +139,7 @@ struct ChatView: View {
                         .animation(.easeOut(duration: 0.2), value: showJump)
                         .pinchToResizeText(tint: bot.color)
                     }
+                    SelectionBar(chatID: bot.id)
                     SlashPromptBar(draft: $draft, botName: bot.name, tint: bot.color)
                     inputBar(bot)
                 }
@@ -584,9 +585,11 @@ struct MessageView: View {
         case .me:
             mine
                 .swipeToReply(message, chatID: chatID, authorName: "You", tint: store.accent)
+                .selectableMessage(message, chatID: chatID, tint: store.accent)
         case .bot:
             theirs
                 .swipeToReply(message, chatID: chatID, authorName: author.name, tint: author.color)
+                .selectableMessage(message, chatID: chatID, tint: author.color)
         case .error(let count):
             ErrorBubble(message: message, count: count)
         case .handoff(let fromName, let fromHex, let note):
