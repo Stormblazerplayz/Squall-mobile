@@ -46,6 +46,16 @@ enum ChatProblemList {
         return ([ask, ""] + lines).joined(separator: "\n") + "\n\n"
     }
 
+    /// Every problem as text, oldest first like the chat reads, each with when it happened and how many times.
+    static func report(_ entries: [Entry], name: String) -> String {
+        entries.reversed().map { entry in
+            let when = entry.at.map { TeamHistory.dayTitle($0) + ", " + TeamHistory.clock($0) } ?? entry.time
+            let times = entry.count > 1 ? " (\(entry.count) times)" : ""
+            let head = when.isEmpty ? "\(name)\(times)" : "\(name), \(when)\(times)"
+            return head + ":\n" + entry.text
+        }.joined(separator: "\n\n")
+    }
+
     /// "3 problems · 7 times", or "No problems".
     static func summary(_ entries: [Entry]) -> String {
         guard !entries.isEmpty else { return "No problems" }

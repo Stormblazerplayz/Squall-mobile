@@ -49,6 +49,24 @@ struct ChatProblemsSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
                 }
+                if !all.isEmpty {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Menu {
+                            Button {
+                                UIPasteboard.general.string = ChatProblemList.report(all, name: bot.name)
+                                store.showToast(all.count == 1 ? "Problem copied." : "\(all.count) problems copied.")
+                            } label: {
+                                Label("Copy all problems", systemImage: "doc.on.doc")
+                            }
+                            ShareLink(item: ChatProblemList.report(all, name: bot.name)) {
+                                Label("Share the problems", systemImage: "square.and.arrow.up")
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis.circle")
+                        }
+                        .accessibilityLabel("Problem actions")
+                    }
+                }
             }
         }
         .presentationDetents([.medium, .large])

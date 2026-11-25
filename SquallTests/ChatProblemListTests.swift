@@ -34,4 +34,11 @@ final class ChatProblemListTests: XCTestCase {
                        "This problem happened 3 times. Can you find out why and fix it?\n\n> Network down\n\n")
         XCTAssertTrue(ChatProblemList.askDraft(list[0]).hasSuffix("\n\n>\n\n"))
     }
+
+    func testReport() {
+        let list = Array(ChatProblemList.entries(messages).suffix(2))
+        XCTAssertEqual(ChatProblemList.report(list, name: "Rex"),
+                       "Rex, 9:00 AM:\nBuild failed: missing file\nat line 4\n\nRex, 9:10 AM (3 times):\nNetwork down")
+        XCTAssertEqual(ChatProblemList.report([], name: "Rex"), "")
+    }
 }
