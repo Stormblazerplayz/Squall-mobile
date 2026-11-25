@@ -81,6 +81,7 @@ Tabs along the bottom:
 - **Browse shortcuts**: ⌘⇧L, ⌘⇧C, ⌘⇧T and ⌘⇧I open a chat's Links, Code, To-dos and Chat stats ([docs](docs/chat-shortcuts.md)).
 - **Stats tiles for lists**: Chat stats shows how many links, code blocks and to-dos a chat has, and opens each list ([docs](docs/chat-stats.md)).
 - **Copy all links**: copy or share every link shown in Links in this chat ([docs](docs/chat-links.md)).
+- **Copy all code**: copy or share every code block shown in Code in this chat ([docs](docs/chat-code.md)).
 - **Inbox**: things that need you (OKs and questions from your bots), problems and finished work. Allow, Deny, pick, Clear, and filters.
 - **Board**: every bot as a card with Chat, Steps and hand-off. A bot with a job running has Watch live.
 - **Routines**: routines that wake a bot on a schedule, with on/off switches. Long-press one to delete it.

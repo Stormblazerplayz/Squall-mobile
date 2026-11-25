@@ -50,6 +50,30 @@ struct ChatCodeSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
                 }
+                if !shown.isEmpty {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Menu {
+                            Button {
+                                UIPasteboard.general.string = CodePieces.all(ChatCodeList.readingOrder(shown).map(\.piece))
+                                store.showToast("Code copied.")
+                            } label: {
+                                Label("Copy all code shown", systemImage: "doc.on.doc")
+                            }
+                            Button {
+                                UIPasteboard.general.string = ChatCodeList.markdown(shown)
+                                store.showToast("Copied as Markdown.")
+                            } label: {
+                                Label("Copy as Markdown", systemImage: "text.alignleft")
+                            }
+                            ShareLink(item: ChatCodeList.markdown(shown)) {
+                                Label("Share the code", systemImage: "square.and.arrow.up")
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis.circle")
+                        }
+                        .accessibilityLabel("Code actions")
+                    }
+                }
             }
         }
         .presentationDetents([.medium, .large])

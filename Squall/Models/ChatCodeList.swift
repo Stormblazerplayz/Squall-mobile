@@ -76,6 +76,24 @@ enum ChatCodeList {
         return entries.filter { languageName($0) == language }
     }
 
+    /// Every block shown as one Markdown text, each fenced with its language, oldest first like the chat reads.
+    static func markdown(_ entries: [Entry]) -> String {
+        readingOrder(entries).map { "```" + $0.piece.language + "\n" + $0.piece.code + "\n```" }.joined(separator: "\n\n")
+    }
+
+    /// The list turned back into the order the chat reads: oldest message first, blocks in order inside each message.
+    static func readingOrder(_ entries: [Entry]) -> [Entry] {
+        var chunks: [[Entry]] = []
+        for entry in entries {
+            if let last = chunks.last?.last, last.messageID == entry.messageID {
+                chunks[chunks.count - 1].append(entry)
+            } else {
+                chunks.append([entry])
+            }
+        }
+        return chunks.reversed().flatMap { $0 }
+    }
+
     /// "5 code blocks · 120 lines".
     static func summary(_ entries: [Entry]) -> String {
         let lines = entries.reduce(0) { $0 + $1.piece.lines }

@@ -39,4 +39,11 @@ final class ChatCodeListTests: XCTestCase {
         XCTAssertEqual(ChatCodeList.only(list, language: "Python").map(\.id), ["1-0-1", "8-0-1"])
         XCTAssertEqual(ChatCodeList.only(list, language: nil).count, 5)
     }
+
+    func testMarkdownIsInReadingOrder() {
+        let list = ChatCodeList.entries(messages)
+        XCTAssertEqual(ChatCodeList.readingOrder(list).map(\.id), ["1-0-1", "2-0-1", "2-0-2"])
+        XCTAssertEqual(ChatCodeList.markdown(Array(list.prefix(2))), "```bash\nnpm test\n```\n\n```swift\nlet a = 1\nlet b = 2\n```")
+        XCTAssertEqual(ChatCodeList.markdown([]), "")
+    }
 }
