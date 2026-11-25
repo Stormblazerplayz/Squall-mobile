@@ -91,6 +91,25 @@ final class StarredMessages: ObservableObject {
         return true
     }
 
+    /// Adds stars from a backup that aren't here yet, newest star first. Returns how many were added.
+    @discardableResult
+    func merge(_ incoming: [Item]) -> Int {
+        var seen = ids
+        var added: [Item] = []
+        for item in incoming where !item.text.isEmpty && seen.insert(item.id).inserted {
+            added.append(Item(id: item.id, chatID: item.chatID, messageID: item.messageID, author: item.author,
+                              authorName: item.authorName, text: String(item.text.prefix(Self.maxLength)),
+                              time: item.time, savedAt: item.savedAt))
+        }
+        guard !added.isEmpty else { return 0 }
+        let all = (items + added).sorted { $0.savedAt > $1.savedAt }
+        let kept = Array(all.prefix(Self.maxItems))
+        let keptIDs = Set(kept.map(\.id))
+        items = kept
+        save()
+        return added.filter { keptIDs.contains($0.id) }.count
+    }
+
     func remove(_ id: String) {
         guard ids.contains(id) else { return }
         items.removeAll { $0.id == id }

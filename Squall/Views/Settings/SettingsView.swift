@@ -719,6 +719,8 @@ struct SettingsView: View {
 
     private var dataSection: some View {
         card {
+            BackupRow()
+            line
             ShareLink(item: store.chatExport, preview: SharePreview("Squall chats")) {
                 Label("Export chats", systemImage: "square.and.arrow.up")
             }

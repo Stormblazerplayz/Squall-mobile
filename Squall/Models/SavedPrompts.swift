@@ -160,6 +160,26 @@ final class SavedPrompts: ObservableObject {
         return Self.fill(items[index].text, name: name, now: now)
     }
 
+    /// Adds prompts from a backup that aren't here yet (by their words), up to the limit. Returns how many were added.
+    @discardableResult
+    func merge(_ incoming: [Item]) -> Int {
+        var texts = Set(items.map(\.text))
+        var ids = Set(items.map(\.id))
+        var added = 0
+        for item in incoming {
+            guard items.count < Self.maxItems else { break }
+            let text = Self.cleanText(item.text)
+            guard !text.isEmpty, texts.insert(text).inserted else { continue }
+            let id = ids.insert(item.id).inserted ? item.id : UUID().uuidString
+            ids.insert(id)
+            items.append(Item(id: id, title: Self.cleanTitle(item.title, text: text), text: text,
+                              uses: max(item.uses, 0), lastUsed: item.lastUsed, created: item.created))
+            added += 1
+        }
+        if added > 0 { save() }
+        return added
+    }
+
     func remove(_ id: String) {
         items.removeAll { $0.id == id }
         save()
