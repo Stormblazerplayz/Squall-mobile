@@ -398,6 +398,7 @@ final class SquallStore: ObservableObject {
         if !newBots.isEmpty {
             ChatDrafts.shared.keepOnly(Set(newBots.map(\.id)))
             MessageReminders.shared.keepOnly(chats: Set(newBots.map(\.id)))
+            LastSeen.shared.keepOnly(chats: Set(newBots.map(\.id)))
         }
         InboxWidgetWriter.update(inbox: inbox, bots: newBots)
         LiveActivities.shared.sync(work: work, inbox: inbox, routines: routines, bots: bots, paused: pausedAll)
@@ -468,6 +469,7 @@ final class SquallStore: ObservableObject {
         DailyRecap.forget()
         ChatDrafts.shared.clear()
         MessageReminders.shared.clear()
+        LastSeen.shared.clear()
         InboxWidgetWriter.forget()
     }
 

@@ -16,6 +16,8 @@ struct ChatView: View {
     @State private var showJump = false
     /// The messages that were there when you scrolled up, so the button can count what's new.
     @State private var seenIDs = Set<String>()
+    /// Where the "New messages" line goes: the first message that came in since you last had this chat open.
+    @State private var newFromID: String?
     @AppStorage(Prefs.showTyping) private var showTyping = true
     @AppStorage(Prefs.sendOnReturn) private var sendOnReturn = false
     @AppStorage(Prefs.haptics) private var haptics = true
@@ -62,6 +64,9 @@ struct ChatView: View {
                                     // A line where a new day starts, from the message's real time.
                                     if let day = dividers[message.id] {
                                         DayDivider(text: day)
+                                    }
+                                    if message.id == newFromID {
+                                        NewMessagesLine(count: NewMessages.count(list, from: message.id))
                                     }
                                     MessageView(message: message, bot: bot, chatID: bot.id) { chip in
                                         store.send(chip)
@@ -144,6 +149,21 @@ struct ChatView: View {
         .onAppear {
             if draft.isEmpty { draft = ChatDrafts.shared.text(for: store.currentChat.id) }
         }
+        // "New messages": the line is worked out when a chat opens, and where you left off is kept as you read.
+        .onAppear { openNewLine(store.currentChat.id) }
+        .onChange(of: store.currentChat.id) { old, new in
+            LastSeen.shared.set(NewMessages.lastToRemember(store.messages(for: old)), for: old)
+            openNewLine(new)
+        }
+        .onChange(of: NewMessages.key(chatID: store.currentChat.id, lastID: store.messages(for: store.currentChat.id).last?.id)) { old, new in
+            switch NewMessages.change(from: old, to: new) {
+            case .firstLoad: openNewLine(store.currentChat.id)
+            case .more: if atBottom { rememberSeen() }
+            case .otherChat: break
+            }
+        }
+        .onChange(of: sentCount) { newFromID = nil }
+        .onDisappear { rememberSeen() }
         .onReceive(SavedPrompts.shared.$insert) { request in
             // A saved prompt picked from the header goes into the message box; what you'd typed stays in front of it.
             guard let request, request.chatID == store.currentChatID else { return }
@@ -152,6 +172,18 @@ struct ChatView: View {
             draft = typed.isEmpty ? request.text : typed + "\n" + request.text
             inputFocused = true
         }
+    }
+
+    /// Puts the "New messages" line above what came in since you last had this chat open, then counts it all as seen.
+    private func openNewLine(_ chatID: String) {
+        let list = store.messages(for: chatID)
+        newFromID = NewMessages.firstNew(list, lastSeen: LastSeen.shared.id(for: chatID))
+        LastSeen.shared.set(NewMessages.lastToRemember(list), for: chatID)
+    }
+
+    private func rememberSeen() {
+        let id = store.currentChat.id
+        LastSeen.shared.set(NewMessages.lastToRemember(store.messages(for: id)), for: id)
     }
 
     private func emptyState(_ bot: Bot) -> some View {
