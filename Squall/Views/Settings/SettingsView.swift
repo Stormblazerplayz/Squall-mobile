@@ -617,6 +617,8 @@ struct SettingsView: View {
             line
             FocusPingsRow()
             line
+            DailyRecapRow()
+            line
             SwitchRow(title: "Play a sound", isOn: $store.settings.notifySound, tint: store.accent)
             line
             SwitchRow(title: "Quiet hours", subtitle: quietSubtitle, isOn: $store.settings.quietHours, tint: store.accent)

@@ -392,6 +392,8 @@ final class SquallStore: ObservableObject {
         TeammateWidgetWriter.update(chats: snapshot.chats, bots: newBots)
         // Snoozes for things answered or cleared somewhere else go away.
         InboxSnooze.shared.keepOnly(Set(inbox.map(\.id)))
+        // The evening recap waits with today's real numbers (rebuilt every few minutes at most).
+        DailyRecap.update(bots: newBots)
         LiveActivities.shared.sync(work: work, inbox: inbox, routines: routines, bots: bots, paused: pausedAll)
     }
 
@@ -457,6 +459,7 @@ final class SquallStore: ObservableObject {
         TeammateWidgetWriter.forget()
         QuickActions.clear()
         InboxSnooze.shared.clear()
+        DailyRecap.forget()
     }
 
     /// Takes everything from the computer off the screens.
