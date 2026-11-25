@@ -718,6 +718,8 @@ struct SettingsView: View {
             SwitchRow(title: "Lock with \(lockMethod)", subtitle: "Asks every time you come back to Squall", isOn: $appLock, tint: store.accent)
             line
             SwitchRow(title: "Hide in app switcher", subtitle: "Covers your chats when you swipe between apps", isOn: $hideInSwitcher, tint: store.accent)
+            line
+            SpotlightRow()
         }
     }
 

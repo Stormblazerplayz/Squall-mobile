@@ -26,6 +26,7 @@ Tabs along the bottom:
 - **Ask with a saved prompt**: a Shortcuts action that sends a saved prompt to Chief or any bot and reads you the answer (see [docs/saved-prompt-shortcuts.md](docs/saved-prompt-shortcuts.md)).
 - **Remind me**: press and hold any message to get pinged about it later, with a bell on the chat while one is coming (see [docs/message-reminders.md](docs/message-reminders.md)).
 - **Real days in chats**: a line where each day starts (Today, Yesterday, Monday, Nov 23) and a Jump to latest pill that counts new messages while you read older ones (see [docs/chat-days.md](docs/chat-days.md)).
+- **iPhone Search**: starred messages and saved prompts show up in Search; a prompt opens Chief's chat ready to send (see [docs/spotlight-content.md](docs/spotlight-content.md)).
 - **Inbox**: things that need you (OKs and questions from your bots), problems and finished work. Allow, Deny, pick, Clear, and filters.
 - **Board**: every bot as a card with Chat, Steps and hand-off. A bot with a job running has Watch live.
 - **Routines**: routines that wake a bot on a schedule, with on/off switches. Long-press one to delete it.
