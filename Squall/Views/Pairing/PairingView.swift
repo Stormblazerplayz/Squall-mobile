@@ -155,27 +155,11 @@ struct PairingView: View {
     }
 
     private var scanFrame: some View {
-        RoundedRectangle(cornerRadius: 22, style: .continuous)
-            .stroke(store.accent.opacity(0.8), lineWidth: 2)
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(Color.white.opacity(0.85), style: StrokeStyle(lineWidth: 3, dash: [26, 140]))
-                    .frame(width: 190, height: 190)
-            )
-            .allowsHitTesting(false)
+        ScannerViewfinder(tint: store.accent, size: 200)
     }
 
     private var busyOverlay: some View {
-        ZStack {
-            Color.black.opacity(0.55)
-            VStack(spacing: 10) {
-                ProgressView().tint(.white)
-                Text("Pairing...")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.white)
-            }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        PairingBusyOverlay(tint: store.accent)
     }
 
     private func cameraMessage(title: String, text: String, showSettings: Bool) -> some View {
