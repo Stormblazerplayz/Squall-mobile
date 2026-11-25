@@ -15,8 +15,8 @@ enum InboxWidgetWriter {
         let problems = awake.filter { $0.kind == .error }
         let items = (needs + problems).prefix(InboxWidgetSnapshot.maxItems).map { item -> InboxWidgetSnapshot.Item in
             let bot = bots.first(where: { $0.id == item.botID })
-            let command = item.command?.trimmingCharacters(in: .whitespacesAndNewlines)
-                .flatMap { $0.isEmpty ? nil : String($0.prefix(InboxWidgetSnapshot.maxTitle)) }
+            let trimmed = item.command?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let command = trimmed.flatMap { $0.isEmpty ? nil : String($0.prefix(InboxWidgetSnapshot.maxTitle)) }
             return InboxWidgetSnapshot.Item(
                 id: item.id,
                 kind: kindKey(item.kind),
