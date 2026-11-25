@@ -208,7 +208,7 @@ Answer `200` with one JSON object. Every field is optional and anything unknown 
 | `bots` | Chief must have `id` `chief`. `color` is `#RRGGBB`. `status` is `working`, `idle`, `napping`, `waiting`, `handed` or `paused`. `unread` is a count. `progress` is 0 to 1. |
 | `chats` | Messages per chat id: a bot's id, or a group's id. `kind` is `me`, `bot`, `system`, `error` (with `count`) or `handoff` (with `fromName`, `fromColor`, `note`). `at` is an ISO 8601 time, or send `time` as ready-made text. |
 | `inbox` | `kind` is `ask` (Allow / Deny, optional `command`), `choice` (with `options`), `error` (optional `details`) or `done` (with `openLabel`, and `opens` `chat` or `live` plus `workId`). |
-| `routines` | `repeat` is `daily`, `weekdays` or `custom`. `days` has 7 entries, Monday first. `minutes` is minutes after midnight. `run` is there only while it's running. |
+| `routines` | `repeat` is `daily`, `weekdays` or `custom`. `days` has 7 entries, Monday first. `minutes` is minutes after midnight. `run` is there only while it's running. `lastRun` (optional, `"2026-11-25"`) is the day it last ran or was skipped, on the computer's clock: it doesn't run again that day. |
 | `work` | Jobs bots are doing. `state` is `working`, `waiting`, `paused`, `done` or `stopped`. Step `state` is `done`, `now` or `todo`. Line `kind` is `cmd`, `ok`, `warn`, `err`, `dim`, `text`, `add` or `del`. `askId` points at the Inbox item the job waits on. |
 | `handoffs` | Recent work passed between bots, newest first. |
 | `claudeCode` | The Claude Code version Chief uses. `updating` is 0 to 1 while an update runs. |
@@ -277,7 +277,7 @@ Answer `200` with `{"ok": true}`. When something new was made, add its id: `{"ok
 | `routine.save` | `routine` (same shape as in the state, with `id`) | Make or change a routine. |
 | `routine.toggle` | `routineId`, `isOn` | Turn a routine on or off. |
 | `routine.delete` | `routineId` | Delete a routine. |
-| `routine.skip` | `routineId` | Skip the run going on now (from the Lock Screen). |
+| `routine.skip` | `routineId` | Skip today's run (from Routines, or from the Lock Screen while it runs). |
 | `claudeCode.update` | | Update Claude Code on the computer. |
 | `settings.save` | `settings` (the phone's Chief, safety and notification settings) | Keep the desktop's rules in sync. |
 | `todo.add` | `text`, optional `botId` | Add to the To do list. With `botId`, that bot is told to do it now and it's marked doing. Reply with its `id`. |

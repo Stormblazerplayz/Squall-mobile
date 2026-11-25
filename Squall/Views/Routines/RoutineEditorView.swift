@@ -1,8 +1,37 @@
 import SwiftUI
 
-/// Make a new routine: who wakes up, what they do and when.
+/// Make a new routine, or change one: who wakes up, what they do and when.
 struct RoutineEditorView: View {
     @EnvironmentObject private var store: SquallStore
+
+    /// The routine being changed, or nil for a new one.
+    private let existing: Routine?
+    /// Runs once the computer has the saved routine (the edit sheet closes then).
+    private let onSaved: (() -> Void)?
+
+    init(existing: Routine? = nil, onSaved: (() -> Void)? = nil) {
+        self.existing = existing
+        self.onSaved = onSaved
+        if let existing {
+            _botID = State(initialValue: existing.botID)
+            _task = State(initialValue: existing.task)
+            _repeatMode = State(initialValue: existing.repeatMode)
+            _days = State(initialValue: existing.days.count == 7 ? existing.days : Array(repeating: true, count: 7))
+            _minutes = State(initialValue: existing.minutes)
+            _pingWhenDone = State(initialValue: existing.pingWhenDone)
+            _askBeforePush = State(initialValue: existing.askBeforePush)
+            _skipIfBusy = State(initialValue: existing.skipIfBusy)
+        }
+    }
+
+    /// The teammates to pick from, plus the routine's own bot when it's Chief.
+    private var pickerBots: [Bot] {
+        var list = store.teammates.isEmpty ? [store.chief] : store.teammates
+        if let current = store.bot(botID), !list.contains(where: { $0.id == current.id }) {
+            list.insert(current, at: 0)
+        }
+        return list
+    }
 
     @State private var botID = ""
     @State private var task = ""
@@ -93,13 +122,13 @@ struct RoutineEditorView: View {
         if bot == nil { return "Pick who wakes up first" }
         if !hasDay { return "Pick a day first" }
         if cleanTask.isEmpty { return "Add a job first" }
-        return "Save routine"
+        return existing == nil ? "Save routine" : "Save changes"
     }
 
     private var whoPicker: some View {
         ScrollView(.horizontal) {
             HStack(spacing: 12) {
-                ForEach(store.teammates.isEmpty ? [store.chief] : store.teammates) { teammate in
+                ForEach(pickerBots) { teammate in
                     let isOn = teammate.id == botID
                     Button {
                         withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) { botID = teammate.id }
@@ -234,16 +263,17 @@ struct RoutineEditorView: View {
     private func save() {
         guard canSave else { return }
         let routine = Routine(
+            id: existing?.id ?? UUID().uuidString,
             botID: botID,
             task: cleanTask,
             repeatMode: repeatMode,
             days: days,
             minutes: minutes,
-            isOn: true,
+            isOn: existing?.isOn ?? true,
             pingWhenDone: pingWhenDone,
             askBeforePush: askBeforePush,
             skipIfBusy: skipIfBusy
         )
-        store.saveRoutine(routine)
+        store.saveRoutine(routine, onSaved: onSaved)
     }
 }

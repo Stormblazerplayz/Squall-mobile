@@ -24,13 +24,13 @@ Tabs along the bottom:
 - **Chat**: one-on-one chat with any bot, with replies from your computer, Chief's errors with Try again, a strip to jump between bots, reply chips, the Live switch and a call button.
 - **Inbox**: things that need you (OKs and questions from your bots), problems and finished work. Allow, Deny, pick, Clear, and filters.
 - **Board**: every bot as a card with Chat, Steps and hand-off. A bot with a job running has Watch live.
-- **Routines**: routines that wake a bot on a schedule, with on/off switches. Long-press one to delete it.
+- **Routines**: an **Up next** card with a live countdown (and Skip today), a **Today** timeline of the day's runs with a line for now, and every routine as a card with its days, time and an on/off switch. Tap a routine to change it; its menu has Skip today, Turn off and Delete (which asks first).
 
 Screens that slide in:
 
 - **New teammate** (sheet): role, name with a dice button, color, what they do, then Bring to life.
 - **Hand off to Chief** (sheet): pick what Chief should do and add a note.
-- **Routine editor**: who wakes up, what they do, when (days and time), rules, preview and next run.
+- **Routine editor**: who wakes up, what they do, when (days and time), rules, preview and next run. The same screen changes an existing routine.
 - **Live work**: watch a bot's job step by step, with Steps, Terminal and Files tabs, its OK question, a note box, Pause, To Chief and Stop.
 - **Group chat**: open one of your groups, or pick bots, name a new group, let Chief lead, then chat with @mentions.
 - **Settings**: the computer you're paired with, Chief napping, safety, the Claude Code version and update, accent color, app icon (Chief's Bolt is the normal one; Classic and five more can be picked), notifications and Clear all chats.

@@ -269,7 +269,7 @@ struct RoutineDTO: Decodable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, botId, task, days, minutes, isOn, pingWhenDone, askBeforePush, skipIfBusy, run
+        case id, botId, task, days, minutes, isOn, pingWhenDone, askBeforePush, skipIfBusy, run, lastRun
         case repeatMode = "repeat"
     }
 
@@ -284,6 +284,8 @@ struct RoutineDTO: Decodable {
     var askBeforePush: Bool?
     var skipIfBusy: Bool?
     var run: RunDTO?
+    /// "2026-11-25": the day it last ran or was skipped. Older desktops don't send it.
+    var lastRun: String?
 
     var model: Routine {
         let mode = Routine.Repeat(rawValue: repeatMode ?? "daily") ?? .daily
@@ -306,7 +308,8 @@ struct RoutineDTO: Decodable {
             pingWhenDone: pingWhenDone ?? true,
             askBeforePush: askBeforePush ?? true,
             skipIfBusy: skipIfBusy ?? false,
-            run: routineRun
+            run: routineRun,
+            lastRun: lastRun.flatMap { $0.range(of: #"^\d{4}-\d{2}-\d{2}$"#, options: .regularExpression) != nil ? $0 : nil }
         )
     }
 }
