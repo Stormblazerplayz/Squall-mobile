@@ -190,7 +190,13 @@ Answer `200` with one JSON object. Every field is optional and anything unknown 
   ],
   "handoffs": [{"id": "h1", "from": "chief", "to": "bot-a", "what": "Fix the build", "at": "2026-11-14T14:54:00Z"}],
   "claudeCode": {"version": "2.1.0", "latest": "2.1.0", "needsUpdate": false, "updating": null},
-  "desktop": {"version": "1.4.0", "latest": "1.5.0", "updating": false}
+  "desktop": {"version": "1.4.0", "latest": "1.5.0", "updating": false},
+  "todo": {"items": [
+    {"id": "td1", "text": "Fix the jump sound", "status": "doing", "by": "Storm", "who": "Builder", "botId": "bot-a",
+     "at": "2026-11-14T14:50:00Z"},
+    {"id": "td2", "text": "Pick the menu music", "status": "todo", "by": "Chief", "needs": "Which song do you want?", "needsBy": "chief"},
+    {"id": "td3", "text": "Back up the saves", "status": "done", "who": "Builder", "botId": "bot-a", "doneAt": "2026-11-14T13:00:00Z"}
+  ]}
 }
 ```
 
@@ -207,6 +213,7 @@ Answer `200` with one JSON object. Every field is optional and anything unknown 
 | `handoffs` | Recent work passed between bots, newest first. |
 | `claudeCode` | The Claude Code version Chief uses. `updating` is 0 to 1 while an update runs. |
 | `desktop` | Optional. Squall desktop's own `version`, the newest on GitHub Releases as `latest` (once it has checked), and `updating` while it installs one. Settings > Computer shows it as "1.4.0 · 1.5.0 is ready" or "1.4.0 · updating". |
+| `todo` | Optional. Squall's shared To do list (the To do pane on the computer). Open items in list order, then the newest finished ones. `status` is `todo`, `doing` or `done`. `by` is who added it, `who` is who's on it (`botId` when that's a bot). `needs` says why a bot is waiting on you, and `needsBy` is the bot to answer. Leave `todo` out and the phone says to update Squall on the computer. |
 | `usage` | Optional. The plan's usage, for **Plan usage** (see below). Older desktops leave it out and the screen says to update Squall. |
 
 #### `usage`
@@ -273,6 +280,11 @@ Answer `200` with `{"ok": true}`. When something new was made, add its id: `{"ok
 | `routine.skip` | `routineId` | Skip the run going on now (from the Lock Screen). |
 | `claudeCode.update` | | Update Claude Code on the computer. |
 | `settings.save` | `settings` (the phone's Chief, safety and notification settings) | Keep the desktop's rules in sync. |
+| `todo.add` | `text`, optional `botId` | Add to the To do list. With `botId`, that bot is told to do it now and it's marked doing. Reply with its `id`. |
+| `todo.set` | `itemId`, `status` (`todo`, `doing`, `done`) | Tick it off, start it, or put it back. |
+| `todo.give` | `itemId`, `botId` | Tell a bot to do that item now. |
+| `todo.delete` | `itemId` | Take it off the list. |
+| `todo.clearDone` | | Remove every finished item. |
 | `usage.settings` | `throttle` (`true`/`false`) and/or `limit` (10 to 100, or `null`) | **Slow the team down to save usage**, and the percent that also slows it down. Send the new state before answering, so the phone's next read shows it. |
 
 If the desktop doesn't know a `type`, answer `{"ok": false, "error": "..."}` or `501`; the phone shows the message.

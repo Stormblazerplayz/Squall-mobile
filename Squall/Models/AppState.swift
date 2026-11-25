@@ -43,6 +43,8 @@ enum Route: Hashable {
     /// Squall Uno's live view of one agent's computer ("chief" or a bot's id).
     case uno(String)
     case unoSettings
+    /// Squall's shared To do list.
+    case todo
     case usage
 }
 

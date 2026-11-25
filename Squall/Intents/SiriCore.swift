@@ -244,6 +244,65 @@ struct SquallSiri {
         return SiriAnswer(spoken: spoken, snippet: .sent(bot: SiriBotRow(bot), text: job))
     }
 
+    // MARK: The To do list
+
+    static let todoNeedsUpdate = "Squall on your computer doesn't share its To do list yet. Update it, then try again."
+
+    private static func todoUpdateNotice() -> SiriAnswer {
+        SiriAnswer(spoken: todoNeedsUpdate,
+                   snippet: .notice(title: "Update Squall", detail: "Squall on your computer doesn't share its To do list yet.", symbol: "arrow.down.circle"))
+    }
+
+    /// Adds something to Squall's shared To do list. With `botID`, that bot is told to do it now.
+    func addTodo(_ raw: String, botID: String? = nil) async -> SiriAnswer {
+        let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else {
+            return SiriAnswer(spoken: "Nothing was added.", snippet: .notice(title: "Nothing added", detail: "There was nothing to add.", symbol: "checklist"))
+        }
+        guard link.isPaired else { return Self.notPaired() }
+        let state: StateSnapshot
+        do {
+            state = try await link.fetchState()
+        } catch {
+            return unreachable("Nothing was added.", error)
+        }
+        guard state.todo != nil else { return Self.todoUpdateNotice() }
+        var bot: Bot?
+        if let botID {
+            guard let found = state.bots.map(\.model).first(where: { $0.id == botID }) else { return missingBot(botID) }
+            bot = found
+        }
+        var fields: [String: JSONValue] = ["text": .string(String(text.prefix(300)))]
+        if let bot { fields["botId"] = .string(bot.id) }
+        do {
+            try await link.send(SyncAction(type: "todo.add", fields: fields))
+        } catch {
+            return unreachable("It might not be on the list.", error)
+        }
+        if let bot {
+            return SiriAnswer(spoken: "Added to your To do list. \(bot.name) is on it.", snippet: .sent(bot: SiriBotRow(bot), text: text))
+        }
+        return SiriAnswer(spoken: "Added to your To do list.", snippet: .notice(title: "Added to To do", detail: text, symbol: "checklist"))
+    }
+
+    /// Reads out what's on Squall's shared To do list.
+    func todoList() async -> SiriAnswer {
+        guard link.isPaired else { return Self.notPaired() }
+        let state: StateSnapshot
+        do {
+            state = try await link.fetchState()
+        } catch {
+            return unreachable("", error)
+        }
+        guard let list = state.todo?.model else { return Self.todoUpdateNotice() }
+        let open = list.needsYou + list.doing + list.next
+        let detail = open.prefix(3).map { "• \($0.text)" }.joined(separator: "\n")
+        return SiriAnswer(spoken: list.spoken,
+                          snippet: .notice(title: list.items.isEmpty ? "To do" : "To do · \(list.countText)",
+                                           detail: detail.isEmpty ? "Nothing open." : detail + (open.count > 3 ? "\n+ \(open.count - 3) more" : ""),
+                                           symbol: "checklist"))
+    }
+
     // MARK: Team status
 
     func teamStatus() async -> SiriAnswer {

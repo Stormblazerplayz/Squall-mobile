@@ -120,6 +120,58 @@ struct TellChiefIntent: AppIntent {
     }
 }
 
+// MARK: - The To do list
+
+/// "Add to my To do list" in Shortcuts: puts something on Squall's shared To do list,
+/// and gives it to a bot right away if you pick one.
+struct AddTodoIntent: AppIntent {
+    static let title: LocalizedStringResource = "Add to my To do list"
+    static let description = IntentDescription("Adds something to Squall's To do list on your computer. Pick a bot to have it start right away.")
+    static let openAppWhenRun = false
+    // Giving it to a bot can start real work, so the phone has to be unlocked.
+    static let authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
+
+    @Parameter(title: "To-do", requestValueDialog: "What should I add?")
+    var text: String
+
+    @Parameter(title: "Bot", description: "Who does it now. Nobody starts it when you don't pick anyone.")
+    var bot: BotEntity?
+
+    init() {}
+
+    init(text: String, bot: BotEntity? = nil) {
+        self.text = text
+        self.bot = bot
+    }
+
+    static var parameterSummary: some ParameterSummary {
+        Summary("Add \(\.$text) to my To do list") {
+            \.$bot
+        }
+    }
+
+    @MainActor
+    func perform() async throws -> some IntentResult & ProvidesDialog & ShowsSnippetView {
+        let answer = await SquallSiri(link: PairingLink()).addTodo(text, botID: bot?.id)
+        return .result(dialog: "\(answer.spoken)", view: SiriSnippetView(snippet: answer.snippet))
+    }
+}
+
+/// "What's on my To do list" in Shortcuts: reads out the shared list.
+struct TodoListIntent: AppIntent {
+    static let title: LocalizedStringResource = "What's on my To do list"
+    static let description = IntentDescription("Tells you what's on Squall's To do list: what needs you, what's being done and what's next.")
+    static let openAppWhenRun = false
+
+    init() {}
+
+    @MainActor
+    func perform() async throws -> some IntentResult & ProvidesDialog & ShowsSnippetView {
+        let answer = await SquallSiri(link: PairingLink()).todoList()
+        return .result(dialog: "\(answer.spoken)", view: SiriSnippetView(snippet: answer.snippet))
+    }
+}
+
 // MARK: - What's going on
 
 /// "What's my team doing in Squall": says what Chief and the team are up to.

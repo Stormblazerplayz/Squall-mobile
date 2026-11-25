@@ -46,6 +46,8 @@ final class SquallStore: ObservableObject {
     @Published private(set) var claudeCode: ClaudeCodeInfo?
     /// Squall on the computer: its version, and whether an update is ready or running.
     @Published private(set) var desktop: DesktopInfo?
+    /// Squall's shared To do list. Nil when this computer's Squall doesn't send one yet.
+    @Published private(set) var todo: TodoList?
     /// The plan's usage and today's jobs, from the computer. Nil when it hasn't sent any (an older Squall).
     @Published private(set) var usage: PlanUsage?
     /// Actions on their way to the computer, so buttons can wait.
@@ -359,6 +361,7 @@ final class SquallStore: ObservableObject {
         let newTyping = (snapshot.typing?.isEmpty ?? true) ? nil : snapshot.typing
         let newCode = snapshot.claudeCode?.model
         let newDesktop = snapshot.desktop
+        let newTodo = snapshot.todo?.model
         let newUsage = snapshot.usage?.model
 
         // Only touch what changed, so screens don't redraw every few seconds.
@@ -373,6 +376,7 @@ final class SquallStore: ObservableObject {
         if pausedAll != snapshot.paused { pausedAll = snapshot.paused }
         if claudeCode != newCode { claudeCode = newCode }
         if desktop != newDesktop { desktop = newDesktop }
+        if todo != newTodo { todo = newTodo }
         if usage != newUsage { usage = newUsage }
 
         if !newBots.isEmpty, bot(currentChatID) == nil, groups.first(where: { $0.id == currentChatID }) == nil {
@@ -474,6 +478,7 @@ final class SquallStore: ObservableObject {
         pausedAll = false
         claudeCode = nil
         desktop = nil
+        todo = nil
         usage = nil
         picking = nil
         liveWorkID = nil
@@ -600,6 +605,8 @@ final class SquallStore: ObservableObject {
             let target = Route.uno(agentID == Bot.chiefID || bot(agentID) != nil ? agentID : Bot.chiefID)
             tab = .uno
             if path.last != target { path = [target] }
+        case "todo":
+            if path.last != .todo { path = [.todo] }
         case "usage":
             if path.last != .usage { path = [.usage] }
         default:
@@ -998,6 +1005,63 @@ final class SquallStore: ObservableObject {
         guard requireConnection() else { return }
         routines.removeAll { $0.id == id }
         send(SyncAction(type: "routine.delete", fields: ["routineId": .string(id)]))
+    }
+
+    // MARK: - To do list
+
+    /// Adds a to-do to the list on the computer. With `botID`, that bot is told to do it right away.
+    /// Returns true when the computer took it.
+    @discardableResult
+    func addTodo(_ raw: String, giveTo botID: String? = nil) async -> Bool {
+        let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty, requireConnection(), todo != nil else { return false }
+        var fields: [String: JSONValue] = ["text": .string(String(text.prefix(300)))]
+        if let botID { fields["botId"] = .string(botID) }
+        guard await perform(SyncAction(type: "todo.add", fields: fields), busyKey: "todo.add") != nil else { return false }
+        if let botID, let bot = bot(botID) {
+            showToast("Added. \(bot.name) is on it.")
+        }
+        return true
+    }
+
+    /// Ticks a to-do off, or opens it again, or marks it as being done now.
+    func setTodo(_ id: String, status: TodoItem.Status) {
+        guard requireConnection(), var list = todo, let index = list.items.firstIndex(where: { $0.id == id }) else { return }
+        list.items[index].status = status
+        if status == .done {
+            list.items[index].doneAt = Date()
+            list.items[index].needs = nil
+        } else {
+            list.items[index].doneAt = nil
+        }
+        todo = list
+        send(SyncAction(type: "todo.set", fields: ["itemId": .string(id), "status": .string(status.rawValue)]), busyKey: "todo.\(id)")
+    }
+
+    /// Hands a to-do to a bot: the bot gets a message about it and it shows as being done.
+    func giveTodo(_ id: String, to botID: String) {
+        guard requireConnection(), let item = todo?.item(id), item.isOpen, let bot = bot(botID) else { return }
+        Task {
+            guard await perform(SyncAction(type: "todo.give", fields: ["itemId": .string(id), "botId": .string(botID)]),
+                                busyKey: "todo.\(id)") != nil else { return }
+            showToast("\(bot.name) is on it.")
+        }
+    }
+
+    /// Takes a to-do off the list.
+    func deleteTodo(_ id: String) {
+        guard requireConnection(), var list = todo else { return }
+        list.items.removeAll { $0.id == id }
+        todo = list
+        send(SyncAction(type: "todo.delete", fields: ["itemId": .string(id)]), busyKey: "todo.\(id)")
+    }
+
+    /// Takes every finished to-do off the list.
+    func clearDoneTodos() {
+        guard requireConnection(), var list = todo else { return }
+        list.items.removeAll { $0.status == .done }
+        todo = list
+        send(SyncAction(type: "todo.clearDone"), busyKey: "todo.clearDone")
     }
 
     // MARK: - Chief
