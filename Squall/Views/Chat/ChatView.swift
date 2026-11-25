@@ -30,6 +30,7 @@ struct ChatView: View {
                 }
                 VStack(spacing: 0) {
                     ChatHeader(bot: bot, showLiveLog: $showLiveLog)
+                    WorkTimerBanner(chatID: bot.id)
                     if !isWide {
                         BotStrip()
                     }
@@ -209,6 +210,7 @@ private struct ChatHeader: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(store.work(for: bot.id) != nil ? "Watch \(bot.name) work live" : "Show live work")
+            WorkTimerButton(bot: bot)
             Button {
                 confirmClear = true
             } label: {
