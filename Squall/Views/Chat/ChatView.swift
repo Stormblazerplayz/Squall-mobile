@@ -580,6 +580,7 @@ struct MessageView: View {
     var onChip: (String) -> Void = { _ in }
     @AppStorage(Prefs.chatTextSize) private var textSize = 15.0
     @AppStorage(Prefs.showTimes) private var showTimes = true
+    @AppStorage(BubbleStyle.key) private var bubbleStyle = BubbleStyle.rounded
     @ObservedObject private var starred = StarredMessages.shared
 
     var body: some View {
@@ -632,7 +633,8 @@ struct MessageView: View {
                     .tint(.white)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
-                    .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(store.accent))
+                    .background(bubbleStyle.shape(mine: true).fill(store.accent))
+                    .contentShape(.contextMenuPreview, bubbleStyle.shape(mine: true))
                     .messageMenu(message, chatID: chatID, authorName: "You")
                     .reactionBadge(chatID: chatID, messageID: message.id, tint: store.accent, trailing: true)
                 if showTimes || isStarred {
@@ -690,7 +692,7 @@ struct MessageView: View {
                 }
             }
             .padding(12)
-            .glassCard(radius: 16, tint: who.hex, strength: 0.1)
+            .bubbleGlass(bubbleStyle, tintHex: who.hex, continued: continued)
             .messageMenu(message, chatID: chatID, authorName: who.name)
             .reactionBadge(chatID: chatID, messageID: message.id, tint: who.color, trailing: false)
             Spacer(minLength: 20)

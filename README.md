@@ -51,6 +51,7 @@ Tabs along the bottom:
 - **Message reactions**: press and hold a message to react with an emoji, which shows on the bubble ([docs](docs/reactions.md)).
 - **Translate and Message info**: press and hold a message to translate it or see when it was sent and how long it is ([docs](docs/message-info.md)).
 - **Chat wallpaper**: dots, grid, waves, stars or stripes behind a chat, in the teammate's color ([docs](docs/chat-wallpaper.md)).
+- **Bubble shape**: Round, Tails or Square message bubbles, in Settings under Chat ([docs](docs/bubble-shape.md)).
 - **Inbox**: things that need you (OKs and questions from your bots), problems and finished work. Allow, Deny, pick, Clear, and filters.
 - **Board**: every bot as a card with Chat, Steps and hand-off. A bot with a job running has Watch live.
 - **Routines**: routines that wake a bot on a schedule, with on/off switches. Long-press one to delete it.

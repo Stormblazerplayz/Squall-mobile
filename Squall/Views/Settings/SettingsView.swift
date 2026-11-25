@@ -17,6 +17,7 @@ struct SettingsView: View {
     /// Words typed in the search field at the top. Only matching sections show while it has some.
     @State private var search = ""
     @AppStorage(UndoSend.key) private var undoSend = false
+    @AppStorage(BubbleStyle.key) private var bubbleStyle = BubbleStyle.rounded
 
     /// Asset name (nil is the normal icon), name shown, and the small preview image.
     private static let iconChoices: [(asset: String?, title: String, preview: String)] = [
@@ -629,6 +630,29 @@ struct SettingsView: View {
                 options: Prefs.OpenChat.allCases.map { (label: $0.label, value: $0) },
                 selection: $openChat
             )
+            line
+            rowTitle("Bubble shape", "How messages look in a chat")
+            PillSegments(
+                options: BubbleStyle.allCases.map { (label: $0.label, value: $0) },
+                selection: $bubbleStyle
+            )
+            HStack(alignment: .bottom, spacing: 8) {
+                Text("Build passed!")
+                    .font(.system(size: 13.5))
+                    .foregroundStyle(Theme.text)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .bubbleGlass(bubbleStyle, tintHex: Theme.defaultAccentHex, continued: false)
+                Spacer(minLength: 8)
+                Text("Nice, open a PR")
+                    .font(.system(size: 13.5))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(bubbleStyle.shape(mine: true).fill(store.accent))
+            }
+            .animation(.easeInOut(duration: 0.2), value: bubbleStyle)
+            .accessibilityHidden(true)
         }
     }
 
