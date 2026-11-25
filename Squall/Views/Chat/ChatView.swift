@@ -85,6 +85,12 @@ struct ChatView: View {
         .animation(.easeOut(duration: 0.2), value: showLiveLog)
         .sensoryFeedback(.impact(weight: .light), trigger: sentCount) { _, _ in haptics }
         .onChange(of: draft) { _, new in SavedPrompts.shared.currentDraft = new }
+        // Each chat keeps what you typed but didn't send (see ChatDrafts).
+        .onChange(of: draft) { _, new in ChatDrafts.shared.set(new, for: store.currentChat.id) }
+        .onChange(of: store.currentChat.id) { _, new in draft = ChatDrafts.shared.text(for: new) }
+        .onAppear {
+            if draft.isEmpty { draft = ChatDrafts.shared.text(for: store.currentChat.id) }
+        }
         .onReceive(SavedPrompts.shared.$insert) { request in
             // A saved prompt picked from the header goes into the message box; what you'd typed stays in front of it.
             guard let request, request.chatID == store.currentChatID else { return }
@@ -251,6 +257,7 @@ private struct ChatHeader: View {
 /// iPad only: a column listing every chat, next to the open conversation.
 private struct ChatList: View {
     @EnvironmentObject private var store: SquallStore
+    @ObservedObject private var drafts = ChatDrafts.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -335,6 +342,7 @@ private struct ChatList: View {
     }
 
     private func preview(_ message: ChatMessage?, bot: Bot) -> String {
+        if bot.id != store.currentChatID, let draft = drafts.preview(for: bot.id) { return "Draft: \(draft)" }
         guard let message, !message.text.isEmpty else { return bot.task }
         let words = Markdown.plain(message.text).replacingOccurrences(of: "\n", with: " ")
         return message.author == ChatMessage.meID ? "You: \(words)" : words
@@ -344,6 +352,7 @@ private struct ChatList: View {
 /// Row of every bot so you can jump between chats.
 private struct BotStrip: View {
     @EnvironmentObject private var store: SquallStore
+    @ObservedObject private var drafts = ChatDrafts.shared
 
     var body: some View {
         ScrollView(.horizontal) {
@@ -356,6 +365,18 @@ private struct BotStrip: View {
                         VStack(spacing: 4) {
                             Sphere(bot: bot, size: 36, glow: isOn ? 0.7 : 0.25)
                                 .overlay(Circle().stroke(Color.white.opacity(isOn ? 0.9 : 0), lineWidth: 2).padding(-3))
+                                .overlay(alignment: .topTrailing) {
+                                    // Something typed here and not sent yet.
+                                    if !isOn, drafts.preview(for: bot.id) != nil {
+                                        Image(systemName: "pencil")
+                                            .font(.system(size: 8, weight: .heavy))
+                                            .foregroundStyle(Theme.darkInk)
+                                            .frame(width: 15, height: 15)
+                                            .background(Circle().fill(Theme.goldBright))
+                                            .offset(x: 4, y: -4)
+                                            .accessibilityLabel("Draft")
+                                    }
+                                }
                             Text(bot.name)
                                 .font(.system(size: 10.5, weight: .semibold))
                                 .foregroundStyle(isOn ? Theme.textBright : Theme.muted)

@@ -21,6 +21,7 @@ Tabs along the bottom:
 - **Focus filter**: pick which pings get through during an iOS Focus, like only Chief or only what needs you (see [docs/focus-filter.md](docs/focus-filter.md)).
 - **Snooze**: hide something in the Inbox for an hour, until this evening or until tomorrow, and get pinged when it's back (see [docs/inbox-snooze.md](docs/inbox-snooze.md)).
 - **Evening recap**: one ping a day with what your team did today, only when something happened (see [docs/daily-recap.md](docs/daily-recap.md)).
+- **Chat drafts**: what you typed but didn't send stays in each chat, with a pencil on the teammate (see [docs/chat-drafts.md](docs/chat-drafts.md)).
 - **Inbox**: things that need you (OKs and questions from your bots), problems and finished work. Allow, Deny, pick, Clear, and filters.
 - **Board**: every bot as a card with Chat, Steps and hand-off. A bot with a job running has Watch live.
 - **Routines**: routines that wake a bot on a schedule, with on/off switches. Long-press one to delete it.
