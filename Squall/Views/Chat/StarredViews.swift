@@ -33,7 +33,7 @@ struct StarredButton: View {
     }
 }
 
-/// Copy, Copy as plain text, Star, Remind me, Reply with quote, Forward to, Save as prompt and Share on a long press of a
+/// Copy, Copy as plain text, Star, Pin, Remind me, Reply with quote, Forward to, Save as prompt and Share on a long press of a
 /// message. Star, Remind me and Reply need the chat it's in, so a message shown without one (like in a group) gets the rest.
 struct MessageMenu: ViewModifier {
     let message: ChatMessage
@@ -43,6 +43,7 @@ struct MessageMenu: ViewModifier {
     @EnvironmentObject private var store: SquallStore
     @ObservedObject private var starred = StarredMessages.shared
     @ObservedObject private var reader = ReadAloud.shared
+    @ObservedObject private var pins = PinnedMessages.shared
 
     @ViewBuilder
     func body(content: Content) -> some View {
@@ -92,6 +93,15 @@ struct MessageMenu: ViewModifier {
                         store.showToast(now ? "Starred. Find it with the star at the top of the chat." : "Star taken off.")
                     } label: {
                         Label(on ? "Unstar" : "Star", systemImage: on ? "star.slash" : "star")
+                    }
+                }
+                if let chatID, StarredMessages.canStar(message) {
+                    let on = pins.isPinned(chatID: chatID, messageID: message.id)
+                    Button {
+                        let now = pins.toggle(message, chatID: chatID, authorName: authorName)
+                        store.showToast(now ? "Pinned to the top of the chat." : "Unpinned.")
+                    } label: {
+                        Label(on ? "Unpin" : "Pin", systemImage: on ? "pin.slash" : "pin")
                     }
                 }
                 if let chatID {

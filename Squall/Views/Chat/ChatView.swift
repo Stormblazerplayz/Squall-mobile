@@ -46,6 +46,8 @@ struct ChatView: View {
                     ChatHeader(bot: bot, showLiveLog: $showLiveLog)
                     WorkTimerBanner(chatID: bot.id)
                     CatchUpBar(chatID: bot.id, tintHex: bot.hex)
+                    PinnedBanner(chatID: bot.id, tint: bot.color)
+                        .id(bot.id)
                     if !isWide {
                         BotStrip()
                     }
