@@ -214,6 +214,33 @@ Answer `200` with one JSON object. Every field is optional and anything unknown 
 | `claudeCode` | The Claude Code version Chief uses. `updating` is 0 to 1 while an update runs. |
 | `desktop` | Optional. Squall desktop's own `version`, the newest on GitHub Releases as `latest` (once it has checked), and `updating` while it installs one. Settings > Computer shows it as "1.4.0 · 1.5.0 is ready" or "1.4.0 · updating". |
 | `todo` | Optional. Squall's shared To do list (the To do pane on the computer). Open items in list order, then the newest finished ones. `status` is `todo`, `doing` or `done`. `by` is who added it, `who` is who's on it (`botId` when that's a bot). `needs` says why a bot is waiting on you, and `needsBy` is the bot to answer. Leave `todo` out and the phone says to update Squall on the computer. |
+| `usage` | Optional. The plan's usage, for **Plan usage** (see below). Older desktops leave it out and the screen says to update Squall. |
+
+#### `usage`
+
+What the desktop reads from Claude (every Claude run reports the plan's 5-hour and weekly windows) and measures itself. Nothing is guessed: a prediction is only there once the desktop has enough readings.
+
+```json
+"usage": {
+  "windows": [
+    {"id": "five_hour", "label": "5-hour limit", "percent": 42, "resetsAt": "2026-11-25T14:14:00Z", "predicting": false, "atReset": 61},
+    {"id": "week", "label": "Weekly · all models", "percent": 17, "resetsAt": "2026-11-29T09:00:00Z", "predicting": true}
+  ],
+  "slowDown": true, "limit": 80, "throttled": false,
+  "readAt": "2026-11-25T11:58:00Z",
+  "today": {"day": "2026-11-25", "bots": [{"botId": "chief", "jobs": 3, "seconds": 840}]}
+}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `windows` | Each window: `id` (`five_hour`, `week`, or `week-<model>`), `label`, `percent` used (0 to 100), `resetsAt`. `atReset` is where the pace lands at the reset, `runsOutAt` is when it runs out (only when that's before the reset), and `predicting` is `true` while there aren't enough readings yet. |
+| `slowDown` | **Slow the team down to save usage** is on: while usage is tight, bots keep turns short, skip extra work and aren't woken up. |
+| `limit` | Also slow down once the 5-hour window reaches this percent (10 to 100), or `null` for only when the pace would run out. |
+| `throttled` / `why` | The team is slowed down right now, and why: `pace` (on track to run out before the reset) or `limit`. |
+| `readAt` | When the desktop last read the usage from Claude. |
+| `overage` | Optional. The plan is using extra usage past its limits. |
+| `today` | The jobs each bot ran today on the desktop's clock, timed by Squall from start to end. Bots with no jobs are left out. |
 
 Lock Screen Live Activities only start from this data: a running `work` job, an `ask` Inbox item, a routine with `run`, or busy bots. They end when the thing they follow is gone, and when the phone loses the computer.
 
@@ -258,6 +285,7 @@ Answer `200` with `{"ok": true}`. When something new was made, add its id: `{"ok
 | `todo.give` | `itemId`, `botId` | Tell a bot to do that item now. |
 | `todo.delete` | `itemId` | Take it off the list. |
 | `todo.clearDone` | | Remove every finished item. |
+| `usage.settings` | `throttle` (`true`/`false`) and/or `limit` (10 to 100, or `null`) | **Slow the team down to save usage**, and the percent that also slows it down. Send the new state before answering, so the phone's next read shows it. |
 
 If the desktop doesn't know a `type`, answer `{"ok": false, "error": "..."}` or `501`; the phone shows the message.
 

@@ -48,6 +48,8 @@ final class SquallStore: ObservableObject {
     @Published private(set) var desktop: DesktopInfo?
     /// Squall's shared To do list. Nil when this computer's Squall doesn't send one yet.
     @Published private(set) var todo: TodoList?
+    /// The plan's usage and today's jobs, from the computer. Nil when it hasn't sent any (an older Squall).
+    @Published private(set) var usage: PlanUsage?
     /// Actions on their way to the computer, so buttons can wait.
     @Published private(set) var busyActions: Set<String> = []
 
@@ -360,6 +362,7 @@ final class SquallStore: ObservableObject {
         let newCode = snapshot.claudeCode?.model
         let newDesktop = snapshot.desktop
         let newTodo = snapshot.todo?.model
+        let newUsage = snapshot.usage?.model
 
         // Only touch what changed, so screens don't redraw every few seconds.
         if bots != newBots { bots = newBots }
@@ -374,6 +377,7 @@ final class SquallStore: ObservableObject {
         if claudeCode != newCode { claudeCode = newCode }
         if desktop != newDesktop { desktop = newDesktop }
         if todo != newTodo { todo = newTodo }
+        if usage != newUsage { usage = newUsage }
 
         if !newBots.isEmpty, bot(currentChatID) == nil, groups.first(where: { $0.id == currentChatID }) == nil {
             currentChatID = Bot.chiefID
@@ -475,6 +479,7 @@ final class SquallStore: ObservableObject {
         claudeCode = nil
         desktop = nil
         todo = nil
+        usage = nil
         picking = nil
         liveWorkID = nil
         handoffTarget = nil
@@ -596,6 +601,8 @@ final class SquallStore: ObservableObject {
             if path.last != .settings { path = [.settings] }
         case "todo":
             if path.last != .todo { path = [.todo] }
+        case "usage":
+            if path.last != .usage { path = [.usage] }
         default:
             break
         }
@@ -924,6 +931,24 @@ final class SquallStore: ObservableObject {
         pausedAll = paused
         LiveActivities.shared.setTeamPaused(paused)
         send(SyncAction(type: "team.pause", fields: ["paused": .bool(paused)]), busyKey: "team.pause")
+    }
+
+    // MARK: - Plan usage
+
+    /// Turns "Slow the team down to save usage" on or off on the computer.
+    func setSlowDown(_ isOn: Bool) {
+        guard requireConnection(), usage != nil else { return }
+        usage?.slowDown = isOn
+        send(SyncAction(type: "usage.settings", fields: ["throttle": .bool(isOn)]), busyKey: "usage.settings")
+    }
+
+    /// Sets the percent of the 5-hour window that also slows the team down (nil: only when it would run out).
+    func setUsageLimit(_ limit: Int?) {
+        guard requireConnection(), usage != nil else { return }
+        if let limit, !(10...100).contains(limit) { return }
+        usage?.limit = limit
+        let value: JSONValue = limit.map { .int($0) } ?? .null
+        send(SyncAction(type: "usage.settings", fields: ["limit": value]), busyKey: "usage.settings")
     }
 
     // MARK: - Claude Code update

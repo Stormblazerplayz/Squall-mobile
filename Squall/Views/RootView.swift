@@ -103,6 +103,8 @@ struct RootView: View {
             connected { MissionControlView() }.navigationTitle("Mission control").pushedScreen()
         case .todo:
             connected { TodoView() }.navigationTitle("To do").pushedScreen()
+        case .usage:
+            connected { UsageView() }.navigationTitle("Plan usage").pushedScreen()
         }
     }
 

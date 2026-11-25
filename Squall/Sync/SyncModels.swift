@@ -22,9 +22,11 @@ struct StateSnapshot: Decodable {
     var desktop: DesktopInfo?
     /// The shared To do list. Older desktops don't send it.
     var todo: TodoListDTO?
+    /// The plan's usage and today's jobs. Older desktops don't send it.
+    var usage: UsageDTO?
 
     private enum CodingKeys: String, CodingKey {
-        case version, paused, typing, bots, chats, groups, inbox, routines, work, handoffs, claudeCode, desktop
+        case version, paused, typing, bots, chats, groups, inbox, routines, work, handoffs, claudeCode, desktop, usage
         case todo
     }
 
@@ -42,6 +44,7 @@ struct StateSnapshot: Decodable {
         claudeCode = try? c.decodeIfPresent(ClaudeCodeDTO.self, forKey: .claudeCode)
         desktop = (try? c.decodeIfPresent(DesktopInfo.self, forKey: .desktop)) ?? nil
         todo = (try? c.decodeIfPresent(TodoListDTO.self, forKey: .todo)) ?? nil
+        usage = (try? c.decodeIfPresent(UsageDTO.self, forKey: .usage)) ?? nil
         let rawChats = (try? c.decodeIfPresent([String: [Lossy<MessageDTO>]].self, forKey: .chats)) ?? [:]
         var cleanChats: [String: [MessageDTO]] = [:]
         for (key, list) in rawChats {

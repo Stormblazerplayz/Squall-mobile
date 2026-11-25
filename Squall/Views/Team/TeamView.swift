@@ -29,6 +29,7 @@ struct TeamView: View {
                                 ChiefCard(showSteps: $showChiefSteps)
                                 todoCard
                                 quickActions
+                                usageCard
                             }
                             .frame(width: 380)
                             teamSection
@@ -38,6 +39,7 @@ struct TeamView: View {
                         ChiefCard(showSteps: $showChiefSteps)
                         todoCard
                         quickActions
+                        usageCard
                         teamSection
                     }
                 }
@@ -92,6 +94,14 @@ struct TeamView: View {
     private var todoCard: some View {
         if let list = store.todo {
             TodoSummaryCard(list: list)
+        }
+    }
+
+    /// Plan usage at a glance, once the computer sends it.
+    @ViewBuilder
+    private var usageCard: some View {
+        if let usage = store.usage {
+            UsageSummaryCard(usage: usage)
         }
     }
 

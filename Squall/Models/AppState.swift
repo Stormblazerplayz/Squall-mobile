@@ -39,6 +39,7 @@ enum Route: Hashable {
     case mission
     /// Squall's shared To do list.
     case todo
+    case usage
 }
 
 enum ToastAction: Equatable {
