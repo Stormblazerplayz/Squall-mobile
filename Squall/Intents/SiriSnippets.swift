@@ -108,7 +108,7 @@ private struct ReplyCard: View {
                 Label("The answer will be in your chat in Squall.", systemImage: "hourglass")
                     .font(.subheadline)
             } else {
-                Text(text)
+                Text(Markdown.plain(text))
                     .font(.body)
                     .lineLimit(14)
                 if !finished {

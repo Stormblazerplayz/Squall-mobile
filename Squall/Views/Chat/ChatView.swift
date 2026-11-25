@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// One-on-one chat with a bot.
 struct ChatView: View {
@@ -323,7 +324,8 @@ private struct ChatList: View {
 
     private func preview(_ message: ChatMessage?, bot: Bot) -> String {
         guard let message, !message.text.isEmpty else { return bot.task }
-        return message.author == ChatMessage.meID ? "You: \(message.text)" : message.text
+        let words = Markdown.plain(message.text).replacingOccurrences(of: "\n", with: " ")
+        return message.author == ChatMessage.meID ? "You: \(words)" : words
     }
 }
 
@@ -493,13 +495,9 @@ struct MessageView: View {
                             .foregroundStyle(Theme.muted)
                     }
                 }
-                Text(message.text)
-                    .font(.system(size: textSize))
-                    .foregroundStyle(Theme.text)
+                MarkdownText(text: message.text, size: textSize, tint: who.color)
                 if let text2 = message.text2 {
-                    Text(text2)
-                        .font(.system(size: textSize))
-                        .foregroundStyle(Theme.text)
+                    MarkdownText(text: text2, size: textSize, tint: who.color)
                 }
                 if let chatID, ChatSummaries.canSummarize(message) {
                     MessageSummary(chatID: chatID, messageID: message.id, tint: who.color)
@@ -510,6 +508,18 @@ struct MessageView: View {
             }
             .padding(12)
             .glassCard(radius: 16, tint: who.hex, strength: 0.1)
+            .contextMenu {
+                Button {
+                    UIPasteboard.general.string = message.text2.map { message.text + "\n\n" + $0 } ?? message.text
+                } label: {
+                    Label("Copy", systemImage: "doc.on.doc")
+                }
+                Button {
+                    UIPasteboard.general.string = Markdown.plain(message.text2.map { message.text + "\n\n" + $0 } ?? message.text)
+                } label: {
+                    Label("Copy as plain text", systemImage: "text.alignleft")
+                }
+            }
             Spacer(minLength: 20)
         }
     }
@@ -526,9 +536,7 @@ struct MessageView: View {
                 Spacer()
                 Text(message.time).font(.system(size: 11)).foregroundStyle(Theme.muted)
             }
-            Text(message.text)
-                .font(.system(size: 14.5))
-                .foregroundStyle(Theme.text)
+            MarkdownText(text: message.text, size: 14.5, tint: Theme.gold)
             if !note.isEmpty {
                 Text("Note: \(note)")
                     .font(.system(size: 13.5))
