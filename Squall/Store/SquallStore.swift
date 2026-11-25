@@ -387,6 +387,7 @@ final class SquallStore: ObservableObject {
         noticeChanges()
         ReplyAlerts.process(chats: snapshot.chats, bots: newBots, settings: settings, computerKey: dataComputerKey ?? "",
                             inForeground: UIApplication.shared.applicationState == .active)
+        TeammateWidgetWriter.update(chats: snapshot.chats, bots: newBots)
         LiveActivities.shared.sync(work: work, inbox: inbox, routines: routines, bots: bots, paused: pausedAll)
     }
 
@@ -449,6 +450,7 @@ final class SquallStore: ObservableObject {
         if SquallShared.loadWidget()?.paired != false, SquallShared.saveWidget(.notPaired()) {
             WidgetCenter.shared.reloadTimelines(ofKind: SquallShared.widgetKind)
         }
+        TeammateWidgetWriter.forget()
     }
 
     /// Takes everything from the computer off the screens.

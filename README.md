@@ -75,6 +75,8 @@ Add **Pause my team** (a switch) and **Call Chief** from Control Center's edit s
 
 Add the **Squall team** widget to the Home Screen (small or medium) or the Lock Screen. It shows what needs you, who's working and when it last synced. Tap it to open the Inbox or Team. With no data it says so, and after Unpair it says "Not paired".
 
+The **Squall teammate** widget shows one teammate you pick (long-press the widget, then Edit Widget): what they're doing and the last message in your chat. Tap it to open that chat. It comes in small and medium for the Home Screen and two Lock Screen sizes (see [docs/teammate-widget.md](docs/teammate-widget.md)).
+
 On the Home Screen it has a **Pause / Resume** button, and the medium one shows **Allow** and **Deny** for the first OK request (only while its data is fresh). The buttons send straight to your computer, even when Squall is closed, and the widget changes only after the computer says yes.
 
 The app hands the widget its data through a shared Keychain group (`<team>.<bundle id>.shared`), which needs no setup. If you also turn on **App Groups** for both App IDs at developer.apple.com and add `group.<bundle id>`, the GitHub build signs with that too and uses it first.
