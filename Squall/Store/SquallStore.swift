@@ -32,6 +32,8 @@ final class SquallStore: ObservableObject {
     @Published private(set) var retryAt: Date?
     /// True while the app is asking the computer, after it stopped answering.
     @Published private(set) var isRetrying = false
+    /// True while waiting messages are going out (see Outbox).
+    @Published private(set) var flushingOutbox = false
 
     // Team and chats, from the computer
     @Published private(set) var bots: [Bot] = []
@@ -50,8 +52,6 @@ final class SquallStore: ObservableObject {
     @Published private(set) var usage: PlanUsage?
     /// Actions on their way to the computer, so buttons can wait.
     @Published private(set) var busyActions: Set<String> = []
-    /// True while waiting messages are going out (see Outbox).
-    @Published private(set) var flushingOutbox = false
 
     // Local screen state
     @Published var picking: String?
@@ -787,13 +787,14 @@ final class SquallStore: ObservableObject {
     /// Sends the messages waiting in the outbox, oldest first. Stops at the first one that doesn't go,
     /// so nothing is sent out of order; the rest try again next time.
     func flushOutbox() {
-        guard !flushingOutbox, isConnected, !Outbox.shared.entries.isEmpty else { return }
+        // Only a real computer, never demo mode, gets them.
+        guard !flushingOutbox, link == .connected, !Outbox.shared.entries.isEmpty else { return }
         flushingOutbox = true
         Task { @MainActor in
             defer { flushingOutbox = false }
             var sent = 0
             for entry in Outbox.shared.entries {
-                guard isConnected else { break }
+                guard link == .connected else { break }
                 let action = SyncAction(type: "chat.send", fields: ["chatId": .string(entry.chatID), "text": .string(entry.text)])
                 guard await perform(action, busyKey: "outbox", quiet: true) != nil else { break }
                 Outbox.shared.remove(entry.id)
