@@ -179,6 +179,7 @@ struct ChatView: View {
         }
         .animation(.easeOut(duration: 0.2), value: showLiveLog)
         .animation(.easeOut(duration: 0.2), value: find.isOpen)
+        .background { ChatKeyCommands(bigEditor: $bigEditor) }
         // Find in chat is for the chat it was opened in.
         .onChange(of: store.currentChat.id) { find.close() }
         .onDisappear { find.close() }

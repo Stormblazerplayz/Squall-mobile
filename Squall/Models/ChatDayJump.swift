@@ -76,6 +76,8 @@ enum ChatDayJump {
         }
 
         @Published var request: Request?
+        /// The list of days is up.
+        @Published var showList = false
         @Published private(set) var flashID: String?
 
         func go(chatID: String, messageID: String) {

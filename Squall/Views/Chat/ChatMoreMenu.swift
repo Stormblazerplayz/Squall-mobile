@@ -10,7 +10,7 @@ struct ChatMoreMenu: View {
     @ObservedObject private var doneWatch = DoneWatch.shared
     let bot: Bot
     @State private var confirmClear = false
-    @State private var showDays = false
+    @ObservedObject private var dayJump = ChatDayJump.Model.shared
 
     var body: some View {
         let messages = store.messages(for: bot.id)
@@ -39,7 +39,7 @@ struct ChatMoreMenu: View {
             }
             .disabled(messages.isEmpty)
             Button {
-                showDays = true
+                dayJump.showList = true
             } label: {
                 Label("Go to a day", systemImage: "calendar")
             }
@@ -82,7 +82,7 @@ struct ChatMoreMenu: View {
         } message: {
             Text("\(bot.name) keeps its memory. Only the messages go away, and starred ones stay in Starred.")
         }
-        .sheet(isPresented: $showDays) {
+        .sheet(isPresented: $dayJump.showList) {
             ChatDaySheet(bot: bot, messages: store.messages(for: bot.id))
         }
     }
