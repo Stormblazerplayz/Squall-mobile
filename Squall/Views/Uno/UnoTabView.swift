@@ -47,6 +47,7 @@ struct UnoTabView: View {
                                 .foregroundStyle(Theme.redText)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
+                        UnoQuickStartCard()
                         setupHints
                         if uno.anyRunning {
                             stopEverything
@@ -69,6 +70,18 @@ struct UnoTabView: View {
     }
 
     private var header: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            headerTitle
+            if uno.loaded, let today = UnoTokens.today(uno.settings) {
+                Text(today)
+                    .font(.system(size: 12.5, design: .monospaced))
+                    .foregroundStyle(Theme.muted)
+                    .accessibilityLabel(today.replacingOccurrences(of: "Today:", with: "Squall Uno used today:"))
+            }
+        }
+    }
+
+    private var headerTitle: some View {
         HStack(alignment: .firstTextBaseline) {
             Text("Squall Uno")
                 .font(.system(size: 28, weight: .bold))
@@ -144,7 +157,7 @@ struct UnoTabView: View {
         VStack(alignment: .leading, spacing: 8) {
             sectionTitle("RECENT TASKS")
             if recent.isEmpty {
-                Text("No tasks yet. Open a computer above and tell Squall Uno what to do.")
+                Text("No tasks yet. Write one above and tap Start.")
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.muted)
                     .fixedSize(horizontal: false, vertical: true)
@@ -154,20 +167,7 @@ struct UnoTabView: View {
                     spacing: 8
                 ) {
                     ForEach(recent) { session in
-                        Button {
-                            store.path.append(.uno(session.agentId))
-                        } label: {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(session.agentName.isEmpty ? "Squall Uno" : "\(session.agentName)'s computer")
-                                    .font(.system(size: 11, weight: .bold))
-                                    .tracking(0.5)
-                                    .foregroundStyle(Theme.muted)
-                                    .padding(.leading, 4)
-                                UnoSessionRow(session: session)
-                            }
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityHint("Opens this computer")
+                        UnoRecentTaskItem(session: session)
                     }
                 }
             }
