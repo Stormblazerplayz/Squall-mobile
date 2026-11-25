@@ -107,24 +107,47 @@ struct MarkdownText: View {
     }
 }
 
-/// A fenced code block: the language, a Copy button, and the code scrolling sideways so lines never wrap.
+/// A fenced code block: the language, Wrap and Copy buttons, line numbers, and the code in color (see CodeHighlight),
+/// scrolling sideways unless Wrap is on.
 struct CodeBlockView: View {
     let language: String
     let code: String
     var size: Double = 15
     @State private var copied = false
+    @AppStorage(CodeColors.wrapKey) private var wrap = false
 
     var body: some View {
+        let lines = code.isEmpty ? 1 : code.components(separatedBy: "\n").count
+        let showNumbers = !wrap && lines >= CodeColors.numbersFrom
+        let font = Font.system(size: max(11, size - 2), design: .monospaced)
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
                 Image(systemName: "chevron.left.forwardslash.chevron.right")
                     .font(.system(size: 10.5, weight: .bold))
                     .foregroundStyle(Theme.muted)
-                Text(language.isEmpty ? "Code" : language)
+                Text(language.isEmpty ? (CodeHighlight.looksLikeDiff(code) ? "diff" : "Code") : language)
                     .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
                     .foregroundStyle(Theme.sub)
                     .lineLimit(1)
+                if lines > 1 {
+                    Text("\(lines) lines")
+                        .font(.system(size: 10.5, weight: .medium))
+                        .foregroundStyle(Theme.muted)
+                }
                 Spacer(minLength: 8)
+                if lines > 1 {
+                    Button {
+                        withAnimation(.easeOut(duration: 0.2)) { wrap.toggle() }
+                    } label: {
+                        Image(systemName: wrap ? "arrow.left.and.right.text.vertical" : "text.justify.leading")
+                            .font(.system(size: 11.5, weight: .semibold))
+                            .foregroundStyle(wrap ? Theme.goldText : Theme.sub)
+                            .frame(width: 28, height: 28)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(wrap ? "Stop wrapping lines" : "Wrap lines")
+                }
                 Button {
                     UIPasteboard.general.string = code
                     withAnimation(.easeOut(duration: 0.15)) { copied = true }
@@ -145,12 +168,35 @@ struct CodeBlockView: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 3)
             .background(Color.white.opacity(0.05))
-            ScrollView(.horizontal, showsIndicators: false) {
-                Text(code.isEmpty ? " " : code)
-                    .font(.system(size: max(11, size - 2), design: .monospaced))
-                    .foregroundStyle(Theme.text)
-                    .fixedSize(horizontal: true, vertical: true)
+            if wrap {
+                Text(CodeColors.styled(code, language: language))
+                    .font(font)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(10)
+                    .textSelection(.enabled)
+            } else {
+                HStack(alignment: .top, spacing: 0) {
+                    if showNumbers {
+                        Text((1...lines).map(String.init).joined(separator: "\n"))
+                            .font(font)
+                            .foregroundStyle(Theme.muted.opacity(0.7))
+                            .multilineTextAlignment(.trailing)
+                            .fixedSize()
+                            .padding(.vertical, 10)
+                            .padding(.leading, 10)
+                            .padding(.trailing, 8)
+                            .background(Color.white.opacity(0.03))
+                            .accessibilityHidden(true)
+                    }
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        Text(CodeColors.styled(code, language: language))
+                            .font(font)
+                            .fixedSize(horizontal: true, vertical: true)
+                            .padding(10)
+                            .textSelection(.enabled)
+                    }
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
