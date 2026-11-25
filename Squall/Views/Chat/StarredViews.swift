@@ -119,6 +119,21 @@ struct MessageMenu: ViewModifier {
                         Label("Forward to", systemImage: "arrowshape.turn.up.right")
                     }
                 }
+                if message.kind == .me, let chatID {
+                    Button {
+                        let online = store.isConnected
+                        // Without the computer, send() says why it can't.
+                        store.send(words, to: chatID)
+                        if online { store.showToast("Sent again.") }
+                    } label: {
+                        Label("Send again", systemImage: "arrow.clockwise")
+                    }
+                    Button {
+                        SavedPrompts.shared.insert = SavedPrompts.Insert(chatID: chatID, text: words)
+                    } label: {
+                        Label("Edit and send again", systemImage: "pencil")
+                    }
+                }
                 if message.kind == .me {
                     Button {
                         if let problem = SavedPrompts.shared.problem(text: words) {

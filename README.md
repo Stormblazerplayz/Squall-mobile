@@ -37,6 +37,7 @@ Tabs along the bottom:
 - **Quick replies**: when a teammate ends with a quick question, tap Yes, No or one of its options to answer (see [docs/quick-replies.md](docs/quick-replies.md)).
 - **Pinch to change text size**: pinch a chat to make messages Small, Normal, Big or Huge (see [docs/pinch-text-size.md](docs/pinch-text-size.md)).
 - **New messages line**: opening a chat shows a line above what came in since you last looked, with how many (see [docs/new-messages.md](docs/new-messages.md)).
+- **Send again**: press and hold your own message to send it again, or edit it first (see [docs/send-again.md](docs/send-again.md)).
 - **Inbox**: things that need you (OKs and questions from your bots), problems and finished work. Allow, Deny, pick, Clear, and filters.
 - **Board**: every bot as a card with Chat, Steps and hand-off. A bot with a job running has Watch live.
 - **Routines**: routines that wake a bot on a schedule, with on/off switches. Long-press one to delete it.
