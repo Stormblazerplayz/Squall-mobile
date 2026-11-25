@@ -47,7 +47,7 @@ struct TeamManageSection: View {
                                         .accessibilityLabel("Chief")
                                 }
                             }
-                            Text(bot.role)
+                            Text([bot.role, info?.projectOf[bot.id]].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
                                 .font(.system(size: 12.5))
                                 .foregroundColor(Theme.sub)
                                 .lineLimit(1)
@@ -143,6 +143,9 @@ struct ManageTeammateSheet: View {
                     .opacity(canManage ? 1 : 0.5)
                 if let info {
                     chiefCard(bot, isChief: isChief, info: info)
+                        .disabled(!canManage || working)
+                        .opacity(canManage ? 1 : 0.5)
+                    projectCard(bot, info: info)
                         .disabled(!canManage || working)
                         .opacity(canManage ? 1 : 0.5)
                     removeCard(bot, isChief: isChief, info: info)
@@ -242,6 +245,55 @@ struct ManageTeammateSheet: View {
         .glassCard(radius: 18)
     }
 
+    private func projectCard(_ bot: Bot, info: TeamManage.Info) -> some View {
+        let current = info.projectOf[bot.id]
+        let choices = TeamManage.projectChoices(current: current, info: info)
+        return VStack(alignment: .leading, spacing: 10) {
+            label("Project")
+            Menu {
+                Button {
+                    setProject(bot, "")
+                } label: {
+                    if current == nil { Label("All of Projects", systemImage: "checkmark") } else { Text("All of Projects") }
+                }
+                if !choices.isEmpty {
+                    Divider()
+                }
+                ForEach(choices, id: \.self) { name in
+                    Button {
+                        setProject(bot, name)
+                    } label: {
+                        if current == name { Label(name, systemImage: "checkmark") } else { Text(name) }
+                    }
+                    .disabled(info.projects?.contains(name) != true)
+                }
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "folder.fill")
+                        .foregroundColor(store.accent)
+                    Text(current ?? "All of Projects")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(Theme.text)
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(Theme.muted)
+                }
+                .padding(.horizontal, 12)
+                .frame(height: 44)
+                .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Theme.field))
+            }
+            Text(info.projects == nil
+                 ? "Your computer is still reading its projects."
+                 : "\(bot.name) works in this folder from its next run, in a new conversation there.")
+                .font(.system(size: 12.5))
+                .foregroundColor(Theme.muted)
+        }
+        .padding(14)
+        .glassCard(radius: 18)
+    }
+
     private func removeCard(_ bot: Bot, isChief: Bool, info: TeamManage.Info) -> some View {
         let block = TeamManage.removeBlock(isChief: isChief, info: info)
         return VStack(alignment: .leading, spacing: 10) {
@@ -291,6 +343,18 @@ struct ManageTeammateSheet: View {
         Task {
             await store.perform(TeamManage.chiefAction(botID: bot.id, on: on))
             working = false
+        }
+    }
+
+    private func setProject(_ bot: Bot, _ project: String) {
+        guard !working else { return }
+        working = true
+        Task {
+            let reply = await store.perform(TeamManage.projectAction(botID: bot.id, project: project))
+            working = false
+            if reply != nil {
+                store.showToast(project.isEmpty ? "\(bot.name) works across all of Projects." : "\(bot.name) now works in \(project).")
+            }
         }
     }
 

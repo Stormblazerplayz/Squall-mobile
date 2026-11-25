@@ -13,6 +13,10 @@ enum TeamManage {
         /// True when this computer can do the manage actions. An older one doesn't send the block at all.
         var manage: Bool
         var chiefIDs: Set<String>
+        /// Each teammate's project (a folder under Documents\Projects), by bot id. Missing means all of Projects.
+        var projectOf: [String: String] = [:]
+        /// The computer's projects, or nil before it has read them.
+        var projects: [String]? = nil
 
         func isChief(_ botID: String) -> Bool { chiefIDs.contains(botID) }
     }
@@ -23,8 +27,11 @@ enum TeamManage {
               let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
               let team = root["team"] as? [String: Any] else { return nil }
         var chiefs = Set<String>()
+        var projectOf: [String: String] = [:]
         for bot in root["bots"] as? [[String: Any]] ?? [] {
-            if let id = bot["id"] as? String, bot["chief"] as? Bool == true { chiefs.insert(id) }
+            guard let id = bot["id"] as? String else { continue }
+            if bot["chief"] as? Bool == true { chiefs.insert(id) }
+            if let project = bot["project"] as? String, !project.isEmpty { projectOf[id] = project }
         }
         func number(_ key: String, _ fallback: Int) -> Int {
             (team[key] as? NSNumber)?.intValue ?? fallback
@@ -35,7 +42,9 @@ enum TeamManage {
             chiefs: number("chiefs", chiefs.count),
             maxChiefs: number("maxChiefs", 4),
             manage: team["manage"] as? Bool ?? false,
-            chiefIDs: chiefs
+            chiefIDs: chiefs,
+            projectOf: projectOf,
+            projects: (team["projects"] as? [Any])?.compactMap { $0 as? String }
         )
     }
 
@@ -81,6 +90,18 @@ enum TeamManage {
 
     static func chiefAction(botID: String, on: Bool) -> SyncAction {
         SyncAction(type: "bot.chief", fields: ["botId": .string(botID), "on": .bool(on)])
+    }
+
+    /// A project's name, or "" for all of Projects.
+    static func projectAction(botID: String, project: String) -> SyncAction {
+        SyncAction(type: "bot.project", fields: ["botId": .string(botID), "project": .string(project)])
+    }
+
+    /// The projects to pick from: the computer's list, plus the teammate's current one when it's somewhere else.
+    static func projectChoices(current: String?, info: Info) -> [String] {
+        var list = info.projects ?? []
+        if let current, !current.isEmpty, !list.contains(current) { list.insert(current, at: 0) }
+        return list
     }
 
     /// `confirm` is the name the phone showed, so a stale screen can't remove someone else.

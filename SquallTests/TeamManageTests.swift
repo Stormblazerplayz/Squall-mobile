@@ -60,4 +60,24 @@ final class TeamManageTests: XCTestCase {
         XCTAssertEqual(remove.type, "bot.remove")
         XCTAssertEqual(remove.fields["confirm"], .string("Quill"))
     }
+
+    func testProjects() {
+        let json = """
+        { "bots": [ { "id": "chief", "name": "Nova", "chief": true }, { "id": "quill", "name": "Quill", "project": "Farside" },
+                    { "id": "rex", "name": "Rex", "project": "Odd" } ],
+          "team": { "size": 3, "max": 12, "chiefs": 1, "maxChiefs": 4, "manage": true, "projects": ["Squall", "Farside", 7] } }
+        """
+        let info = TeamManage.info(from: Data(json.utf8))!
+        XCTAssertEqual(info.projectOf, ["quill": "Farside", "rex": "Odd"])
+        XCTAssertEqual(info.projects, ["Squall", "Farside"])
+        XCTAssertEqual(TeamManage.projectChoices(current: "Farside", info: info), ["Squall", "Farside"])
+        XCTAssertEqual(TeamManage.projectChoices(current: "Odd", info: info), ["Odd", "Squall", "Farside"])
+        XCTAssertEqual(TeamManage.projectChoices(current: nil, info: info), ["Squall", "Farside"])
+        let noList = TeamManage.Info(size: 1, max: 12, chiefs: 1, maxChiefs: 4, manage: true, chiefIDs: [])
+        XCTAssertNil(noList.projects)
+        XCTAssertEqual(TeamManage.projectChoices(current: "Odd", info: noList), ["Odd"])
+        let action = TeamManage.projectAction(botID: "quill", project: "")
+        XCTAssertEqual(action.type, "bot.project")
+        XCTAssertEqual(action.fields["project"], .string(""))
+    }
 }
