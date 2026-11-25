@@ -3,7 +3,7 @@ import UIKit
 import UniformTypeIdentifiers
 import UserNotifications
 
-/// The ••• button at the top of a chat: get a ping when the teammate is done, find words in the chat, go to a day, pick a wallpaper, share the chat as a
+/// The ••• button at the top of a chat: get a ping when the teammate is done, find words in the chat, go to a day, see chat stats, pick a wallpaper, share the chat as a
 /// Markdown file or a PDF, copy it, or clear it.
 struct ChatMoreMenu: View {
     @EnvironmentObject private var store: SquallStore
@@ -11,6 +11,7 @@ struct ChatMoreMenu: View {
     let bot: Bot
     @State private var confirmClear = false
     @ObservedObject private var dayJump = ChatDayJump.Model.shared
+    @State private var showStats = false
 
     var body: some View {
         let messages = store.messages(for: bot.id)
@@ -42,6 +43,12 @@ struct ChatMoreMenu: View {
                 dayJump.showList = true
             } label: {
                 Label("Go to a day", systemImage: "calendar")
+            }
+            .disabled(messages.isEmpty)
+            Button {
+                showStats = true
+            } label: {
+                Label("Chat stats", systemImage: "chart.bar")
             }
             .disabled(messages.isEmpty)
             WallpaperMenu(bot: bot)
@@ -84,6 +91,9 @@ struct ChatMoreMenu: View {
         }
         .sheet(isPresented: $dayJump.showList) {
             ChatDaySheet(bot: bot, messages: store.messages(for: bot.id))
+        }
+        .sheet(isPresented: $showStats) {
+            ChatStatsSheet(bot: bot, messages: store.messages(for: bot.id))
         }
     }
 
