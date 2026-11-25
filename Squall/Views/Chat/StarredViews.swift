@@ -33,8 +33,8 @@ struct StarredButton: View {
     }
 }
 
-/// Copy, Copy as plain text, Star, Remind me, Save as prompt and Share on a long press of a message. Star and Remind me need the
-/// chat it's in, so a message shown without one (like in a group) gets the rest.
+/// Copy, Copy as plain text, Star, Remind me, Reply with quote, Forward to, Save as prompt and Share on a long press of a
+/// message. Star, Remind me and Reply need the chat it's in, so a message shown without one (like in a group) gets the rest.
 struct MessageMenu: ViewModifier {
     let message: ChatMessage
     let chatID: String?
@@ -76,6 +76,28 @@ struct MessageMenu: ViewModifier {
                 }
                 if let chatID {
                     RemindMeMenu(message: message, chatID: chatID, authorName: authorName, store: store)
+                    Button {
+                        let quote = QuoteReply.quote(words, author: authorName, mine: message.kind == .me)
+                        SavedPrompts.shared.insert = SavedPrompts.Insert(chatID: chatID, text: quote)
+                    } label: {
+                        Label("Reply with quote", systemImage: "arrowshape.turn.up.left")
+                    }
+                }
+                let targets = QuoteReply.targets(store.bots, excluding: chatID)
+                if !targets.isEmpty, message.kind == .me || message.kind == .bot {
+                    Menu {
+                        ForEach(targets) { bot in
+                            Button(bot.name) {
+                                let quote = QuoteReply.quote(words, author: authorName, mine: message.kind == .me)
+                                let draft = QuoteReply.forwardDraft(existing: ChatDrafts.shared.text(for: bot.id), quote: quote)
+                                ChatDrafts.shared.set(draft, for: bot.id)
+                                store.openChat(bot.id)
+                                store.showToast("In \(bot.name)'s message box. Add a note and send.")
+                            }
+                        }
+                    } label: {
+                        Label("Forward to", systemImage: "arrowshape.turn.up.right")
+                    }
                 }
                 if message.kind == .me {
                     Button {

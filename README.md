@@ -28,6 +28,7 @@ Tabs along the bottom:
 - **Real days in chats**: a line where each day starts (Today, Yesterday, Monday, Nov 23) and a Jump to latest pill that counts new messages while you read older ones (see [docs/chat-days.md](docs/chat-days.md)).
 - **iPhone Search**: starred messages and saved prompts show up in Search; a prompt opens Chief's chat ready to send (see [docs/spotlight-content.md](docs/spotlight-content.md)).
 - **Code colors**: code in chats is colored like an editor, with line numbers, red and green diffs, and a Wrap button (see [docs/code-colors.md](docs/code-colors.md)).
+- **Reply with quote and Forward to**: press and hold a message to quote it in your reply or pass it to another teammate's chat (see [docs/quote-forward.md](docs/quote-forward.md)).
 - **Inbox**: things that need you (OKs and questions from your bots), problems and finished work. Allow, Deny, pick, Clear, and filters.
 - **Board**: every bot as a card with Chat, Steps and hand-off. A bot with a job running has Watch live.
 - **Routines**: routines that wake a bot on a schedule, with on/off switches. Long-press one to delete it.
