@@ -77,6 +77,9 @@ struct MessageMenu: ViewModifier {
                     }
                 }
                 if message.kind == .bot {
+                    CodeMenu(pieces: CodePieces.pieces(in: words))
+                }
+                if message.kind == .bot {
                     let readID = ReadAloud.id(chatID: chatID ?? "", messageID: message.id)
                     let reading = reader.isReading(readID)
                     Button {
@@ -408,5 +411,49 @@ struct StarredView: View {
 
     private func chatName(_ id: String) -> String {
         store.bot(id)?.name ?? starred.items.first { $0.chatID == id && $0.author != ChatMessage.meID }?.authorName ?? "Old chat"
+    }
+}
+
+/// Copy code and Save code as a file, for a reply with code blocks. One block is copied or saved straight away; with
+/// more, each block gets a line, and Copy all code joins them.
+private struct CodeMenu: View {
+    @EnvironmentObject private var store: SquallStore
+    let pieces: [CodePieces.Piece]
+
+    var body: some View {
+        if pieces.count == 1, let piece = pieces.first {
+            copyButton("Copy code", text: piece.code)
+            ShareLink(item: CodeFile(piece: piece), preview: SharePreview(piece.fileName, image: Image(systemName: "doc.plaintext"))) {
+                Label("Save code as a file", systemImage: "square.and.arrow.down")
+            }
+        } else if pieces.count > 1 {
+            Menu {
+                copyButton("Copy all code", text: CodePieces.all(pieces))
+                Divider()
+                ForEach(pieces) { piece in
+                    copyButton("Copy \(piece.number): \(piece.title)", text: piece.code)
+                }
+            } label: {
+                Label("Copy code", systemImage: "chevron.left.forwardslash.chevron.right")
+            }
+            Menu {
+                ForEach(pieces) { piece in
+                    ShareLink(item: CodeFile(piece: piece), preview: SharePreview(piece.fileName, image: Image(systemName: "doc.plaintext"))) {
+                        Text("\(piece.fileName) (\(piece.title))")
+                    }
+                }
+            } label: {
+                Label("Save code as a file", systemImage: "square.and.arrow.down")
+            }
+        }
+    }
+
+    private func copyButton(_ title: String, text: String) -> some View {
+        Button {
+            UIPasteboard.general.string = text
+            store.showToast("Code copied.")
+        } label: {
+            Label(title, systemImage: "chevron.left.forwardslash.chevron.right")
+        }
     }
 }
