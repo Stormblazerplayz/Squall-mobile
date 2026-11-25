@@ -46,6 +46,24 @@ enum ChatFind {
         return "\(index + 1) of \(count)"
     }
 
+    /// Where the typed words are in a message's text, as character places, in order. Case and accents don't matter.
+    static func ranges(in text: String, terms: [String]) -> [Range<Int>] {
+        guard !text.isEmpty else { return [] }
+        var out: [Range<Int>] = []
+        for term in terms where !term.isEmpty {
+            var from = text.startIndex
+            while from < text.endIndex,
+                  let found = text.range(of: term, options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive],
+                                         range: from..<text.endIndex) {
+                let start = text.distance(from: text.startIndex, to: found.lowerBound)
+                let end = text.distance(from: text.startIndex, to: found.upperBound)
+                if end > start { out.append(start..<end) }
+                from = found.upperBound
+            }
+        }
+        return out.sorted { $0.lowerBound < $1.lowerBound }
+    }
+
     /// Whether find is open, what's typed and which match is showing. The ••• menu opens it; the chat draws it.
     final class Model: ObservableObject {
         static let shared = Model()

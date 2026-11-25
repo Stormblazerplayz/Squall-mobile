@@ -9,3 +9,7 @@ Tap ••• at the top of a chat and pick **Find in chat**. A bar slides in un
 - Tap Done, switch chats or leave the chat to close it.
 
 Code: `Squall/Models/ChatFind.swift`, `Squall/Views/Chat/ChatFindBar.swift`.
+
+## Highlights
+
+While the bar is open, the words you typed light up in gold inside every message, yours and the teammate's, so you can see why a message matched.

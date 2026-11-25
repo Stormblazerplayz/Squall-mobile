@@ -121,6 +121,7 @@ struct ChatView: View {
                             .padding(.vertical, 8)
                             .readableColumn(780)
                             .environment(\.findMarkID, foundID ?? dayJump.flashID)
+                            .environment(\.findTerms, find.isOpen ? ChatFind.terms(find.query) : [])
                         }
                         .scrollIndicators(.hidden)
                         .scrollDismissesKeyboard(.interactively)
@@ -714,6 +715,7 @@ struct MessageView: View {
     @AppStorage(BubbleStyle.key) private var bubbleStyle = BubbleStyle.rounded
     @ObservedObject private var starred = StarredMessages.shared
     @Environment(\.findMarkID) private var findMarkID
+    @Environment(\.findTerms) private var findTerms
 
     var body: some View {
         bubble
@@ -776,7 +778,7 @@ struct MessageView: View {
                             .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 14, style: .continuous))
                             .transition(.scale(scale: 0.4).combined(with: .opacity))
                     } else {
-                        Text(ChatLinks.mine(message.text, mentions: Mentions.targets(store.bots)))
+                        Text(ChatFind.highlighted(ChatLinks.mine(message.text, mentions: Mentions.targets(store.bots)), terms: findTerms))
                             .font(.system(size: textSize))
                             .foregroundStyle(.white)
                             .tint(.white)

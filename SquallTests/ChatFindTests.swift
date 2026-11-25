@@ -59,3 +59,21 @@ final class ChatFindTests: XCTestCase {
         XCTAssertNil(model.index)
     }
 }
+
+final class ChatFindHighlightTests: XCTestCase {
+    func testRanges() {
+        XCTAssertEqual(ChatFind.ranges(in: "Login fixed. The login works", terms: ["login"]), [0..<5, 17..<22])
+        XCTAssertEqual(ChatFind.ranges(in: "At the Café", terms: ChatFind.terms("cafe")), [7..<11])
+        XCTAssertEqual(ChatFind.ranges(in: "fix the login", terms: ["login", "fix"]), [0..<3, 8..<13])
+        XCTAssertEqual(ChatFind.ranges(in: "", terms: ["a"]), [])
+        XCTAssertEqual(ChatFind.ranges(in: "abc", terms: []), [])
+    }
+
+    func testHighlightLeavesTheWordsAlone() {
+        let text = AttributedString("Fix the login")
+        let out = ChatFind.highlighted(text, terms: ["login"])
+        XCTAssertEqual(String(out.characters), "Fix the login")
+        XCTAssertEqual(ChatFind.highlighted(text, terms: []), text)
+        XCTAssertNotEqual(out, text)
+    }
+}

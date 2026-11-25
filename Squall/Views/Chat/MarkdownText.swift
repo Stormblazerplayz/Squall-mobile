@@ -13,6 +13,7 @@ struct MarkdownText: View {
     /// Which reply this is, so its task list can be ticked (see TickLists). nil leaves the boxes as written.
     @Environment(\.tickListKey) private var tickListKey
     @Environment(\.printing) private var printing
+    @Environment(\.findTerms) private var findTerms
     @ObservedObject private var tickLists = TickLists.shared
     /// Headings folded shut (see MarkdownSections), by their place in the reply.
     @State private var folded = Set<Int>()
@@ -159,7 +160,7 @@ struct MarkdownText: View {
 
     private func inline(_ text: String, size: Double? = nil, weight: Font.Weight = .regular, color: Color? = nil) -> some View {
         let fontSize = size ?? self.size
-        return Text(MarkdownText.styled(text, size: fontSize, mentions: mentionTargets))
+        return Text(ChatFind.highlighted(MarkdownText.styled(text, size: fontSize, mentions: mentionTargets), terms: findTerms))
             .font(.system(size: fontSize, weight: weight))
             .foregroundStyle(color ?? self.color)
             .fixedSize(horizontal: false, vertical: true)
