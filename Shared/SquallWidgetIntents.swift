@@ -61,6 +61,8 @@ struct AnswerAskIntent: LiveActivityIntent {
             snapshot.firstAskBot = nil
             snapshot.firstAskID = nil
         }
+        // The Inbox widget drops it right away too.
+        InboxWidgetSnapshot.answered(id)
         return .result()
     }
 }

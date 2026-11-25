@@ -396,6 +396,7 @@ final class SquallStore: ObservableObject {
         DailyRecap.update(bots: newBots)
         // Drafts for teammates who were removed go too.
         if !newBots.isEmpty { ChatDrafts.shared.keepOnly(Set(newBots.map(\.id))) }
+        InboxWidgetWriter.update(inbox: inbox, bots: newBots)
         LiveActivities.shared.sync(work: work, inbox: inbox, routines: routines, bots: bots, paused: pausedAll)
     }
 
@@ -463,6 +464,7 @@ final class SquallStore: ObservableObject {
         InboxSnooze.shared.clear()
         DailyRecap.forget()
         ChatDrafts.shared.clear()
+        InboxWidgetWriter.forget()
     }
 
     /// Takes everything from the computer off the screens.

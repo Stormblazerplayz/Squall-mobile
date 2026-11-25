@@ -10,6 +10,7 @@ struct SquallActivitiesBundle: WidgetBundle {
     var body: some Widget {
         TeamStatusWidget()
         TeammateWidget()
+        InboxWidget()
         BuildActivityWidget()
         ApprovalActivityWidget()
         RoutineActivityWidget()
