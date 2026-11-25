@@ -3,13 +3,14 @@ import UIKit
 import UniformTypeIdentifiers
 import UserNotifications
 
-/// The ••• button at the top of a chat: get a ping when the teammate is done, find words in the chat, pick a wallpaper, share the chat as a
+/// The ••• button at the top of a chat: get a ping when the teammate is done, find words in the chat, go to a day, pick a wallpaper, share the chat as a
 /// Markdown file or a PDF, copy it, or clear it.
 struct ChatMoreMenu: View {
     @EnvironmentObject private var store: SquallStore
     @ObservedObject private var doneWatch = DoneWatch.shared
     let bot: Bot
     @State private var confirmClear = false
+    @State private var showDays = false
 
     var body: some View {
         let messages = store.messages(for: bot.id)
@@ -35,6 +36,12 @@ struct ChatMoreMenu: View {
                 withAnimation(.easeOut(duration: 0.2)) { ChatFind.Model.shared.open() }
             } label: {
                 Label("Find in chat", systemImage: "magnifyingglass")
+            }
+            .disabled(messages.isEmpty)
+            Button {
+                showDays = true
+            } label: {
+                Label("Go to a day", systemImage: "calendar")
             }
             .disabled(messages.isEmpty)
             WallpaperMenu(bot: bot)
@@ -74,6 +81,9 @@ struct ChatMoreMenu: View {
             }
         } message: {
             Text("\(bot.name) keeps its memory. Only the messages go away, and starred ones stay in Starred.")
+        }
+        .sheet(isPresented: $showDays) {
+            ChatDaySheet(bot: bot, messages: store.messages(for: bot.id))
         }
     }
 

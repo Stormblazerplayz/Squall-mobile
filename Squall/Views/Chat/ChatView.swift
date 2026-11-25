@@ -22,6 +22,8 @@ struct ChatView: View {
     @State private var bigEditor = false
     /// Find in chat, opened from the ••• menu.
     @ObservedObject private var find = ChatFind.Model.shared
+    /// Go to a day, picked in the ••• menu.
+    @ObservedObject private var dayJump = ChatDayJump.Model.shared
     @AppStorage(Prefs.showTyping) private var showTyping = true
     @AppStorage(Prefs.sendOnReturn) private var sendOnReturn = false
     @AppStorage(Prefs.haptics) private var haptics = true
@@ -118,7 +120,7 @@ struct ChatView: View {
                             .padding(.horizontal, 16)
                             .padding(.vertical, 8)
                             .readableColumn(780)
-                            .environment(\.findMarkID, foundID)
+                            .environment(\.findMarkID, foundID ?? dayJump.flashID)
                         }
                         .scrollIndicators(.hidden)
                         .scrollDismissesKeyboard(.interactively)
@@ -142,6 +144,16 @@ struct ChatView: View {
                         .onChange(of: foundID) { _, id in
                             guard let id else { return }
                             withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo(id, anchor: .center) }
+                        }
+                        .onChange(of: dayJump.request) { _, request in
+                            guard let request, request.chatID == bot.id else { return }
+                            dayJump.request = nil
+                            Task { @MainActor in
+                                // Once the list of days has gone away.
+                                try? await Task.sleep(for: .milliseconds(350))
+                                withAnimation(.easeOut(duration: 0.3)) { proxy.scrollTo(request.messageID, anchor: .top) }
+                                dayJump.flash(request.messageID)
+                            }
                         }
                         .overlay(alignment: .bottom) {
                             if showJump && !list.isEmpty {
