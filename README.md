@@ -16,6 +16,7 @@ Tabs along the bottom:
 - **Chat**: one-on-one chat with any bot, with replies from your computer, Chief's errors with Try again, a strip to jump between bots, reply chips, the Live switch and a call button. Bot replies are formatted the way Claude wrote them: headings, lists, task lists, quotes, tables, links, and code blocks with a Copy button. Long-press a reply to copy it, with or without the formatting.
 - **Saved prompts**: messages you send a lot, one tap away from the book at the top of every chat. `{name}` and `{today}` fill in by themselves (see [docs/saved-prompts.md](docs/saved-prompts.md)).
 - **Back up this phone**: Settings > Data saves your stars, saved prompts and settings to one file and restores them on any phone (see [docs/backup.md](docs/backup.md)).
+- **Answer at once**: when several OKs are waiting, look them over in one list and Allow (with Face ID) or Deny the ones you tick (see [docs/answer-many.md](docs/answer-many.md)).
 - **Inbox**: things that need you (OKs and questions from your bots), problems and finished work. Allow, Deny, pick, Clear, and filters.
 - **Board**: every bot as a card with Chat, Steps and hand-off. A bot with a job running has Watch live.
 - **Routines**: routines that wake a bot on a schedule, with on/off switches. Long-press one to delete it.

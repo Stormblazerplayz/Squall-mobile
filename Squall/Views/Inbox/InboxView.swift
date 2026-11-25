@@ -101,6 +101,7 @@ struct InboxView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 50)
         } else {
+            if filter == .all || filter == .needs { AnswerManyBar() }
             section("Needs you", dot: Theme.goldBright, items: shown.filter { $0.kind.needsYou })
             section("Problems", dot: Theme.redSoft, items: shown.filter { $0.kind == .error })
             section("Done", dot: Theme.green, items: shown.filter {
@@ -151,6 +152,7 @@ struct InboxView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 50)
                     } else {
+                        if filter == .all || filter == .needs { AnswerManyBar() }
                         listSection("Needs you", dot: Theme.goldBright, items: shown.filter { $0.kind.needsYou }, selected: selected?.id)
                         listSection("Problems", dot: Theme.redSoft, items: shown.filter { $0.kind == .error }, selected: selected?.id)
                         listSection("Done", dot: Theme.green, items: shown.filter {
