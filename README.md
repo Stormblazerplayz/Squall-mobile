@@ -29,6 +29,17 @@ Screens that slide in:
 - **Call Chief**: a real voice call with Chief on your computer (live captions, Mute, End). It only works while the computer is connected.
 - **Mission control** (the grid button on Team): everyone at once, Pause all, wake Chief, what needs you, recent handoffs and a jump-to search.
 
+## Plan usage
+
+Tap the **Plan usage** card on Team (or Settings > Plan usage) to see how much of your Claude plan the team has used, straight from Claude on your computer:
+
+- **5-hour limit**: a ring with how much is used, when it resets, and where your pace lands ("about 61% when it resets", or "runs out in 25m, before it resets").
+- **Weekly**: each weekly window with a bar, its reset and its pace.
+- **Save usage**: **Slow the team down to save usage** (bots keep turns short and don't wake sleeping teammates while usage is tight) and **Also slow down at** 50% to 90% of the 5-hour window. The gold tick on the ring is your limit. These change Squall on the computer too.
+- **Today**: each bot's jobs and how long they worked today. Tap a bot to open its chat.
+
+It needs the newer Squall on the computer; with an older one the screen says to update it.
+
 ## Siri and Shortcuts
 
 Say these to Siri, or find them in the Shortcuts app and Spotlight. Everything goes to your real computer; if Squall isn't paired or the computer isn't answering, Siri says so.

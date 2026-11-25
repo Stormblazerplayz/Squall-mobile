@@ -28,6 +28,7 @@ struct TeamView: View {
                             VStack(spacing: 18) {
                                 ChiefCard(showSteps: $showChiefSteps)
                                 quickActions
+                                usageCard
                             }
                             .frame(width: 380)
                             VStack(spacing: 18) {
@@ -40,6 +41,7 @@ struct TeamView: View {
                     } else {
                         ChiefCard(showSteps: $showChiefSteps)
                         quickActions
+                        usageCard
                         teamSection
                         // Each agent's own computer, right after the team.
                         UnoTeamSection()
@@ -88,6 +90,14 @@ struct TeamView: View {
             QuickAction(icon: "clock", title: "Routines") {
                 store.tab = .routines
             }
+        }
+    }
+
+    /// Plan usage at a glance, once the computer sends it.
+    @ViewBuilder
+    private var usageCard: some View {
+        if let usage = store.usage {
+            UsageSummaryCard(usage: usage)
         }
     }
 

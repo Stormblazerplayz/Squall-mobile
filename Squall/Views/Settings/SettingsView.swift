@@ -105,6 +105,8 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var secondColumn: some View {
+        SectionLabel(text: "Plan usage")
+        usageSection
         SectionLabel(text: "Safety")
         safetySection
         SectionLabel(text: "Claude Code")
@@ -146,6 +148,46 @@ struct SettingsView: View {
 
     private var line: some View {
         Divider().overlay(Theme.cardBorder)
+    }
+
+    /// Opens Plan usage: the plan's windows, the slow-down switch and today's jobs.
+    private var usageSection: some View {
+        Button {
+            store.path.append(.usage)
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "gauge.with.dots.needle.50percent")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(Color(hex: 0x3FD0B0))
+                    .frame(width: 40, height: 40)
+                    .background(Circle().fill(Color(hex: 0x3FD0B0, opacity: 0.14)))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Plan usage")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(Theme.text)
+                    Text(usageLine)
+                        .font(.system(size: 12.5))
+                        .foregroundStyle(Theme.sub)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(Theme.muted)
+            }
+            .padding(14)
+            .glassCard(radius: 18)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var usageLine: String {
+        guard store.hasData else { return "Pair with your computer to see it." }
+        guard let usage = store.usage else { return "Update Squall on your computer to see it here." }
+        var line = UsageText.summary(usage)
+        if usage.slowDown, let limit = usage.limit { line += " · slows down at \(limit)%" }
+        return line
     }
 
     private var computerSection: some View {

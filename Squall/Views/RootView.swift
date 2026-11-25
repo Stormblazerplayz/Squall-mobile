@@ -107,6 +107,8 @@ struct RootView: View {
             connected { UnoLiveView(agentId: agentId) }.navigationTitle("Squall Uno").pushedScreen()
         case .unoSettings:
             connected { UnoSettingsView() }.navigationTitle("Squall Uno settings").pushedScreen()
+        case .usage:
+            connected { UsageView() }.navigationTitle("Plan usage").pushedScreen()
         }
     }
 
