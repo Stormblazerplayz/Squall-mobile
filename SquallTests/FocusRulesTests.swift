@@ -52,4 +52,11 @@ final class FocusRulesTests: XCTestCase {
         XCTAssertEqual(FocusRules.decode(nil), FocusRules())
         XCTAssertEqual(FocusRules.decode(Data("nope".utf8)), FocusRules())
     }
+
+    func testFocusFilterChoicesMatchTheSavedOnes() {
+        XCTAssertEqual(FocusPingsOption.allCases.map(\.rawValue), FocusRules.Pings.allCases.map(\.rawValue))
+        for option in FocusPingsOption.allCases {
+            XCTAssertEqual(option.rules.rawValue, option.rawValue)
+        }
+    }
 }
