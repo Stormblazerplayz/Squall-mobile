@@ -8,6 +8,7 @@ struct UnoLiveView: View {
     @EnvironmentObject private var uno: UnoModel
     @EnvironmentObject private var lock: AppLock
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage(Prefs.haptics) private var haptics = true
     let agentId: String
 
@@ -20,6 +21,14 @@ struct UnoLiveView: View {
     @State private var openSession: UnoSession?
     @State private var stopAllPresses = 0
     @State private var pausePresses = 0
+    // The live screen's motion, from real events only (see UnoMotion).
+    @State private var effects = UnoScreenEffects()
+    @State private var lastMotionSeq = 0
+    @State private var motionArmed = false
+    @State private var eventCursor: CGPoint?
+    @State private var framesSinceMove = 0
+    @State private var hapticGate = UnoHapticGate(perSecond: 4)
+    @State private var clickTaps = 0
 
     private var watcher: String { "live.\(agentId)" }
     private var agent: Bot? { store.bot(agentId) }
@@ -67,6 +76,8 @@ struct UnoLiveView: View {
         .onAppear {
             rippleArmed = uno.loaded
             lastRippleSeq = newestClickSeq
+            motionArmed = uno.loaded
+            lastMotionSeq = newestEventSeq
             uno.show(watcher)
             uno.showFrames(watcher, computerId: computerId)
         }
@@ -76,12 +87,21 @@ struct UnoLiveView: View {
         }
         .onChange(of: computerId) {
             uno.showFrames(watcher, computerId: computerId)
+            eventCursor = nil
+            effects = UnoScreenEffects()
         }
         .onChange(of: newestClickSeq) {
             showNewClicks()
         }
+        .onChange(of: newestEventSeq) {
+            showNewMotion()
+        }
+        .onChange(of: liveFrame?.seq) {
+            framesSinceMove += 1
+        }
         .sensoryFeedback(.warning, trigger: stopAllPresses) { _, _ in haptics }
         .sensoryFeedback(.impact(weight: .light), trigger: pausePresses) { _, _ in haptics }
+        .sensoryFeedback(.impact(weight: .light), trigger: clickTaps) { _, _ in haptics }
         .sheet(isPresented: $showTakeover) {
             UnoTakeoverView(agentId: agentId, agentName: agentName)
                 .lockCover()
@@ -111,6 +131,9 @@ struct UnoLiveView: View {
                 if let notice = uno.notice {
                     UnoNoticeText(text: notice)
                 }
+                if let session = running ?? latest {
+                    UnoFilmstrip(session: session, agentName: agentName)
+                }
                 feedSection
                 recentSection
             }
@@ -137,6 +160,7 @@ struct UnoLiveView: View {
                     .font(.system(size: 12.5))
                     .foregroundStyle(UnoColors.muted)
                     .lineLimit(2)
+                UnoTokenLine(session: running ?? latest)
             }
             Spacer(minLength: 0)
             if let running {
@@ -165,7 +189,9 @@ struct UnoLiveView: View {
             frame: liveFrame,
             fallbackSize: computer?.size ?? CGSize(width: 1280, height: 800),
             ripples: ripples,
-            emptyText: screenEmptyText
+            emptyText: screenEmptyText,
+            cursorOverride: movedCursor,
+            effects: effects
         )
         .overlay(alignment: .bottomLeading) {
             if let cursor = liveFrame?.cursor {
@@ -507,5 +533,129 @@ struct UnoLiveView: View {
             try? await Task.sleep(for: .milliseconds(900))
             ripples.removeAll { $0.id == id }
         }
+    }
+
+    // MARK: Motion on the live screen
+
+    private var newestEventSeq: Int {
+        computerEvents.last?.seq ?? 0
+    }
+
+    /// Where a real event just moved the mouse. Kept until two more frames have come, since a frame grabbed
+    /// just before the event can still show the mouse where it was.
+    private var movedCursor: CGPoint? {
+        framesSinceMove < 2 ? eventCursor : nil
+    }
+
+    /// Where effects that follow the mouse go.
+    private var cursorSpot: CGPoint? {
+        movedCursor ?? liveFrame?.cursor
+    }
+
+    /// Plays each new event on the screen: the mouse glides, typing and keys show near it, and so on.
+    private func showNewMotion() {
+        let newest = newestEventSeq
+        guard motionArmed else {
+            // The first answer just came in: don't replay old events.
+            motionArmed = true
+            lastMotionSeq = newest
+            return
+        }
+        let fresh = computerEvents.filter { $0.seq > lastMotionSeq }.suffix(6)
+        lastMotionSeq = max(lastMotionSeq, newest)
+        for event in fresh {
+            if let motion = UnoMotion.of(event) {
+                play(motion, from: event)
+            }
+        }
+    }
+
+    private func play(_ motion: UnoMotion, from event: UnoEvent) {
+        let appear: Animation? = reduceMotion ? nil : .easeOut(duration: 0.2)
+        let fade: Animation? = reduceMotion ? nil : .easeOut(duration: 0.3)
+        switch motion {
+        case .click(let at, _):
+            moveCursor(to: at)
+            // A light tap for each click Squall Uno makes, at most 4 a second.
+            if !event.byYou, haptics, hapticGate.allow() {
+                clickTaps += 1
+            }
+        case .move(let to):
+            moveCursor(to: to)
+        case .drag(let from, let to):
+            let trail = UnoScreenEffects.Trail(from: from, to: to, color: event.byYou ? UnoColors.typed : UnoColors.blueBright)
+            withAnimation(appear) {
+                effects.trails.append(trail)
+                if effects.trails.count > 4 {
+                    effects.trails.removeFirst(effects.trails.count - 4)
+                }
+            }
+            moveCursor(to: to)
+            let id = trail.id
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(1200))
+                withAnimation(fade) {
+                    effects.trails.removeAll { $0.id == id }
+                }
+            }
+        case .type(let text):
+            let note = UnoScreenEffects.Typing(text: text, at: cursorSpot, start: Date())
+            withAnimation(appear) { effects.typing = note }
+            let typing = reduceMotion ? 0 : UnoMotionText.tickerTotal(length: text.count)
+            let stay = Int((typing + (reduceMotion ? 1.8 : 0.9)) * 1000)
+            let id = note.id
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(stay))
+                if effects.typing?.id == id {
+                    withAnimation(fade) { effects.typing = nil }
+                }
+            }
+        case .key(let chip):
+            let note = UnoScreenEffects.Keycap(chip: chip, at: cursorSpot)
+            withAnimation(appear) { effects.keycap = note }
+            let id = note.id
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(1300))
+                if effects.keycap?.id == id {
+                    withAnimation(fade) { effects.keycap = nil }
+                }
+            }
+        case .scroll(let direction, let at):
+            guard let spot = at ?? cursorSpot else { return }
+            let mark = UnoScreenEffects.ScrollMark(direction: direction, at: spot)
+            effects.scrolls.append(mark)
+            if effects.scrolls.count > 3 {
+                effects.scrolls.removeFirst(effects.scrolls.count - 3)
+            }
+            let id = mark.id
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(800))
+                effects.scrolls.removeAll { $0.id == id }
+            }
+        case .flash(let zoom):
+            // A camera flash is pure motion: with Reduce Motion on, the feed is enough.
+            guard !reduceMotion else { return }
+            withAnimation(.easeOut(duration: 0.08)) { effects.flash = true }
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(100))
+                withAnimation(.easeOut(duration: 0.32)) { effects.flash = false }
+            }
+            if let zoom, zoom.width > 0, zoom.height > 0 {
+                let mark = UnoScreenEffects.ZoomMark(rect: zoom)
+                withAnimation(appear) { effects.zoom = mark }
+                let id = mark.id
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(1000))
+                    if effects.zoom?.id == id {
+                        withAnimation(.easeOut(duration: 0.3)) { effects.zoom = nil }
+                    }
+                }
+            }
+        }
+    }
+
+    private func moveCursor(to point: CGPoint) {
+        eventCursor = point
+        framesSinceMove = 0
     }
 }

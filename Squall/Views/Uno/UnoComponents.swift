@@ -250,7 +250,9 @@ private struct UnoRippleView: View {
 
 /// The computer's live screen: the newest JPEG, fitted to the space, with the mouse arrow
 /// and click ripples on top. With `onTap`, a tap gives back the computer pixel under your finger.
+/// New frames fade in over the old one and the mouse glides to each new spot, unless Reduce Motion is on.
 struct UnoScreenView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let frame: UnoLiveFrame?
     /// The computer's size before the first frame comes.
     let fallbackSize: CGSize
@@ -258,6 +260,10 @@ struct UnoScreenView: View {
     /// What to say while there's no picture.
     var emptyText: String
     var onTap: ((CGPoint) -> Void)? = nil
+    /// Where the mouse just went by a real event, ahead of the frame that shows it.
+    var cursorOverride: CGPoint? = nil
+    /// Typed text, keycaps, drag trails and the like, from real events.
+    var effects = UnoScreenEffects()
 
     private var computerSize: CGSize {
         if let frame { return frame.size }
@@ -271,12 +277,19 @@ struct UnoScreenView: View {
             let rect = UnoMath.fitRect(content: content, in: box)
             ZStack {
                 if let frame {
-                    Image(uiImage: frame.image)
-                        .resizable()
-                        .interpolation(.medium)
-                        .frame(width: rect.width, height: rect.height)
-                        .position(x: rect.midX, y: rect.midY)
-                        .accessibilityLabel("The computer's screen")
+                    ZStack {
+                        Image(uiImage: frame.image)
+                            .resizable()
+                            .interpolation(.medium)
+                            .frame(width: rect.width, height: rect.height)
+                            .position(x: rect.midX, y: rect.midY)
+                            .accessibilityLabel("The computer's screen")
+                            .zIndex(Double(frame.seq))
+                            .transition(.unoFrameSwap)
+                            .id(frame.seq)
+                    }
+                    .frame(width: box.width, height: box.height)
+                    .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: frame.seq)
                 } else {
                     VStack(spacing: 10) {
                         Image(systemName: "display")
@@ -294,13 +307,15 @@ struct UnoScreenView: View {
                     UnoRippleView(color: ripple.color)
                         .position(UnoMath.toView(ripple.point, computer: content, rect: rect))
                 }
-                if let cursor = frame?.cursor {
+                UnoEffectsLayer(effects: effects, computer: content, rect: rect, box: box, reduceMotion: reduceMotion)
+                if frame != nil, let cursor = cursorOverride ?? frame?.cursor {
                     let tip = UnoMath.toView(cursor, computer: content, rect: rect)
                     Image(systemName: "cursorarrow")
                         .font(.system(size: 17, weight: .bold))
                         .foregroundStyle(.white)
                         .shadow(color: .black.opacity(0.85), radius: 1.5)
                         .position(x: tip.x + 5, y: tip.y + 8)
+                        .animation(reduceMotion ? nil : .easeOut(duration: 0.25), value: cursor)
                         .allowsHitTesting(false)
                         .accessibilityHidden(true)
                 }

@@ -182,6 +182,13 @@ final class PairingStore: ObservableObject {
         return try await unoClient.unoFrame(computer, token: token, computerId: computerId, after: after)
     }
 
+    /// One replay picture of a Squall Uno task, or nil when the PC no longer keeps it. See UnoShots.
+    func unoShot(sessionId: String, id: Int) async throws -> Data? {
+        guard let computer else { throw UnoError.notPaired }
+        guard let token = KeychainStore.read(account: Self.tokenAccount) else { throw PairingError.tokenRejected }
+        return try await unoClient.unoShot(computer, token: token, sessionId: sessionId, id: id)
+    }
+
     /// Forgets the computer on this phone, and asks the computer to forget this phone too.
     func unpair() async {
         guard let computer, !busy else { return }
