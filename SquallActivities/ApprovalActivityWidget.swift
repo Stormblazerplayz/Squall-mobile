@@ -15,7 +15,7 @@ struct ApprovalActivityWidget: Widget {
             let s = context.state
             return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    Avatar(letter: String(a.askerName.prefix(1)), hex: Palette.goldHex, size: 36)
+                    AskerAvatar(name: a.askerName, decision: s.decision, size: 38)
                         .padding(.leading, 2)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
@@ -43,7 +43,7 @@ struct ApprovalActivityWidget: Widget {
                     .padding(.horizontal, 4)
                 }
             } compactLeading: {
-                Avatar(letter: String(a.askerName.prefix(1)), hex: Palette.goldHex, size: 22)
+                AskerAvatar(name: a.askerName, decision: s.decision, size: 22, badge: false)
             } compactTrailing: {
                 switch s.decision {
                 case .waiting:
@@ -78,15 +78,25 @@ private struct ApprovalLockScreen: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             ActivityHeader(sub: "\(attributes.askerName) · \(attributes.askerRole)", title: attributes.title) {
-                Avatar(letter: String(attributes.askerName.prefix(1)), hex: Palette.goldHex)
+                AskerAvatar(name: attributes.askerName, decision: state.decision, size: 36)
             } trailing: {
                 ApprovalBadge(decision: state.decision)
             }
-            Text(state.decision == .waiting ? attributes.message : ApprovalText.result(state.decision))
-                .font(.system(size: 12.5))
-                .foregroundStyle(Palette.text.opacity(0.9))
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
+            if state.decision == .waiting {
+                Text(attributes.message)
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(Palette.text.opacity(0.9))
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                HStack(spacing: 6) {
+                    Image(systemName: state.decision == .allowed ? "checkmark.seal.fill" : "hand.raised.slash.fill")
+                        .font(.system(size: 13, weight: .bold))
+                    Text(ApprovalText.result(state.decision))
+                        .font(.system(size: 13, weight: .semibold))
+                }
+                .foregroundStyle(state.decision == .allowed ? Palette.greenText : Palette.sub)
+            }
             if !attributes.command.isEmpty {
                 CommandChip(command: attributes.command)
             }
@@ -118,16 +128,68 @@ private struct ApprovalButtons: View {
     }
 }
 
+/// The asker's gold ball, with a small hand while it waits on you
+/// (or a check or cross once you answered).
+private struct AskerAvatar: View {
+    let name: String
+    let decision: ApprovalActivityAttributes.Decision
+    var size: CGFloat = 36
+    var badge = true
+
+    var body: some View {
+        ZStack {
+            if decision == .waiting {
+                Circle()
+                    .stroke(Color(activityHex: Palette.goldHex, opacity: 0.45), lineWidth: max(1.5, size * 0.06))
+                    .frame(width: size + size * 0.2, height: size + size * 0.2)
+            }
+            Avatar(letter: String(name.prefix(1)).uppercased(), hex: Palette.goldHex, size: size)
+        }
+        .frame(width: size + size * 0.2, height: size + size * 0.2)
+        .overlay(alignment: .bottomTrailing) {
+            if badge {
+                Image(systemName: icon)
+                    .font(.system(size: size * 0.22, weight: .heavy))
+                    .foregroundStyle(Palette.ink)
+                    .frame(width: size * 0.42, height: size * 0.42)
+                    .background(Circle().fill(color))
+                    .overlay(Circle().stroke(Palette.ink, lineWidth: 1.5))
+            }
+        }
+    }
+
+    private var icon: String {
+        switch decision {
+        case .waiting: return "hand.raised.fill"
+        case .allowed: return "checkmark"
+        case .denied: return "xmark"
+        }
+    }
+
+    private var color: Color {
+        switch decision {
+        case .waiting: return Palette.goldText
+        case .allowed: return Palette.green
+        case .denied: return Palette.sub
+        }
+    }
+}
+
 private struct ApprovalBadge: View {
     let decision: ApprovalActivityAttributes.Decision
 
     var body: some View {
-        Text(label)
-            .font(.system(size: 11.5, weight: .bold))
-            .foregroundStyle(color)
-            .padding(.horizontal, 8)
-            .frame(height: 22)
-            .background(Capsule().fill(color.opacity(0.16)))
+        HStack(spacing: 4) {
+            Image(systemName: icon)
+                .font(.system(size: 9.5, weight: .heavy))
+            Text(label)
+                .font(.system(size: 11.5, weight: .bold))
+        }
+        .foregroundStyle(color)
+        .padding(.horizontal, 8)
+        .frame(height: 22)
+        .background(Capsule().fill(color.opacity(0.16)))
+        .overlay(Capsule().stroke(color.opacity(0.35), lineWidth: 1))
     }
 
     private var label: String {
@@ -135,6 +197,14 @@ private struct ApprovalBadge: View {
         case .waiting: return "Needs you"
         case .allowed: return "Allowed"
         case .denied: return "Denied"
+        }
+    }
+
+    private var icon: String {
+        switch decision {
+        case .waiting: return "hand.raised.fill"
+        case .allowed: return "checkmark"
+        case .denied: return "xmark"
         }
     }
 
@@ -147,17 +217,31 @@ private struct ApprovalBadge: View {
     }
 }
 
+/// The command it wants to run, like a line in a terminal.
 private struct CommandChip: View {
     let command: String
 
     var body: some View {
-        Text(command)
-            .font(.system(size: 11.5, weight: .medium, design: .monospaced))
-            .foregroundStyle(Palette.goldText)
-            .lineLimit(1)
-            .padding(.horizontal, 8)
-            .frame(maxWidth: .infinity, minHeight: 22, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Color.black.opacity(0.35)))
+        HStack(spacing: 6) {
+            Capsule()
+                .fill(Palette.gold)
+                .frame(width: 3, height: 14)
+            Text("$")
+                .font(.system(size: 11.5, weight: .bold, design: .monospaced))
+                .foregroundStyle(Palette.muted)
+            Text(command)
+                .font(.system(size: 11.5, weight: .medium, design: .monospaced))
+                .foregroundStyle(Palette.goldText)
+                .lineLimit(1)
+                .truncationMode(.middle)
+        }
+        .padding(.horizontal, 8)
+        .frame(maxWidth: .infinity, minHeight: 24, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.black.opacity(0.4)))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+        )
     }
 }
 
