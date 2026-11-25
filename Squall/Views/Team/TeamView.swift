@@ -26,38 +26,31 @@ struct TeamView: View {
                         // iPad: Chief on the left, the whole team in a grid on the right.
                         HStack(alignment: .top, spacing: 18) {
                             VStack(spacing: 18) {
-                                ChiefCard(showSteps: $showChiefSteps)
-                                todoCard
-                                quickActions
                                 TeamPulseCard().appearIn(0)
                                 ChiefCard(showSteps: $showChiefSteps).appearIn(1)
+                                todoCard
                                 quickActions.appearIn(2)
                                 usageCard
                             }
                             .frame(width: 380)
                             VStack(spacing: 18) {
-                                teamSection
-                                // Each agent's own computer, right after the team.
-                                UnoTeamSection(isWide: true)
                                 RecentActivityCard().appearIn(1)
                                 teamSection.appearIn(2)
+                                // Each agent's own computer, right after the team.
+                                UnoTeamSection(isWide: true)
                             }
                             .frame(maxWidth: .infinity)
                         }
                     } else {
-                        ChiefCard(showSteps: $showChiefSteps)
-                        todoCard
-                        quickActions
-                        usageCard
-                        teamSection
-                        // Each agent's own computer, right after the team.
-                        UnoTeamSection()
                         TeamPulseCard().appearIn(0)
                         ChiefCard(showSteps: $showChiefSteps).appearIn(1)
+                        todoCard
                         quickActions.appearIn(2)
                         usageCard
                         RecentActivityCard().appearIn(3)
                         teamSection.appearIn(4)
+                        // Each agent's own computer, right after the team.
+                        UnoTeamSection()
                     }
                 }
                 .padding(.horizontal, isWide ? 24 : 16)

@@ -21,8 +21,6 @@ The last real update from your computer is kept on the phone, so screens open ri
 Tabs along the bottom:
 
 - **Team**: a hello with live counts (working, needs you, done today), Chief's card (message Chief, see its steps), quick actions (new teammate, new group, call Chief, routines), **Recent activity** from your team, and the team list with unread badges and progress bars. Long-press a bot, then tap the glowing Chief card to hand its work to Chief.
-- **Chat**: one-on-one chat with any bot, with replies from your computer, Chief's errors with Try again, a strip to jump between bots, reply chips, the Live switch and a call button.
-- **Team**: Chief's card (message Chief, see its steps), quick actions (new teammate, new group, routines) and the team list with unread badges. Long-press a bot, then tap the glowing Chief card to hand its work to Chief.
 - **Chat**: one-on-one chat with any bot, with replies from your computer, Chief's errors with Try again, a strip to jump between bots, reply chips, the Live switch and a call button. Bot replies are formatted the way Claude wrote them: headings, lists, task lists, quotes, tables, links, and code blocks with a Copy button. Long-press a reply to copy it, with or without the formatting.
 - **Saved prompts**: messages you send a lot, one tap away from the book at the top of every chat. `{name}` and `{today}` fill in by themselves (see [docs/saved-prompts.md](docs/saved-prompts.md)).
 - **Back up this phone**: Settings > Data saves your stars, saved prompts and settings to one file and restores them on any phone (see [docs/backup.md](docs/backup.md)).
