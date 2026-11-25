@@ -20,7 +20,7 @@ struct UnoLiveView: View {
     @State private var showTakeover = false
     @State private var openSession: UnoSession?
     @State private var stopAllPresses = 0
-    @State private var pausePresses = 0
+    @State private var showBigScreen = false
     // The live screen's motion, from real events only (see UnoMotion).
     @State private var effects = UnoScreenEffects()
     @State private var lastMotionSeq = 0
@@ -100,7 +100,6 @@ struct UnoLiveView: View {
             framesSinceMove += 1
         }
         .sensoryFeedback(.warning, trigger: stopAllPresses) { _, _ in haptics }
-        .sensoryFeedback(.impact(weight: .light), trigger: pausePresses) { _, _ in haptics }
         .sensoryFeedback(.impact(weight: .light), trigger: clickTaps) { _, _ in haptics }
         .sheet(isPresented: $showTakeover) {
             UnoTakeoverView(agentId: agentId, agentName: agentName)
@@ -108,6 +107,20 @@ struct UnoLiveView: View {
                 .environmentObject(store)
                 .environmentObject(uno)
                 .environmentObject(lock)
+        }
+        .fullScreenCover(isPresented: $showBigScreen) {
+            UnoBigScreenView(
+                agentId: agentId,
+                agentName: agentName,
+                ripples: ripples,
+                emptyText: screenEmptyText,
+                cursorOverride: movedCursor,
+                effects: effects
+            )
+            .lockCover()
+            .environmentObject(store)
+            .environmentObject(uno)
+            .environmentObject(lock)
         }
         .sheet(item: $openSession) { session in
             UnoSessionSheet(session: session, agentName: agentName)
@@ -193,6 +206,24 @@ struct UnoLiveView: View {
             cursorOverride: movedCursor,
             effects: effects
         )
+        .onTapGesture(count: 2) {
+            showBigScreen = true
+        }
+        .overlay(alignment: .topTrailing) {
+            Button {
+                showBigScreen = true
+            } label: {
+                Image(systemName: "arrow.up.left.and.arrow.down.right")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(UnoColors.text)
+                    .frame(width: 32, height: 32)
+                    .background(Circle().fill(Color.black.opacity(0.6)))
+            }
+            .buttonStyle(.plain)
+            .padding(8)
+            .accessibilityLabel("Big screen")
+            .accessibilityHint("Shows the screen full size, so you can zoom in")
+        }
         .overlay(alignment: .bottomLeading) {
             if let cursor = liveFrame?.cursor {
                 Text("\(Int(cursor.x)), \(Int(cursor.y))")
@@ -306,7 +337,7 @@ struct UnoLiveView: View {
                         }
                         .buttonStyle(GhostButtonStyle(height: 42, fontSize: 14))
                         .disabled(uno.isBusy("handback"))
-                        stopButton(session)
+                        UnoStopButton(session: session)
                     }
                 } else {
                     Button(uno.isBusy("takeover") ? "Taking it…" : "Take the wheel") {
@@ -315,8 +346,8 @@ struct UnoLiveView: View {
                     .buttonStyle(GhostButtonStyle(height: 42, foreground: UnoColors.blueBright, fontSize: 14))
                     .disabled(uno.isBusy("takeover"))
                     HStack(spacing: 8) {
-                        pauseButton(session)
-                        stopButton(session)
+                        UnoPauseButton(session: session)
+                        UnoStopButton(session: session)
                     }
                 }
             } else {
@@ -348,38 +379,6 @@ struct UnoLiveView: View {
                 .accessibilityHint("Stops Squall Uno on every computer")
             }
         }
-    }
-
-    private func stopButton(_ session: UnoSession) -> some View {
-        Button(uno.isBusy("stop.\(session.id)") ? "Stopping…" : "Stop") {
-            Task { @MainActor in
-                await uno.stop(sessionId: session.id)
-            }
-        }
-        .buttonStyle(GhostButtonStyle(height: 42, foreground: Theme.redText, border: Theme.red.opacity(0.5), fontSize: 14))
-        .disabled(uno.isBusy("stop.\(session.id)"))
-    }
-
-    /// Pause while it works (the step it's on finishes first), Resume while it's paused.
-    private func pauseButton(_ session: UnoSession) -> some View {
-        let paused = session.isPaused
-        let busy = uno.isBusy("pause.\(session.id)") || uno.isBusy("resume.\(session.id)")
-        let title = paused ? (busy ? "Resuming…" : "Resume") : (busy ? "Pausing…" : "Pause")
-        return Button {
-            pausePresses += 1
-            Task { @MainActor in
-                if paused {
-                    await uno.resume(sessionId: session.id)
-                } else {
-                    await uno.pause(sessionId: session.id)
-                }
-            }
-        } label: {
-            Label(title, systemImage: paused ? "play.fill" : "pause.fill")
-        }
-        .buttonStyle(GhostButtonStyle(height: 42, foreground: UnoColors.paused, border: UnoColors.paused.opacity(0.5), fontSize: 14))
-        .disabled(busy || !(paused || session.canPause))
-        .accessibilityHint(paused ? "Lets Squall Uno carry on" : "Squall Uno finishes the step it's on, then waits")
     }
 
     private var isStarting: Bool {

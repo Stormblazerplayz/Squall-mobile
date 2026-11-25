@@ -375,3 +375,55 @@ struct UnoNoticeText: View {
             .fixedSize(horizontal: false, vertical: true)
     }
 }
+
+/// Pause while it works (the step it's on finishes first), Resume while it's paused.
+/// Shared by the live view and the big screen.
+struct UnoPauseButton: View {
+    @EnvironmentObject private var uno: UnoModel
+    @AppStorage(Prefs.haptics) private var haptics = true
+    let session: UnoSession
+    var height: CGFloat = 42
+
+    @State private var presses = 0
+
+    var body: some View {
+        let paused = session.isPaused
+        let busy = uno.isBusy("pause.\(session.id)") || uno.isBusy("resume.\(session.id)")
+        let title = paused ? (busy ? "Resuming…" : "Resume") : (busy ? "Pausing…" : "Pause")
+        Button {
+            presses += 1
+            let id = session.id
+            Task { @MainActor in
+                if paused {
+                    await uno.resume(sessionId: id)
+                } else {
+                    await uno.pause(sessionId: id)
+                }
+            }
+        } label: {
+            Label(title, systemImage: paused ? "play.fill" : "pause.fill")
+        }
+        .buttonStyle(GhostButtonStyle(height: height, foreground: UnoColors.paused, border: UnoColors.paused.opacity(0.5), fontSize: 14))
+        .disabled(busy || !(paused || session.canPause))
+        .accessibilityHint(paused ? "Lets Squall Uno carry on" : "Squall Uno finishes the step it's on, then waits")
+        .sensoryFeedback(.impact(weight: .light), trigger: presses) { _, _ in haptics }
+    }
+}
+
+/// Stops the task on this computer. Shared by the live view and the big screen.
+struct UnoStopButton: View {
+    @EnvironmentObject private var uno: UnoModel
+    let session: UnoSession
+    var height: CGFloat = 42
+
+    var body: some View {
+        Button(uno.isBusy("stop.\(session.id)") ? "Stopping…" : "Stop") {
+            let id = session.id
+            Task { @MainActor in
+                await uno.stop(sessionId: id)
+            }
+        }
+        .buttonStyle(GhostButtonStyle(height: height, foreground: Theme.redText, border: Theme.red.opacity(0.5), fontSize: 14))
+        .disabled(uno.isBusy("stop.\(session.id)"))
+    }
+}

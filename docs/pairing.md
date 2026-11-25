@@ -321,6 +321,10 @@ One replay picture as `200 image/jpeg`, with `X-Uno-Step`, `X-Uno-Width`, `X-Uno
 
 The live view shows them as the **Replay** filmstrip under the controls. It asks for `shots` again each time the task takes a step (and once more 1.6 seconds later, while the task is working), fetches each small picture only when it scrolls into view, and keeps the last 80 in memory. Tapping one opens a full-screen replay you can swipe through or play. The share button there makes an animated GIF of the whole replay on the phone (each picture with its step under it, at most 800 pixels wide) and opens the share sheet, so you can save it to Photos or send it. The PC keeps pictures in memory only, so they're gone after Squall on the PC restarts.
 
+### Big screen
+
+The expand button in the live screen's corner (or a double tap on the screen) opens the **big screen**: the same live picture, mouse, click ripples and motion, filling the phone. Pinch to zoom from 1x to 4x, drag to move around while zoomed in, and double-tap to zoom to 2.5x on that spot (or back to 1x). The picture can't be dragged off the view. Turn the phone sideways for the biggest picture: the rest of the app stays upright. The agent's name, the **Live** / **Paused** pill, **Pause** / **Resume** and **Stop** stay at hand. It asks for frames under its own name, so closing it never stops the live view's screen. No new calls: it uses the same `state` and `frame` requests as the live view.
+
 ## Safety
 
 - Codes are short-lived, single-use and limited to 5 tries.
