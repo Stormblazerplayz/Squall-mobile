@@ -226,6 +226,7 @@ private struct ChatHeader: View {
     @EnvironmentObject private var store: SquallStore
     let bot: Bot
     @Binding var showLiveLog: Bool
+    @State private var confirmClear = false
 
     var body: some View {
         HStack(spacing: 10) {
