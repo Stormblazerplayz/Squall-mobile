@@ -385,6 +385,8 @@ final class SquallStore: ObservableObject {
         // Siri learns the bots' names, and Spotlight lists them.
         SiriSync.update(bots: newBots)
         noticeChanges()
+        ReplyAlerts.process(chats: snapshot.chats, bots: newBots, settings: settings, computerKey: dataComputerKey ?? "",
+                            inForeground: UIApplication.shared.applicationState == .active)
         LiveActivities.shared.sync(work: work, inbox: inbox, routines: routines, bots: bots, paused: pausedAll)
     }
 

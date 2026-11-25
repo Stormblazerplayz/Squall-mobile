@@ -57,7 +57,7 @@ Asking, starting a task, approving and declining need your iPhone or iPad unlock
 
 ## Notifications
 
-Squall pings you when a bot needs your OK or an answer, when something breaks, and (if you turn it on) when work is done. It follows Settings > Notifications: which pings, sound, quiet hours and muted bots. An OK request has **Allow** and **Deny** right on the notification (Allow asks for Face ID first). The app icon's badge counts what needs you.
+Squall pings you when a bot needs your OK or an answer, when something breaks, and (if you turn it on) when work is done. It follows Settings > Notifications: which pings, sound, quiet hours and muted bots. An OK request has **Allow** and **Deny** right on the notification (Allow asks for Face ID first). The app icon's badge counts what needs you. When a teammate replies in a one-on-one chat while Squall is closed, you get a ping with a **Reply** box (see [docs/reply-pings.md](docs/reply-pings.md)).
 
 Squall checks the computer while it's open, for a little while after you leave it, and now and then in the background when iOS allows, so a ping can come a few minutes late. Nothing pings for old news when you first pair.
 

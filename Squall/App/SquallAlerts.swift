@@ -41,7 +41,7 @@ final class SquallAlerts: NSObject, ObservableObject, UNUserNotificationCenterDe
         let deny = UNNotificationAction(identifier: AlertIDs.denyAction, title: "Deny", options: [.destructive])
         let ask = UNNotificationCategory(identifier: AlertIDs.askCategory, actions: [allow, deny], intentIdentifiers: [], options: [])
         let item = UNNotificationCategory(identifier: AlertIDs.itemCategory, actions: [], intentIdentifiers: [], options: [])
-        center.setNotificationCategories([ask, item])
+        center.setNotificationCategories([ask, item, ReplyAlerts.notificationCategory])
         Task { await refreshPermission() }
     }
 
@@ -157,6 +157,7 @@ final class SquallAlerts: NSObject, ObservableObject, UNUserNotificationCenterDe
         let defaults = UserDefaults.standard
         defaults.removeObject(forKey: Self.seenKey)
         defaults.removeObject(forKey: Self.computerKey)
+        ReplyAlerts.forget()
         center.removeAllDeliveredNotifications()
         lastBadge = nil
         updateBadge(0)
@@ -173,7 +174,18 @@ final class SquallAlerts: NSObject, ObservableObject, UNUserNotificationCenterDe
         let itemID = info[AlertIDs.itemKey] as? String
         let route = info[AlertIDs.routeKey] as? String
         let action = response.actionIdentifier
-        if action == AlertIDs.allowAction || action == AlertIDs.denyAction {
+        if action == ReplyAlerts.replyAction {
+            // The Reply box on a teammate's reply: send the words straight to that chat.
+            guard let chatID = info[ReplyAlerts.chatKey] as? String,
+                  let typed = (response as? UNTextInputNotificationResponse)?.userText,
+                  let text = ReplyAlerts.message(typed) else { return }
+            do {
+                try await SquallDirect.send("chat.send", ["chatId": chatID, "text": text])
+            } catch {
+                let reason = (error as? SquallDirect.Failure)?.message ?? error.localizedDescription
+                await Self.tell(title: "Your reply wasn't sent", body: "\(reason) Open Squall to send it.")
+            }
+        } else if action == AlertIDs.allowAction || action == AlertIDs.denyAction {
             guard let itemID else { return }
             let allow = action == AlertIDs.allowAction
             do {
