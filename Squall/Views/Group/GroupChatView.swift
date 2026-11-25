@@ -225,6 +225,7 @@ struct GroupChatView: View {
                     withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
                 }
             }
+            MentionPickerBar(draft: $draft, bots: memberBots, tint: store.accent)
             mentionBar
             inputBar
         }

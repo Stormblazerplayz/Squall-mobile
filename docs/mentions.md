@@ -8,3 +8,9 @@ mention shows bold, and tapping it opens that teammate's chat.
 - A mention inside `code` stays as code.
 
 Code: `Squall/Models/Mentions.swift` (finding and styling), `Squall/Views/Chat/MentionTaps.swift` (the tap).
+
+## Picking a name
+
+Type @ in the message box and a row of teammates shows above it, names that start with what you typed first. Tap one
+to finish the name with a space after it. In a group chat it lists the group's members.
+Code: `Squall/Models/MentionPicker.swift`, `Squall/Views/Chat/MentionPickerBar.swift`.

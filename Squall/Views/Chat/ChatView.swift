@@ -143,6 +143,7 @@ struct ChatView: View {
                     }
                     SelectionBar(chatID: bot.id)
                     SlashPromptBar(draft: $draft, botName: bot.name, tint: bot.color)
+                    MentionPickerBar(draft: $draft, bots: store.bots, tint: bot.color)
                     inputBar(bot)
                 }
                 .readableColumn(isWide ? .infinity : Theme.readableWidth)
