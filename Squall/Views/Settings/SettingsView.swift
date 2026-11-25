@@ -548,15 +548,10 @@ struct SettingsView: View {
         card {
             rowTitle("Message text size")
             PillSegments(
-                options: [
-                    (label: "Small", value: 13.5),
-                    (label: "Normal", value: 15.0),
-                    (label: "Big", value: 17.0),
-                    (label: "Huge", value: 19.0)
-                ],
+                options: ChatTextSizes.steps.map { (label: $0.label, value: $0.size) },
                 selection: $chatTextSize
             )
-            Text("Hey, this is how big messages look.")
+            Text("Hey, this is how big messages look. You can also pinch a chat to change it.")
                 .font(.system(size: chatTextSize))
                 .foregroundStyle(Theme.text)
                 .padding(.horizontal, 12)

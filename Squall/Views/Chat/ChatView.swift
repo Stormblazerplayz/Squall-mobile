@@ -127,6 +127,7 @@ struct ChatView: View {
                             }
                         }
                         .animation(.easeOut(duration: 0.2), value: showJump)
+                        .pinchToResizeText(tint: bot.color)
                     }
                     SlashPromptBar(draft: $draft, botName: bot.name, tint: bot.color)
                     inputBar(bot)

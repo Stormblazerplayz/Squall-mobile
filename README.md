@@ -35,6 +35,7 @@ Tabs along the bottom:
 - **Slash for saved prompts**: type / in a chat to pick a saved prompt, and keep typing to search them (see [docs/slash-prompts.md](docs/slash-prompts.md)).
 - **Long replies fold**: a reply over about 24 lines starts folded with Show more, so a big log doesn't fill the chat (see [docs/long-replies.md](docs/long-replies.md)).
 - **Quick replies**: when a teammate ends with a quick question, tap Yes, No or one of its options to answer (see [docs/quick-replies.md](docs/quick-replies.md)).
+- **Pinch to change text size**: pinch a chat to make messages Small, Normal, Big or Huge (see [docs/pinch-text-size.md](docs/pinch-text-size.md)).
 - **Inbox**: things that need you (OKs and questions from your bots), problems and finished work. Allow, Deny, pick, Clear, and filters.
 - **Board**: every bot as a card with Chat, Steps and hand-off. A bot with a job running has Watch live.
 - **Routines**: routines that wake a bot on a schedule, with on/off switches. Long-press one to delete it.
