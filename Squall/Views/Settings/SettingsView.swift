@@ -16,6 +16,7 @@ struct SettingsView: View {
     @State private var changingIcon = false
     /// Words typed in the search field at the top. Only matching sections show while it has some.
     @State private var search = ""
+    @AppStorage(UndoSend.key) private var undoSend = false
 
     /// Asset name (nil is the normal icon), name shown, and the small preview image.
     private static let iconChoices: [(asset: String?, title: String, preview: String)] = [
@@ -620,6 +621,8 @@ struct SettingsView: View {
             SwitchRow(title: "Show message times", isOn: $showTimes, tint: store.accent)
             line
             SwitchRow(title: "Send with Return", subtitle: "Handy with an iPad keyboard. Off makes Return start a new line.", isOn: $sendOnReturn, tint: store.accent)
+            line
+            SwitchRow(title: "Undo send", subtitle: "Messages wait 5 seconds in the chat with an Undo button before they go", isOn: $undoSend, tint: store.accent)
             line
             rowTitle("Chat opens on", "What you see when Squall starts")
             PillSegments(

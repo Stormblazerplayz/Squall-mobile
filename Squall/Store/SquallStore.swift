@@ -771,6 +771,18 @@ final class SquallStore: ObservableObject {
         let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         let id = chatID ?? currentChatID
+        // With Undo send on, it waits a few seconds in the chat first (see UndoSend).
+        if UndoSend.isOn, link != .unpaired {
+            UndoSend.shared.hold(text, chatID: id) { [weak self] item in
+                self?.sendNow(item.text, to: item.chatID)
+            }
+            return
+        }
+        sendNow(text, to: id)
+    }
+
+    /// Sends a message straight away, or puts it in the outbox when the computer isn't answering.
+    private func sendNow(_ text: String, to id: String) {
         guard isConnected else {
             // Paired but not answering: the message waits on the phone and goes out when the computer is back.
             if link != .unpaired, Outbox.shared.add(text, chatID: id) {

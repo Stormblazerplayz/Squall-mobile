@@ -14,7 +14,7 @@ enum SettingsSearch {
     static let sections: [Section] = [
         Section(name: "Computer", words: ["paired", "pair with computer", "unpair", "not paired", "team name", "your name", "teammates", "computer"]),
         Section(name: "Look", words: ["accent color", "colour", "app icon", "home screen", "softer glow", "background", "vibrate", "haptics", "buzz", "small sounds", "tink", "silent"]),
-        Section(name: "Chat", words: ["message text size", "font", "bigger", "pinch", "typing dots", "message times", "send with return", "keyboard", "ipad", "chat opens on", "start"]),
+        Section(name: "Chat", words: ["message text size", "font", "bigger", "pinch", "typing dots", "message times", "send with return", "undo send", "keyboard", "ipad", "chat opens on", "start"]),
         Section(name: "Chief", words: ["nap when there is no work", "sleep", "check for work", "hand out work", "jobs"]),
         Section(name: "New teammates", words: ["starting role", "new teammates", "role"]),
         Section(name: "Your team", words: ["rename", "promote", "chief", "remove", "teammate", "project", "folder"]),
