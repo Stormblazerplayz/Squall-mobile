@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 
 /// Problems in this chat, from Browse this chat: every error the teammate hit, newest first. Tap to copy it (to paste
-/// into a message asking for a fix), press and hold to go to its message.
+/// into a message asking for a fix), press and hold to ask the teammate to fix it or go to its message.
 struct ChatProblemsSheet: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var store: SquallStore
@@ -95,6 +95,11 @@ struct ChatProblemsSheet: View {
                 Label("Copy the problem", systemImage: "doc.on.doc")
             }
             Button {
+                ask(entry)
+            } label: {
+                Label("Ask \(bot.name) to fix it", systemImage: "wrench.and.screwdriver")
+            }
+            Button {
                 dismiss()
                 ChatDayJump.Model.shared.go(chatID: bot.id, messageID: entry.messageID)
             } label: {
@@ -111,6 +116,12 @@ struct ChatProblemsSheet: View {
     private func byline(_ entry: ChatProblemList.Entry) -> String {
         guard let at = entry.at else { return entry.time.isEmpty ? bot.name : "\(bot.name) · \(entry.time)" }
         return "\(bot.name) · \(TeamHistory.dayTitle(at)), \(TeamHistory.clock(at))"
+    }
+
+    /// Puts the ask and the error in this chat's message box, for you to send.
+    private func ask(_ entry: ChatProblemList.Entry) {
+        dismiss()
+        SavedPrompts.shared.insert = SavedPrompts.Insert(chatID: bot.id, text: ChatProblemList.askDraft(entry))
     }
 
     private func copy(_ entry: ChatProblemList.Entry) {

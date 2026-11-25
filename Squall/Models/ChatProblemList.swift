@@ -34,6 +34,18 @@ enum ChatProblemList {
         return line.count > maxTitle ? String(line.prefix(maxTitle - 1)) + "…" : line
     }
 
+    /// What goes in the message box for "Ask to fix it": a short ask, then the error as a quote. Nothing is sent
+    /// until you tap Send, so you can add to it first.
+    static func askDraft(_ entry: Entry) -> String {
+        var body = entry.text
+        if body.count > QuoteReply.maxQuote {
+            body = String(body.prefix(QuoteReply.maxQuote - 1)).trimmingCharacters(in: .whitespacesAndNewlines) + "…"
+        }
+        let lines = body.isEmpty ? [">"] : body.components(separatedBy: "\n").map { $0.isEmpty ? ">" : "> \($0)" }
+        let ask = entry.count > 1 ? "This problem happened \(entry.count) times. Can you find out why and fix it?" : "Can you find out why this happened and fix it?"
+        return ([ask, ""] + lines).joined(separator: "\n") + "\n\n"
+    }
+
     /// "3 problems · 7 times", or "No problems".
     static func summary(_ entries: [Entry]) -> String {
         guard !entries.isEmpty else { return "No problems" }

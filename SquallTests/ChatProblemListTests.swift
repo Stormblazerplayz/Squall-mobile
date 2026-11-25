@@ -25,4 +25,13 @@ final class ChatProblemListTests: XCTestCase {
         let long = String(repeating: "e", count: 200)
         XCTAssertEqual(ChatProblemList.title(long).count, ChatProblemList.maxTitle)
     }
+
+    func testAskDraft() {
+        let list = ChatProblemList.entries(messages)
+        XCTAssertEqual(ChatProblemList.askDraft(list[2]),
+                       "Can you find out why this happened and fix it?\n\n> Build failed: missing file\n> at line 4\n\n")
+        XCTAssertEqual(ChatProblemList.askDraft(list[1]),
+                       "This problem happened 3 times. Can you find out why and fix it?\n\n> Network down\n\n")
+        XCTAssertTrue(ChatProblemList.askDraft(list[0]).hasSuffix("\n\n>\n\n"))
+    }
 }
