@@ -6,9 +6,9 @@ Save a whole chat with a teammate as a Markdown file, or copy it.
 
 Tap the **•••** button at the top right of a chat:
 
-- **Share chat**: picks where the file goes (Files, Notes, Mail, AirDrop, another app). The file is called
+- **Share chat** > **Share as a file**: picks where the file goes (Files, Notes, Mail, AirDrop, another app). The file is called
   "Chat with Rex 2026-11-25.md".
-- **Copy chat**: puts the same Markdown on the clipboard.
+- **Share chat** > **Copy chat**: puts the same Markdown on the clipboard.
 - **Clear chat**: moved here from the trash button. It still asks first, and starred messages stay in Starred.
 
 ## What's in the file
@@ -27,3 +27,10 @@ that iOS cleans up.
 - `Squall/Models/ChatExport.swift`: the Markdown, file name and writing the file.
 - `Squall/Views/Chat/ChatMoreMenu.swift`: the ••• menu and the shareable transcript.
 - Tests: `SquallTests/ChatExportTests.swift`.
+
+## The ••• menu
+
+The menu keeps the everyday things on top and folds the rest into two submenus:
+
+- **Browse this chat**: Go to a day, Links, Code, To-dos and Chat stats.
+- **Share chat**: Share as a file, Share as PDF and Copy chat.

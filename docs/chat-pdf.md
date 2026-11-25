@@ -1,6 +1,6 @@
 # Share a chat as PDF
 
-Tap ••• at the top of a chat and pick **Share as PDF**. Squall draws the chat onto Letter pages the way it looks in the
+Tap ••• at the top of a chat and pick **Share chat** > **Share as PDF**. Squall draws the chat onto Letter pages the way it looks in the
 app: each message with the teammate's sphere, name, color and time, Markdown, tables and code included, on the dark
 Squall background, with a title and the date at the top.
 

@@ -1,6 +1,6 @@
 # Chat stats
 
-Tap ••• at the top of a chat and pick **Chat stats**. It's worked out on the phone from the chat's own messages:
+Tap ••• at the top of a chat and pick **Browse this chat** > **Chat stats**. It's worked out on the phone from the chat's own messages:
 
 - how many messages, and since when
 - a bar showing who sends more, you or the teammate

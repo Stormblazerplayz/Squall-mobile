@@ -3,8 +3,9 @@ import UIKit
 import UniformTypeIdentifiers
 import UserNotifications
 
-/// The ••• button at the top of a chat: get a ping when the teammate is done, find words in the chat, go to a day, see chat stats, see every link, code block and to-do, pick a wallpaper, share the chat as a
-/// Markdown file or a PDF, copy it, or clear it.
+/// The ••• button at the top of a chat, kept short with two submenus: get a ping when the teammate is done, find words in the chat,
+/// Browse this chat (go to a day, links, code, to-dos, chat stats), pick a wallpaper,
+/// Share chat (as a Markdown file or a PDF, or copy it), or clear it.
 struct ChatMoreMenu: View {
     @EnvironmentObject private var store: SquallStore
     @ObservedObject private var doneWatch = DoneWatch.shared
@@ -42,51 +43,53 @@ struct ChatMoreMenu: View {
                 Label("Find in chat", systemImage: "magnifyingglass")
             }
             .disabled(messages.isEmpty)
-            Button {
-                dayJump.showList = true
+            Menu {
+                Button {
+                    dayJump.showList = true
+                } label: {
+                    Label("Go to a day", systemImage: "calendar")
+                }
+                Button {
+                    showLinks = true
+                } label: {
+                    Label("Links", systemImage: "link")
+                }
+                Button {
+                    showCode = true
+                } label: {
+                    Label("Code", systemImage: "chevron.left.forwardslash.chevron.right")
+                }
+                Button {
+                    showTodos = true
+                } label: {
+                    Label("To-dos", systemImage: "checklist")
+                }
+                Button {
+                    showStats = true
+                } label: {
+                    Label("Chat stats", systemImage: "chart.bar")
+                }
             } label: {
-                Label("Go to a day", systemImage: "calendar")
-            }
-            .disabled(messages.isEmpty)
-            Button {
-                showStats = true
-            } label: {
-                Label("Chat stats", systemImage: "chart.bar")
-            }
-            .disabled(messages.isEmpty)
-            Button {
-                showLinks = true
-            } label: {
-                Label("Links in this chat", systemImage: "link")
-            }
-            .disabled(messages.isEmpty)
-            Button {
-                showCode = true
-            } label: {
-                Label("Code in this chat", systemImage: "chevron.left.forwardslash.chevron.right")
-            }
-            .disabled(messages.isEmpty)
-            Button {
-                showTodos = true
-            } label: {
-                Label("To-dos in this chat", systemImage: "checklist")
+                Label("Browse this chat", systemImage: "square.grid.2x2")
             }
             .disabled(messages.isEmpty)
             WallpaperMenu(bot: bot)
             Divider()
-            ShareLink(item: transcript, preview: SharePreview(transcript.title, image: Image(systemName: "doc.text"))) {
-                Label("Share chat", systemImage: "square.and.arrow.up")
-            }
-            .disabled(messages.isEmpty)
-            ShareLink(item: pdf(messages), preview: SharePreview(transcript.title, image: Image(systemName: "doc.richtext"))) {
-                Label("Share as PDF", systemImage: "doc.richtext")
-            }
-            .disabled(messages.isEmpty)
-            Button {
-                UIPasteboard.general.string = transcript.markdown()
-                store.showToast("Chat copied.")
+            Menu {
+                ShareLink(item: transcript, preview: SharePreview(transcript.title, image: Image(systemName: "doc.text"))) {
+                    Label("Share as a file", systemImage: "doc.text")
+                }
+                ShareLink(item: pdf(messages), preview: SharePreview(transcript.title, image: Image(systemName: "doc.richtext"))) {
+                    Label("Share as PDF", systemImage: "doc.richtext")
+                }
+                Button {
+                    UIPasteboard.general.string = transcript.markdown()
+                    store.showToast("Chat copied.")
+                } label: {
+                    Label("Copy chat", systemImage: "doc.on.doc")
+                }
             } label: {
-                Label("Copy chat", systemImage: "doc.on.doc")
+                Label("Share chat", systemImage: "square.and.arrow.up")
             }
             .disabled(messages.isEmpty)
             Divider()
