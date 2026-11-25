@@ -56,6 +56,7 @@ Tabs along the bottom:
 - **@mentions**: @Rex shows bold in chats and opens Rex's chat on a tap ([docs](docs/mentions.md)).
 - **@ name picker**: type @ in the message box to pick a teammate's name ([docs](docs/mentions.md#picking-a-name)).
 - **Chat sounds**: an optional soft sound when you send and when a reply comes in ([docs](docs/chat-sounds.md)).
+- **Full editor**: long messages open in a full-screen editor with Markdown buttons and a preview ([docs](docs/full-editor.md)).
 - **Inbox**: things that need you (OKs and questions from your bots), problems and finished work. Allow, Deny, pick, Clear, and filters.
 - **Board**: every bot as a card with Chat, Steps and hand-off. A bot with a job running has Watch live.
 - **Routines**: routines that wake a bot on a schedule, with on/off switches. Long-press one to delete it.

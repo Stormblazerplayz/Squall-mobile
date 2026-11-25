@@ -22,6 +22,8 @@ struct ChatView: View {
     @AppStorage(Prefs.sendOnReturn) private var sendOnReturn = false
     @AppStorage(Prefs.haptics) private var haptics = true
     @State private var showLiveLog = false
+    /// The full-screen editor for long messages.
+    @State private var bigEditor = false
     @FocusState private var inputFocused: Bool
 
     var body: some View {
@@ -144,6 +146,7 @@ struct ChatView: View {
                     SelectionBar(chatID: bot.id)
                     SlashPromptBar(draft: $draft, botName: bot.name, tint: bot.color)
                     MentionPickerBar(draft: $draft, bots: store.bots, tint: bot.color)
+                    BigEditorHint(draft: draft, tint: bot.color) { bigEditor = true }
                     inputBar(bot)
                 }
                 .readableColumn(isWide ? .infinity : Theme.readableWidth)
@@ -172,6 +175,11 @@ struct ChatView: View {
             }
         }
         .onChange(of: sentCount) { newFromID = nil }
+        .sheet(isPresented: $bigEditor) {
+            BigEditorSheet(draft: $draft, botName: store.currentChat.name, tint: store.currentChat.color) {
+                sendDraft()
+            }
+        }
         // Chat sounds (Settings, Chat): one when you send, one when a reply comes in here.
         .onChange(of: sentCount) { ChatSounds.play(.sent) }
         .onChange(of: ChatSounds.snapshot(chatID: store.currentChat.id, messages: store.messages(for: store.currentChat.id))) { old, new in
