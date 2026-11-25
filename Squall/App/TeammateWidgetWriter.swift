@@ -10,7 +10,7 @@ enum TeammateWidgetWriter {
 
     /// The widget's data from the computer's chats and the team.
     static func snapshot(chats: [String: [MessageDTO]], bots: [Bot], now: Date = Date()) -> TeammateWidgetSnapshot {
-        let order = bots.sorted { $0.isChief && !$1.isChief }
+        let order = bots.filter(\.isChief) + bots.filter { !$0.isChief }
         let teammates = order.map { bot -> TeammateWidgetSnapshot.Teammate in
             let last = lastMessage(in: chats[bot.id] ?? [])
             return TeammateWidgetSnapshot.Teammate(
