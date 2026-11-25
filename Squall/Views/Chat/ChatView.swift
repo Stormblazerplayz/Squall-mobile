@@ -352,29 +352,92 @@ private struct ChatHeader: View {
 private struct ChatList: View {
     @EnvironmentObject private var store: SquallStore
     @ObservedObject private var drafts = ChatDrafts.shared
+    @ObservedObject private var favorites = ChatFavorites.shared
+    @AppStorage(ChatListOrder.Sort.key) private var sort = ChatListOrder.Sort.recent
+    @State private var search = ""
 
     var body: some View {
+        let sections = ChatListOrder.sections(store.displayBots, favorites: favorites.ids, sort: sort, query: search) { id in
+            store.messages(for: id).last?.at
+        }
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text("Chats")
                     .font(.system(size: 24, weight: .bold))
                     .foregroundStyle(Theme.textBright)
                 Spacer()
+                Menu {
+                    Picker("Order", selection: $sort) {
+                        ForEach(ChatListOrder.Sort.allCases) { option in
+                            Text(option.title).tag(option)
+                        }
+                    }
+                } label: {
+                    Image(systemName: "arrow.up.arrow.down")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Theme.sub)
+                        .frame(width: 36, height: 36)
+                        .contentShape(Rectangle())
+                }
+                .accessibilityLabel("Order chats")
                 IconButton(systemName: "person.3", label: "New group") {
                     store.path.append(.group)
                 }
             }
             .padding(.horizontal, 16)
             .padding(.top, 8)
+            .padding(.bottom, 6)
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Theme.muted)
+                TextField("", text: $search, prompt: Text("Find a chat").foregroundStyle(Theme.muted))
+                    .font(.system(size: 14))
+                    .foregroundStyle(Theme.text)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                if !search.isEmpty {
+                    Button {
+                        search = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(Theme.muted)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Clear")
+                }
+            }
+            .padding(.horizontal, 10)
+            .frame(height: 34)
+            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Theme.field))
+            .padding(.horizontal, 12)
             .padding(.bottom, 8)
             ScrollView {
-                VStack(spacing: 6) {
-                    ForEach(store.displayBots) { bot in
-                        row(bot)
+                LazyVStack(alignment: .leading, spacing: 6) {
+                    if sections.isEmpty, !search.isEmpty {
+                        Text("No chat matches \u{201C}\(search)\u{201D}.")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Theme.muted)
+                            .padding(.horizontal, 8)
+                            .padding(.top, 8)
+                    }
+                    ForEach(sections) { section in
+                        if !section.title.isEmpty {
+                            Text(section.title.uppercased())
+                                .font(.system(size: 11, weight: .bold))
+                                .tracking(0.8)
+                                .foregroundStyle(Theme.muted)
+                                .padding(.horizontal, 8)
+                                .padding(.top, 6)
+                        }
+                        ForEach(section.bots) { bot in
+                            row(bot)
+                        }
                     }
                 }
                 .padding(.horizontal, 10)
                 .padding(.bottom, 12)
+                .animation(.easeInOut(duration: 0.25), value: sections)
             }
             .scrollIndicators(.hidden)
         }
@@ -396,6 +459,12 @@ private struct ChatList: View {
                             .foregroundStyle(Theme.textBright)
                             .lineLimit(1)
                         Circle().fill(bot.status.dot).frame(width: 7, height: 7)
+                        if favorites.contains(bot.id) {
+                            Image(systemName: "star.fill")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(Theme.goldBright)
+                                .accessibilityLabel("Favorite")
+                        }
                         Spacer(minLength: 0)
                         if let last {
                             Text(last.time)
@@ -433,6 +502,14 @@ private struct ChatList: View {
         .buttonStyle(.plain)
         .accessibilityLabel("Chat with \(bot.name)")
         .accessibilityAddTraits(isOn ? .isSelected : [])
+        .contextMenu {
+            let on = favorites.contains(bot.id)
+            Button {
+                withAnimation { _ = favorites.toggle(bot.id) }
+            } label: {
+                Label(on ? "Remove from favorites" : "Add to favorites", systemImage: on ? "star.slash" : "star")
+            }
+        }
     }
 
     private func preview(_ message: ChatMessage?, bot: Bot) -> String {
@@ -447,11 +524,12 @@ private struct ChatList: View {
 private struct BotStrip: View {
     @EnvironmentObject private var store: SquallStore
     @ObservedObject private var drafts = ChatDrafts.shared
+    @ObservedObject private var favorites = ChatFavorites.shared
 
     var body: some View {
         ScrollView(.horizontal) {
             HStack(spacing: 12) {
-                ForEach(store.displayBots) { bot in
+                ForEach(ChatListOrder.favoritesFirst(store.displayBots, favorites: favorites.ids)) { bot in
                     let isOn = bot.id == store.currentChatID
                     Button {
                         store.openChat(bot.id)
