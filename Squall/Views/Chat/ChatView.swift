@@ -177,7 +177,7 @@ private struct ChatHeader: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Back to team")
-            Sphere(bot: bot, size: 40)
+            ProfileSphere(bot: bot)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(bot.name)
