@@ -9,27 +9,40 @@ struct SquallFocusFilter: SetFocusFilterIntent {
     )
 
     @Parameter(title: "Let through", default: .everything)
-    var pings: FocusRules.Pings
+    var pings: FocusPingsOption
 
     @Parameter(title: "Without sound", default: false)
     var silent: Bool
 
     var displayRepresentation: DisplayRepresentation {
-        DisplayRepresentation(title: "\(FocusRules(pings: pings, silent: silent).summary)")
+        DisplayRepresentation(title: "\(FocusRules(pings: pings.rules, silent: silent).summary)")
     }
 
     func perform() async throws -> some IntentResult {
-        FocusRules.save(FocusRules(pings: pings, silent: silent, since: Date()))
+        FocusRules.save(FocusRules(pings: pings.rules, silent: silent, since: Date()))
         return .result()
     }
 }
 
-extension FocusRules.Pings: AppEnum {
-    static let typeDisplayRepresentation: TypeDisplayRepresentation = "Pings"
-    static let caseDisplayRepresentations: [FocusRules.Pings: DisplayRepresentation] = [
+/// The choices in the Focus filter. A type of its own, declared in one piece, because the App Intents build step
+/// reads these names at build time and can't read them from an extension of FocusRules.Pings.
+enum FocusPingsOption: String, AppEnum {
+    case everything
+    case needsYou
+    case chief
+    case nothing
+
+    static var typeDisplayRepresentation: TypeDisplayRepresentation = "Pings"
+
+    static var caseDisplayRepresentations: [FocusPingsOption: DisplayRepresentation] = [
         .everything: DisplayRepresentation(title: "Everything", image: .init(systemName: "bell.fill")),
         .needsYou: DisplayRepresentation(title: "Only when a teammate needs me", image: .init(systemName: "exclamationmark.bubble.fill")),
         .chief: DisplayRepresentation(title: "Only Chief", image: .init(systemName: "bolt.fill")),
         .nothing: DisplayRepresentation(title: "Nothing", image: .init(systemName: "bell.slash.fill")),
     ]
+
+    /// The same choice as Squall saves it.
+    var rules: FocusRules.Pings {
+        FocusRules.Pings(rawValue: rawValue) ?? .everything
+    }
 }
