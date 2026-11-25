@@ -47,7 +47,7 @@ struct UnoSession: Identifiable, Hashable, Decodable {
     var agentId: String
     var agentName: String
     var task: String
-    /// "starting", "running", "you" (you have the wheel), "done", "stopped" or "error".
+    /// "starting", "running", "paused" (waiting for you to resume it), "you" (you have the wheel), "done", "stopped" or "error".
     var state: String
     /// Unix milliseconds.
     var startedAt: Double?
@@ -61,15 +61,20 @@ struct UnoSession: Identifiable, Hashable, Decodable {
     var inputTokens: Int
     var outputTokens: Int
 
-    /// Still going: getting ready, working, or paused while you drive.
-    var isActive: Bool { state == "starting" || state == "running" || state == "you" }
+    /// Still going: getting ready, working, paused, or waiting while you drive. It keeps its computer meanwhile.
+    var isActive: Bool { state == "starting" || state == "running" || state == "paused" || state == "you" }
     /// You have the wheel right now.
     var youHaveTheWheel: Bool { state == "you" }
+    /// You paused it: it waits (spending nothing) until you resume it.
+    var isPaused: Bool { state == "paused" }
+    /// Pause makes sense now: it's getting ready or working (not paused, not ended, and you don't have the wheel).
+    var canPause: Bool { state == "starting" || state == "running" }
 
     var stateLabel: String {
         switch state {
         case "starting": return "Getting ready"
         case "running": return "Working"
+        case "paused": return "Paused"
         case "you": return "You have the wheel"
         case "done": return "Done"
         case "stopped": return "Stopped"

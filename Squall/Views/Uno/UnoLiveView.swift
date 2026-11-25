@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Watch an agent's own computer live while Squall Uno uses it, give it a task, stop it, or take the wheel.
+/// Watch an agent's own computer live while Squall Uno uses it, give it a task, pause, stop it, or take the wheel.
 /// Everything here comes from Squall on the PC: the screen is the computer's real screen and the feed
 /// lists what Squall Uno really did.
 struct UnoLiveView: View {
@@ -19,6 +19,7 @@ struct UnoLiveView: View {
     @State private var showTakeover = false
     @State private var openSession: UnoSession?
     @State private var stopAllPresses = 0
+    @State private var pausePresses = 0
 
     private var watcher: String { "live.\(agentId)" }
     private var agent: Bot? { store.bot(agentId) }
@@ -80,6 +81,7 @@ struct UnoLiveView: View {
             showNewClicks()
         }
         .sensoryFeedback(.warning, trigger: stopAllPresses) { _, _ in haptics }
+        .sensoryFeedback(.impact(weight: .light), trigger: pausePresses) { _, _ in haptics }
         .sheet(isPresented: $showTakeover) {
             UnoTakeoverView(agentId: agentId, agentName: agentName)
                 .lockCover()
@@ -137,8 +139,12 @@ struct UnoLiveView: View {
                     .lineLimit(2)
             }
             Spacer(minLength: 0)
-            if running != nil {
-                UnoLivePill()
+            if let running {
+                if running.isPaused {
+                    UnoPausedPill()
+                } else {
+                    UnoLivePill()
+                }
             }
             IconButton(systemName: "gearshape", label: "Squall Uno settings") {
                 store.path.append(.unoSettings)
@@ -247,6 +253,7 @@ struct UnoLiveView: View {
         switch state {
         case "running", "done": return Theme.greenText
         case "you": return UnoColors.blueBright
+        case "paused": return UnoColors.paused
         case "starting": return Theme.goldText
         case "stopped", "error": return Theme.redText
         default: return UnoColors.muted
@@ -260,8 +267,8 @@ struct UnoLiveView: View {
         VStack(alignment: .leading, spacing: 10) {
             if let session = running {
                 messageBar(session)
-                HStack(spacing: 8) {
-                    if session.youHaveTheWheel {
+                if session.youHaveTheWheel {
+                    HStack(spacing: 8) {
                         Button("Keep driving") {
                             showTakeover = true
                         }
@@ -273,20 +280,18 @@ struct UnoLiveView: View {
                         }
                         .buttonStyle(GhostButtonStyle(height: 42, fontSize: 14))
                         .disabled(uno.isBusy("handback"))
-                    } else {
-                        Button(uno.isBusy("takeover") ? "Taking it…" : "Take the wheel") {
-                            takeWheel(session)
-                        }
-                        .buttonStyle(GhostButtonStyle(height: 42, foreground: UnoColors.blueBright, fontSize: 14))
-                        .disabled(uno.isBusy("takeover"))
+                        stopButton(session)
                     }
-                    Button(uno.isBusy("stop.\(session.id)") ? "Stopping…" : "Stop") {
-                        Task { @MainActor in
-                            await uno.stop(sessionId: session.id)
-                        }
+                } else {
+                    Button(uno.isBusy("takeover") ? "Taking it…" : "Take the wheel") {
+                        takeWheel(session)
                     }
-                    .buttonStyle(GhostButtonStyle(height: 42, foreground: Theme.redText, border: Theme.red.opacity(0.5), fontSize: 14))
-                    .disabled(uno.isBusy("stop.\(session.id)"))
+                    .buttonStyle(GhostButtonStyle(height: 42, foreground: UnoColors.blueBright, fontSize: 14))
+                    .disabled(uno.isBusy("takeover"))
+                    HStack(spacing: 8) {
+                        pauseButton(session)
+                        stopButton(session)
+                    }
                 }
             } else {
                 DarkField(placeholder: "What should Squall Uno do?", text: $taskText, axis: .vertical)
@@ -317,6 +322,38 @@ struct UnoLiveView: View {
                 .accessibilityHint("Stops Squall Uno on every computer")
             }
         }
+    }
+
+    private func stopButton(_ session: UnoSession) -> some View {
+        Button(uno.isBusy("stop.\(session.id)") ? "Stopping…" : "Stop") {
+            Task { @MainActor in
+                await uno.stop(sessionId: session.id)
+            }
+        }
+        .buttonStyle(GhostButtonStyle(height: 42, foreground: Theme.redText, border: Theme.red.opacity(0.5), fontSize: 14))
+        .disabled(uno.isBusy("stop.\(session.id)"))
+    }
+
+    /// Pause while it works (the step it's on finishes first), Resume while it's paused.
+    private func pauseButton(_ session: UnoSession) -> some View {
+        let paused = session.isPaused
+        let busy = uno.isBusy("pause.\(session.id)") || uno.isBusy("resume.\(session.id)")
+        let title = paused ? (busy ? "Resuming…" : "Resume") : (busy ? "Pausing…" : "Pause")
+        return Button {
+            pausePresses += 1
+            Task { @MainActor in
+                if paused {
+                    await uno.resume(sessionId: session.id)
+                } else {
+                    await uno.pause(sessionId: session.id)
+                }
+            }
+        } label: {
+            Label(title, systemImage: paused ? "play.fill" : "pause.fill")
+        }
+        .buttonStyle(GhostButtonStyle(height: 42, foreground: UnoColors.paused, border: UnoColors.paused.opacity(0.5), fontSize: 14))
+        .disabled(busy || !(paused || session.canPause))
+        .accessibilityHint(paused ? "Lets Squall Uno carry on" : "Squall Uno finishes the step it's on, then waits")
     }
 
     private var isStarting: Bool {

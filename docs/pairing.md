@@ -291,15 +291,19 @@ The body is `{"op": "...", ...}`. A failed op answers `{"ok": false, "error": "P
 | --- | --- | --- |
 | `state` | `since` (feed number, default 0), `sessionId` (optional) | `{ok, settings, computers[], sessions[] (newest first), events[] (seq > since, oldest first, max 300), lastSeq}` |
 | `start` | `agentId` (`chief` or a bot id), `agentName`, `task` | `{ok, sessionId, computerId}` |
-| `message` | `sessionId`, `text` | `{ok}` |
-| `stop` | `sessionId` | `{ok}` |
-| `stopAll` | | `{ok, stopped}` |
-| `takeover` | `sessionId` | `{ok}` (the session's state becomes `you`) |
+| `message` | `sessionId`, `text` | `{ok}` (while paused it's read after Resume) |
+| `stop` | `sessionId` | `{ok}` (works while paused) |
+| `stopAll` | | `{ok, stopped}` (paused tasks count) |
+| `pause` | `sessionId` | `{ok}` (the session's state becomes `paused`: the step it's on finishes, then no model calls until `resume`). Not running, or you have the wheel → `{ok: false, error}` |
+| `resume` | `sessionId` | `{ok}` (a `paused` session goes back to `running`). Not running → `{ok: false, error}` |
+| `takeover` | `sessionId` | `{ok}` (the session's state becomes `you`; works while paused) |
 | `input` | `computerId`, `action` (`left_click`, `double_click`, `right_click`, `type`, `key`, `scroll`), `x`, `y`, `text`, `direction` (`up`/`down`) | `{ok}` |
-| `handback` | `sessionId`, `note` (optional) | `{ok}` |
+| `handback` | `sessionId`, `note` (optional) | `{ok}` (back to `paused` if it was paused before you took over) |
 | `saveKey` / `removeKey` | `key` (save only) | `{ok, settings}` |
 | `check` | | `{ok, text}` |
 | `setMaxSteps` | `value` (10 to 300) | `{ok, settings}` |
+
+Session states are `starting`, `running`, `paused`, `you` (you have the wheel), `done`, `stopped` and `error`; the first four count as active (the task keeps its computer). A paused task shows **Paused** in sky blue, with a still dot instead of the red live one, on the live view, the Uno tab and the Team tab, and the live view's **Pause** button (next to **Stop**) turns into **Resume**. The feed gets `pause` ("Paused by you.") and `resume` ("Resumed.") events from `you`. A paused task has no time limit: it waits until you resume or stop it.
 
 Keys sent with `input` `key` are `Escape`, `Tab`, `Return` and `ctrl+z`. `x` and `y` are the computer's own pixels (its `width` × `height`); the phone maps your tap on the fitted picture back to them. The API key goes to the PC once with `saveKey` and is never kept on the phone; `settings` only carries a short `keyHint`.
 

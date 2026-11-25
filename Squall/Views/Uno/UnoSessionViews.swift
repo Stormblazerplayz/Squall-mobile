@@ -46,6 +46,7 @@ struct UnoSessionRow: View {
         switch state {
         case "starting": return "hourglass"
         case "running": return "play.circle.fill"
+        case "paused": return "pause.circle.fill"
         case "you": return "hand.raised.fill"
         case "done": return "checkmark.circle.fill"
         case "stopped": return "stop.circle.fill"

@@ -12,6 +12,8 @@ enum UnoColors {
     static let screenshot = Color(hex: 0xC3C7D4)
     static let wait = Color(hex: 0x7D8197)
     static let live = Theme.red
+    /// A paused task: calm sky blue, not the red "live" color.
+    static let paused = Color(hex: 0x7DD3FC)
 }
 
 /// The red dot that pulses while Squall Uno is working.
@@ -54,6 +56,27 @@ struct UnoLivePill: View {
         .overlay(Capsule().stroke(UnoColors.live.opacity(0.5), lineWidth: 1))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Live")
+    }
+}
+
+/// Sky-blue "PAUSED" pill with a still dot, shown instead of "LIVE" while a task is paused.
+struct UnoPausedPill: View {
+    var body: some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(UnoColors.paused)
+                .frame(width: 7, height: 7)
+            Text("PAUSED")
+                .font(.system(size: 11.5, weight: .heavy))
+                .tracking(0.8)
+                .foregroundStyle(UnoColors.paused)
+        }
+        .padding(.horizontal, 10)
+        .frame(height: 28)
+        .background(Capsule().fill(UnoColors.paused.opacity(0.14)))
+        .overlay(Capsule().stroke(UnoColors.paused.opacity(0.5), lineWidth: 1))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Paused")
     }
 }
 
@@ -109,6 +132,8 @@ enum UnoKindStyle {
         case "message": return "bubble.left"
         case "takeover": return "hand.raised.fill"
         case "handback": return "arrow.uturn.backward"
+        case "pause": return "pause.circle.fill"
+        case "resume": return "play.circle.fill"
         case "done": return "checkmark.circle.fill"
         case "stopped": return "stop.circle.fill"
         case "error": return "exclamationmark.triangle.fill"
@@ -126,6 +151,7 @@ enum UnoKindStyle {
         case "type", "key", "hold_key": return UnoColors.typed
         case "wait": return UnoColors.wait
         case "message", "takeover", "handback": return UnoColors.text
+        case "pause", "resume": return UnoColors.paused
         case "done": return Theme.green
         case "stopped", "error": return Theme.redSoft
         default: return UnoColors.muted
@@ -142,6 +168,8 @@ enum UnoKindStyle {
         case "key", "hold_key": return "Pressed a key"
         case "scroll": return "Scrolled"
         case "wait": return "Waited"
+        case "pause": return "Paused by you"
+        case "resume": return "Resumed"
         case "done": return "Done"
         case "stopped": return "Stopped"
         case "error": return "Hit a problem"

@@ -361,7 +361,19 @@ final class UnoModel: ObservableObject {
         return reply.stopped ?? 0
     }
 
-    /// You take the wheel: Squall Uno pauses after the action it's on.
+    /// Pauses a task: the step it's on finishes, then Squall Uno waits (spending nothing) until you resume it.
+    @discardableResult
+    func pause(sessionId: String) async -> Bool {
+        await run("pause.\(sessionId)", ["op": .string("pause"), "sessionId": .string(sessionId)]) != nil
+    }
+
+    /// Lets a paused task carry on.
+    @discardableResult
+    func resume(sessionId: String) async -> Bool {
+        await run("resume.\(sessionId)", ["op": .string("resume"), "sessionId": .string(sessionId)]) != nil
+    }
+
+    /// You take the wheel: Squall Uno waits after the action it's on.
     @discardableResult
     func takeover(sessionId: String) async -> Bool {
         await run("takeover", ["op": .string("takeover"), "sessionId": .string(sessionId)]) != nil

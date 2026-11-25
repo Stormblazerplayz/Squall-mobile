@@ -78,7 +78,17 @@ struct UnoComputerRow: View {
                         .lineLimit(1)
                 }
                 Spacer(minLength: 0)
-                if let running {
+                if let running, running.isPaused {
+                    HStack(spacing: 5) {
+                        Circle()
+                            .fill(UnoColors.paused)
+                            .frame(width: 7, height: 7)
+                        Text("PAUSED")
+                            .font(.system(size: 11, weight: .heavy))
+                            .tracking(0.7)
+                            .foregroundStyle(UnoColors.paused)
+                    }
+                } else if let running {
                     HStack(spacing: 0) {
                         UnoLiveDot(size: 7)
                         Text(running.youHaveTheWheel ? "YOU" : "LIVE")
@@ -92,7 +102,7 @@ struct UnoComputerRow: View {
                     .foregroundStyle(Theme.muted)
             }
             .padding(12)
-            .glassCard(radius: 16, tint: running == nil ? nil : 0xE5484D, strength: 0.12)
+            .glassCard(radius: 16, tint: running.map { $0.isPaused ? UInt32(0x7DD3FC) : UInt32(0xE5484D) }, strength: 0.12)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
