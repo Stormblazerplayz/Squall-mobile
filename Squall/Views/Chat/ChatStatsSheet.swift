@@ -20,7 +20,7 @@ struct ChatStatsSheet: View {
                         tile("Your words", MessageInfo.number(stats.yourWords), "text.word.spacing")
                         tile("\(bot.name)'s words", MessageInfo.number(stats.theirWords), "text.bubble")
                         tile("Code blocks", MessageInfo.number(stats.codeBlocks), "chevron.left.forwardslash.chevron.right")
-                        tile("Problems", MessageInfo.number(stats.problems), "exclamationmark.triangle")
+                        browseTile(.problems, MessageInfo.number(stats.problems))
                         tile("Days active", MessageInfo.number(stats.daysActive), "calendar")
                         tile("Busiest hour", stats.busiestHour.map(TeamHistory.hourText) ?? "None yet", "clock")
                     }

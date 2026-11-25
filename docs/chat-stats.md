@@ -13,3 +13,5 @@ Code: `Squall/Models/ChatStats.swift`, `Squall/Views/Chat/ChatStatsSheet.swift`.
 ## Links, Code and To-dos
 
 Under the tiles, three more show how many links and code blocks the chat has and how many of its to-dos are done. Tap one to open that list.
+
+The Problems tile can be tapped too, and opens Problems in this chat.

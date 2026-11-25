@@ -84,6 +84,7 @@ Tabs along the bottom:
 - **Copy all code**: copy or share every code block shown in Code in this chat ([docs](docs/chat-code.md)).
 - **Problems in this chat**: every error a teammate hit in a chat in one list, ready to copy ([docs](docs/chat-problems.md)).
 - **Ask to fix it**: from Problems, put an ask and the error in the message box, ready to send ([docs](docs/chat-problems.md)).
+- **Problems tile opens the list**: tap Problems in Chat stats to see each one ([docs](docs/chat-stats.md)).
 - **Inbox**: things that need you (OKs and questions from your bots), problems and finished work. Allow, Deny, pick, Clear, and filters.
 - **Board**: every bot as a card with Chat, Steps and hand-off. A bot with a job running has Watch live.
 - **Routines**: routines that wake a bot on a schedule, with on/off switches. Long-press one to delete it.
