@@ -27,6 +27,7 @@ struct TeamView: View {
                         HStack(alignment: .top, spacing: 18) {
                             VStack(spacing: 18) {
                                 ChiefCard(showSteps: $showChiefSteps)
+                                todoCard
                                 quickActions
                             }
                             .frame(width: 380)
@@ -35,6 +36,7 @@ struct TeamView: View {
                         }
                     } else {
                         ChiefCard(showSteps: $showChiefSteps)
+                        todoCard
                         quickActions
                         teamSection
                     }
@@ -82,6 +84,14 @@ struct TeamView: View {
             QuickAction(icon: "clock", title: "Routines") {
                 store.tab = .routines
             }
+        }
+    }
+
+    /// The shared To do list at a glance, once the computer sends it.
+    @ViewBuilder
+    private var todoCard: some View {
+        if let list = store.todo {
+            TodoSummaryCard(list: list)
         }
     }
 

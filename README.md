@@ -28,6 +28,7 @@ Screens that slide in:
 - **Settings**: the computer you're paired with, Chief napping, safety, the Claude Code version and update, accent color, app icon (Chief's Bolt is the normal one; Classic and five more can be picked), notifications and Clear all chats.
 - **Call Chief**: a real voice call with Chief on your computer (live captions, Mute, End). It only works while the computer is connected.
 - **Mission control** (the grid button on Team): everyone at once, Pause all, wake Chief, what needs you, recent handoffs and a jump-to search.
+- **To do**: the same To do list as Squall on your computer, on its own screen and as a card on Team. Add items (and give one straight to a bot), tick them off, see who is on what, answer a bot that needs you on one, and clear finished items. Needs a Squall desktop that shares its To do list.
 
 ## Siri and Shortcuts
 
@@ -41,6 +42,7 @@ Say these to Siri, or find them in the Shortcuts app and Spotlight. Everything g
 - **"Approve the request in Squall"** and **"Decline the request in Squall"**: Siri reads who's asking and what it wants to run, and asks before sending Allow or Deny. Questions with choices stay in the app. In Shortcuts you can pick whose request.
 - **"Call Chief in Squall"**: opens a voice call with Chief.
 - **"Pause my team in Squall"** and **"Resume my team in Squall"**: pause or start every bot.
+- **Add to my To do list** and **Read my To do list** (Shortcuts and Spotlight): add an item, optionally for a bot to start now, or hear what is on the list.
 
 Asking, starting a task, approving and declining need your iPhone or iPad unlocked. Your bots also show up in Spotlight: search a bot's name and tap it to open its chat.
 

@@ -101,6 +101,8 @@ struct RootView: View {
             connected { RoutineEditorView() }.navigationTitle("New routine").pushedScreen()
         case .mission:
             connected { MissionControlView() }.navigationTitle("Mission control").pushedScreen()
+        case .todo:
+            connected { TodoView() }.navigationTitle("To do").pushedScreen()
         }
     }
 
@@ -222,6 +224,10 @@ private struct KeyCommands: View {
                 store.open(SquallLink.mission)
             }
             .keyboardShortcut("m", modifiers: [.command, .shift])
+            Button("To do") {
+                if store.path.last != .todo { store.path = [.todo] }
+            }
+            .keyboardShortcut("t", modifiers: [.command, .shift])
             Button("Settings") {
                 if store.path.last != .settings { store.path = [.settings] }
             }
