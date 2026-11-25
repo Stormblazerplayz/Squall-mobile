@@ -19,3 +19,16 @@ Everything is built from the state Squall on the computer already sends: message
 - `Squall/Models/TeamHistory.swift`
 - `Squall/Views/Inbox/TeamHistoryView.swift`
 - `SquallTests/TeamHistoryTests.swift`
+
+## Team stats
+
+The chart button at the top left of Team history opens **Team stats**, for Today, 7 days or Everything:
+
+- **Totals:** what you sent, replies, done, problems, asks for you and hand offs.
+- **Chart:** chats, done and problems by the hour (Today) or by day, with the busiest hour.
+- **Answer time:** the usual (middle) time teammates took to answer you, timed from your first unanswered message in a
+  chat to the next reply there. Waits over 6 hours aren't counted as answers.
+- **Who did what:** every teammate with their counts, a bar, and their own answer time. Tap one to open their chat.
+
+It's worked out on the phone from the same entries as Team history, so it only counts what's in the chats, Inbox, hand
+offs and jobs right now. Code: `TeamStats` in Squall/Models/TeamStats.swift and Squall/Views/Inbox/TeamStatsView.swift.

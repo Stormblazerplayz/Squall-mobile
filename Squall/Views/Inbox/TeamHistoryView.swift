@@ -88,6 +88,14 @@ struct TeamHistoryView: View {
             .navigationTitle("Team history")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    NavigationLink {
+                        TeamStatsView { chatID in openChat(chatID) }
+                    } label: {
+                        Label("Stats", systemImage: "chart.bar.xaxis")
+                    }
+                    .accessibilityLabel("Team stats")
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
                 }
@@ -212,7 +220,12 @@ struct TeamHistoryView: View {
     }
 
     private func open(_ entry: TeamHistory.Entry) {
-        guard let chatID = entry.chatID, store.bot(chatID) != nil else { return }
+        guard let chatID = entry.chatID else { return }
+        openChat(chatID)
+    }
+
+    private func openChat(_ chatID: String) {
+        guard store.bot(chatID) != nil else { return }
         dismiss()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
             store.openChat(chatID)
