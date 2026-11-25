@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 import UserNotifications
 
 /// The ••• button at the top of a chat, kept short with two submenus: get a ping when the teammate is done, find words in the chat,
-/// Browse this chat (go to a day, links, code, to-dos, chat stats), pick a wallpaper,
+/// Browse this chat (go to a day, links, code, to-dos, problems, chat stats), pick a wallpaper,
 /// Share chat (as a Markdown file or a PDF, or copy it), or clear it.
 struct ChatMoreMenu: View {
     @EnvironmentObject private var store: SquallStore
@@ -105,6 +105,7 @@ struct ChatMoreMenu: View {
             case .links: ChatLinksSheet(bot: bot, messages: store.messages(for: bot.id))
             case .code: ChatCodeSheet(bot: bot, messages: store.messages(for: bot.id))
             case .todos: ChatTodosSheet(bot: bot, messages: store.messages(for: bot.id))
+            case .problems: ChatProblemsSheet(bot: bot, messages: store.messages(for: bot.id))
             case .stats: ChatStatsSheet(bot: bot, messages: store.messages(for: bot.id))
             }
         }

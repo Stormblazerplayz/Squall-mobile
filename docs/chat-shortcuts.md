@@ -10,6 +10,7 @@ With a keyboard on iPad (or iPhone), these work in a chat. Hold ⌘ to see them 
 | ⌘⇧L | Links in this chat |
 | ⌘⇧C | Code in this chat |
 | ⌘⇧T | To-dos in this chat |
+| ⌘⇧P | Problems in this chat |
 | ⌘⇧I | Chat stats |
 | ⌘E | Open the full editor |
 | ⌘⌥↓ | Next chat, in the order of the teammate row (favorites first) |

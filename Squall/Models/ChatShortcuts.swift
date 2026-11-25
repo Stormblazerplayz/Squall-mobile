@@ -18,6 +18,7 @@ enum ChatShortcuts {
         ("⌘⇧L", "Links in this chat"),
         ("⌘⇧C", "Code in this chat"),
         ("⌘⇧T", "To-dos in this chat"),
+        ("⌘⇧P", "Problems in this chat"),
         ("⌘⇧I", "Chat stats"),
         ("⌘E", "Open the full editor"),
         ("⌘⌥↓", "Next chat"),

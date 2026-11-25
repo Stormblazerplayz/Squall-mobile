@@ -32,5 +32,5 @@ that iOS cleans up.
 
 The menu keeps the everyday things on top and folds the rest into two submenus:
 
-- **Browse this chat**: Go to a day, Links, Code, To-dos and Chat stats.
+- **Browse this chat**: Go to a day, Links, Code, To-dos, Problems and Chat stats.
 - **Share chat**: Share as a file, Share as PDF and Copy chat.
