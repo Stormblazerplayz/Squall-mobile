@@ -1,9 +1,11 @@
 import SwiftUI
+import UIKit
 
 /// To-dos in this chat, from the ••• menu: every task-list line in the teammate's replies, open ones first.
 /// Tap to tick or untick (the reply changes too), press and hold to go to its message.
 struct ChatTodosSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var store: SquallStore
     @ObservedObject private var tickLists = TickLists.shared
     let bot: Bot
     let messages: [ChatMessage]
@@ -56,6 +58,11 @@ struct ChatTodosSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
                 }
+                if !all.isEmpty {
+                    ToolbarItem(placement: .topBarLeading) {
+                        actions(all: all, open: parts.open, done: parts.done)
+                    }
+                }
             }
         }
         .presentationDetents([.medium, .large])
@@ -98,6 +105,44 @@ struct ChatTodosSheet: View {
                 Label("Go to message", systemImage: "text.bubble")
             }
         }
+    }
+
+    /// Copy or share the list, tick everything left, or go back to the boxes as the teammate wrote them.
+    private func actions(all: [ChatTodoList.Entry], open: [ChatTodoList.Entry], done: [ChatTodoList.Entry]) -> some View {
+        let text = ChatTodoList.markdown(open: open, done: done)
+        let changed = all.filter { tickLists.isDone($0.reply, line: $0.line, written: $0.written) != $0.written }
+        return Menu {
+            Button {
+                UIPasteboard.general.string = ChatTodoList.markdown(open: open, done: [])
+                store.showToast("What's left is copied.")
+            } label: {
+                Label("Copy what's left", systemImage: "doc.on.doc")
+            }
+            .disabled(open.isEmpty)
+            ShareLink(item: text) {
+                Label("Share the list", systemImage: "square.and.arrow.up")
+            }
+            Divider()
+            Button {
+                withAnimation(.easeOut(duration: 0.2)) {
+                    for entry in open { tickLists.toggle(entry.reply, line: entry.line, written: entry.written) }
+                }
+            } label: {
+                Label("Tick all", systemImage: "checkmark.square")
+            }
+            .disabled(open.isEmpty)
+            Button {
+                withAnimation(.easeOut(duration: 0.2)) {
+                    for entry in changed { tickLists.toggle(entry.reply, line: entry.line, written: entry.written) }
+                }
+            } label: {
+                Label("Back to as written", systemImage: "arrow.uturn.backward")
+            }
+            .disabled(changed.isEmpty)
+        } label: {
+            Image(systemName: "ellipsis.circle")
+        }
+        .accessibilityLabel("To-do actions")
     }
 
     private func byline(_ entry: ChatTodoList.Entry) -> String {

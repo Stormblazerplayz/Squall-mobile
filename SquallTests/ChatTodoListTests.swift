@@ -26,4 +26,11 @@ final class ChatTodoListTests: XCTestCase {
         XCTAssertEqual(parts.done.map(\.text), ["Write tests"])
         XCTAssertEqual(ChatTodoList.summary(done: 1, total: 3), "1 of 3 done")
     }
+
+    func testMarkdown() {
+        let list = ChatTodoList.entries(chatID: "rex", messages: messages)
+        let parts = ChatTodoList.split(list) { $0.written }
+        XCTAssertEqual(ChatTodoList.markdown(open: parts.open, done: parts.done), "- [ ] Ship it\n- [ ] Fix login\n- [x] Write tests")
+        XCTAssertEqual(ChatTodoList.markdown(open: [], done: []), "")
+    }
 }

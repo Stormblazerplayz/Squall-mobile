@@ -47,6 +47,11 @@ enum ChatTodoList {
         return (open, done)
     }
 
+    /// The to-dos as a Markdown task list, ready to paste into Notes or another chat.
+    static func markdown(open: [Entry], done: [Entry]) -> String {
+        (open.map { "- [ ] " + $0.text } + done.map { "- [x] " + $0.text }).joined(separator: "\n")
+    }
+
     /// "3 of 8 done".
     static func summary(done: Int, total: Int) -> String {
         "\(done) of \(total) done"
