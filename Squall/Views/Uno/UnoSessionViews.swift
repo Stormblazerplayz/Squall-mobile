@@ -30,6 +30,7 @@ struct UnoSessionRow: View {
                 }
                 .font(.system(size: 12))
                 .lineLimit(1)
+                UnoTokenLine(session: session, size: 11)
             }
             Spacer(minLength: 0)
             Image(systemName: "chevron.right")
