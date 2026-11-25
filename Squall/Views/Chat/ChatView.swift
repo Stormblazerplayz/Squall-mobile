@@ -98,40 +98,44 @@ struct ChatView: View {
     }
 
     private func inputBar(_ bot: Bot) -> some View {
-        HStack(spacing: 8) {
-            TextField("", text: $draft, prompt: Text("Message \(bot.name)...").foregroundStyle(Theme.muted), axis: .vertical)
-                .lineLimit(1...4)
-                .font(.system(size: 15))
-                .foregroundStyle(Theme.text)
-                .focused($inputFocused)
-                .submitLabel(.send)
-                .onSubmit(sendDraft)
-                .onChange(of: draft) { old, new in
-                    // "Send with Return": a Return typed at the end sends instead of starting a new line.
-                    if sendOnReturn, new.count == old.count + 1, new.hasSuffix("\n") {
-                        draft = String(new.dropLast())
-                        sendDraft()
+        VStack(spacing: 0) {
+            LaterStrip(chatID: bot.id)
+            HStack(spacing: 8) {
+                TextField("", text: $draft, prompt: Text("Message \(bot.name)...").foregroundStyle(Theme.muted), axis: .vertical)
+                    .lineLimit(1...4)
+                    .font(.system(size: 15))
+                    .foregroundStyle(Theme.text)
+                    .focused($inputFocused)
+                    .submitLabel(.send)
+                    .onSubmit(sendDraft)
+                    .onChange(of: draft) { old, new in
+                        // "Send with Return": a Return typed at the end sends instead of starting a new line.
+                        if sendOnReturn, new.count == old.count + 1, new.hasSuffix("\n") {
+                            draft = String(new.dropLast())
+                            sendDraft()
+                        }
                     }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 11)
+                    .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Theme.field))
+                roundButton("phone.fill", label: "Call Chief") {
+                    store.showCall = true
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 11)
-                .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Theme.field))
-            roundButton("phone.fill", label: "Call Chief") {
-                store.showCall = true
+                LaterButton(bot: bot, draft: $draft)
+                Button(action: sendDraft) {
+                    Image(systemName: "arrow.up")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 40, height: 40)
+                        .background(Circle().fill(canSend ? store.accent : Color.white.opacity(0.12)))
+                }
+                .buttonStyle(.plain)
+                .disabled(!canSend)
+                .accessibilityLabel("Send")
             }
-            Button(action: sendDraft) {
-                Image(systemName: "arrow.up")
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(.white)
-                    .frame(width: 40, height: 40)
-                    .background(Circle().fill(canSend ? store.accent : Color.white.opacity(0.12)))
-            }
-            .buttonStyle(.plain)
-            .disabled(!canSend)
-            .accessibilityLabel("Send")
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
         .background(Theme.background.opacity(0.9))
     }
 

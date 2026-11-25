@@ -254,6 +254,7 @@ final class SquallStore: ObservableObject {
                 if wasOffline { Feedback.play(.connected) }
             }
             keepCopy(reply.data, for: reply.computer, at: now)
+            SendLater.shared.update(from: reply.data)
         } catch {
             guard !Task.isCancelled, pairing.isPaired else { return }
             failures += 1
@@ -480,6 +481,7 @@ final class SquallStore: ObservableObject {
         handoffTarget = nil
         showNewTeammate = false
         LiveActivities.shared.stopAll()
+        SendLater.shared.clear()
     }
 
     /// Sends an action, then gets fresh data so the screens show what really happened.
