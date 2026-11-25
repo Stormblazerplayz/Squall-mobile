@@ -12,6 +12,7 @@ extension Theme {
 struct DemoBanner: View {
     @EnvironmentObject private var store: SquallStore
     @State private var askLeave = false
+    @State private var showTour = false
 
     var body: some View {
         HStack(spacing: 8) {
@@ -26,6 +27,18 @@ struct DemoBanner: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
             Spacer(minLength: 4)
+            Button {
+                showTour = true
+            } label: {
+                Image(systemName: "questionmark.circle.fill")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(Theme.demoText)
+                    .frame(width: 34, height: 30)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Demo tour")
+            .accessibilityHint("Shows what each tab does")
             Button("Exit") { askLeave = true }
                 .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(Theme.demoText)
@@ -44,6 +57,10 @@ struct DemoBanner: View {
         )
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Demo mode. Nothing here is real.")
+        .sheet(isPresented: $showTour) {
+            DemoTourSheet()
+                .environmentObject(store)
+        }
         .confirmationDialog("Leave the demo?", isPresented: $askLeave, titleVisibility: .visible) {
             Button("Leave demo", role: .destructive) { store.endDemo() }
             Button("Leave and pair a computer") {
