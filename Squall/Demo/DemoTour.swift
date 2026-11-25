@@ -75,6 +75,7 @@ struct DemoTourSheet: View {
         }
         .presentationDetents([.large])
         .presentationBackground(Theme.background)
+        .onAppear { UserDefaults.standard.set(true, forKey: Prefs.demoTourSeen) }
     }
 
     // MARK: Card
@@ -185,4 +186,9 @@ private struct TourIcon: View {
             withAnimation(.easeInOut(duration: 2.2).repeatForever(autoreverses: true)) { bob = true }
         }
     }
+}
+
+extension Prefs {
+    /// Set once the demo tour has been shown, so it only opens by itself the first time.
+    static let demoTourSeen = "squall.demoTourSeen"
 }

@@ -71,6 +71,8 @@ final class SquallStore: ObservableObject {
         didSet { Feedback.quiet = showCall }
     }
     @Published var showPairing = false
+    /// Opens the demo tour on its own the first time someone starts the demo.
+    @Published var showDemoTour = false
 
     // Pop-up message
     @Published var toast: ToastMessage?
@@ -1100,6 +1102,14 @@ extension SquallStore {
         Feedback.play(.connected)
         showToast("Demo mode. Everything here is pretend, so play around!")
         startDemoClock()
+        if !UserDefaults.standard.bool(forKey: Prefs.demoTourSeen) {
+            Task { @MainActor [weak self] in
+                // Let any closing screen finish first, then show the tour once.
+                try? await Task.sleep(for: .seconds(0.9))
+                guard let self, self.isDemo else { return }
+                self.showDemoTour = true
+            }
+        }
     }
 
     /// Leaves demo mode. The pretend team is thrown away and your settings go back to how they were.
@@ -1113,6 +1123,7 @@ extension SquallStore {
         path = []
         tab = .team
         showCall = false
+        showDemoTour = false
         if let saved = settingsBeforeDemo { settings = saved }
         settingsBeforeDemo = nil
         currentChatID = Bot.chiefID
