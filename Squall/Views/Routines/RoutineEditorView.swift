@@ -9,17 +9,6 @@ struct RoutineEditorView: View {
     /// Runs once the computer has the saved routine (the edit sheet closes then).
     private let onSaved: (() -> Void)?
 
-    @State private var botID = ""
-    @State private var task = ""
-    @State private var repeatMode: Routine.Repeat = .daily
-    @State private var days = Array(repeating: true, count: 7)
-    @State private var minutes = 9 * 60
-    @State private var pingWhenDone = true
-    @State private var askBeforePush = true
-    @State private var skipIfBusy = false
-
-    private let ideas = ["Check my build", "Tidy my notes", "Look for bugs", "Write a daily recap"]
-
     init(existing: Routine? = nil, onSaved: (() -> Void)? = nil) {
         self.existing = existing
         self.onSaved = onSaved
@@ -34,6 +23,26 @@ struct RoutineEditorView: View {
             _skipIfBusy = State(initialValue: existing.skipIfBusy)
         }
     }
+
+    /// The teammates to pick from, plus the routine's own bot when it's Chief.
+    private var pickerBots: [Bot] {
+        var list = store.teammates.isEmpty ? [store.chief] : store.teammates
+        if let current = store.bot(botID), !list.contains(where: { $0.id == current.id }) {
+            list.insert(current, at: 0)
+        }
+        return list
+    }
+
+    @State private var botID = ""
+    @State private var task = ""
+    @State private var repeatMode: Routine.Repeat = .daily
+    @State private var days = Array(repeating: true, count: 7)
+    @State private var minutes = 9 * 60
+    @State private var pingWhenDone = true
+    @State private var askBeforePush = true
+    @State private var skipIfBusy = false
+
+    private let ideas = ["Check my build", "Tidy my notes", "Look for bugs", "Write a daily recap"]
 
     var body: some View {
         ZStack {
@@ -181,15 +190,6 @@ struct RoutineEditorView: View {
         }
         .padding(14)
         .glassCard(radius: 18)
-    }
-
-    /// The teammates to pick from, plus the routine's own bot when it's Chief.
-    private var pickerBots: [Bot] {
-        var list = store.teammates.isEmpty ? [store.chief] : store.teammates
-        if let current = store.bot(botID), !list.contains(where: { $0.id == current.id }) {
-            list.insert(current, at: 0)
-        }
-        return list
     }
 
     private func matchingMode(for days: [Bool]) -> Routine.Repeat {
