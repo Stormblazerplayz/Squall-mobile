@@ -1,42 +1,26 @@
 import SwiftUI
 
-/// The moon button on an Inbox card: hide it until later.
-struct SnoozeMenu: View {
+/// Press and hold an Inbox card: hide it until later.
+struct SnoozeMenuItems: View {
     @EnvironmentObject private var store: SquallStore
     @ObservedObject private var snooze = InboxSnooze.shared
     let item: InboxItem
 
     var body: some View {
-        Menu {
-            if let until = snooze.until(item.id), snooze.isSnoozed(item.id) {
-                Text("Snoozed \(InboxSnooze.untilText(until))")
-                Button {
-                    snooze.wake(item.id)
-                } label: {
-                    Label("Wake now", systemImage: "bell")
-                }
-            } else {
-                let now = Date()
-                ForEach(InboxSnooze.Choice.allCases) { choice in
-                    if let until = choice.until(from: now) {
-                        Button {
-                            snooze.snooze(item, until: until)
-                            store.markRead(item.id)
-                            store.showToast("Snoozed \(InboxSnooze.untilText(until)).")
-                        } label: {
-                            Label(choice.label, systemImage: choice.icon)
-                        }
+        let now = Date()
+        Section("Snooze") {
+            ForEach(InboxSnooze.Choice.allCases) { choice in
+                if let until = choice.until(from: now) {
+                    Button {
+                        snooze.snooze(item, until: until)
+                        store.markRead(item.id)
+                        store.showToast("Snoozed \(InboxSnooze.untilText(until)). It's under Snoozed at the bottom.")
+                    } label: {
+                        Label(choice.label, systemImage: choice.icon)
                     }
                 }
             }
-        } label: {
-            Image(systemName: "moon.zzz")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Theme.muted)
-                .frame(width: 30, height: 30)
-                .contentShape(Rectangle())
         }
-        .accessibilityLabel("Snooze")
     }
 }
 

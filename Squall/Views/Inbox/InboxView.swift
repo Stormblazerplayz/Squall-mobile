@@ -127,6 +127,8 @@ struct InboxView: View {
                 InboxCard(item: item, showDetails: openDetails.contains(item.id)) {
                     toggleDetails(item.id)
                 }
+                // Press and hold to snooze it.
+                .contextMenu { SnoozeMenuItems(item: item) }
             }
         }
     }
@@ -211,6 +213,7 @@ struct InboxView: View {
                     selectedID = item.id
                     store.markRead(item.id)
                 }
+                .contextMenu { SnoozeMenuItems(item: item) }
             }
         }
     }
@@ -331,13 +334,9 @@ private struct InboxCard: View {
                         .foregroundStyle(Theme.sub)
                 }
                 Spacer(minLength: 0)
-                VStack(alignment: .trailing, spacing: 0) {
-                    Text(item.time)
-                        .font(.system(size: 11.5))
-                        .foregroundStyle(Theme.muted)
-                    SnoozeMenu(item: item)
-                        .offset(x: 8)
-                }
+                Text(item.time)
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(Theme.muted)
             }
             actions
             if showDetails, item.kind == .error, let details = item.details, !details.isEmpty {

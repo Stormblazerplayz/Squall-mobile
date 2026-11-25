@@ -1,6 +1,6 @@
 # Snooze in the Inbox
 
-Not ready to deal with something? Tap the moon on its card and pick:
+Not ready to deal with something? Press and hold its card in the Inbox and pick:
 
 - **For 1 hour** or **For 3 hours**
 - **Until this evening** (6 PM, shown until 5:30 PM)
