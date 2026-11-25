@@ -101,6 +101,8 @@ struct SettingsView: View {
         chiefSection
         SectionLabel(text: "New teammates")
         teammateSection
+        SectionLabel(text: "Your team")
+        TeamManageSection()
     }
 
     @ViewBuilder
