@@ -33,7 +33,7 @@ struct StarredButton: View {
     }
 }
 
-/// React, Copy, Copy as plain text, Star, Pin, Select, Remind me, Reply with quote, Forward to, Save as prompt, Share and Share as picture on a long press of a
+/// React, Copy, Copy as plain text, Star, Pin, Select, Remind me, Reply with quote, Forward to, Save as prompt, Share, Share as picture, Translate and Info on a long press of a
 /// message. Star, Remind me and Reply need the chat it's in, so a message shown without one (like in a group) gets the rest.
 struct MessageMenu: ViewModifier {
     let message: ChatMessage
@@ -44,6 +44,8 @@ struct MessageMenu: ViewModifier {
     @ObservedObject private var starred = StarredMessages.shared
     @ObservedObject private var reader = ReadAloud.shared
     @ObservedObject private var pins = PinnedMessages.shared
+    @State private var showInfo = false
+    @State private var translating = false
 
     @ViewBuilder
     func body(content: Content) -> some View {
@@ -185,7 +187,27 @@ struct MessageMenu: ViewModifier {
                     ShareLink(item: picture, preview: SharePreview("Message from \(authorName)", image: Image(systemName: "photo"))) {
                         Label("Share as picture", systemImage: "photo")
                     }
+                    if TranslateSupport.isAvailable, !MessageInfo.translatable(message).isEmpty {
+                        Button {
+                            translating = true
+                        } label: {
+                            Label("Translate", systemImage: "translate")
+                        }
+                    }
+                    Button {
+                        showInfo = true
+                    } label: {
+                        Label("Info", systemImage: "info.circle")
+                    }
                 }
+            }
+            .modifier(TranslateCard(isPresented: $translating, text: MessageInfo.translatable(message)))
+            .sheet(isPresented: $showInfo) {
+                MessageInfoSheet(
+                    message: message,
+                    authorName: authorName,
+                    tint: message.kind == .me ? store.accent : Color(hex: store.bot(message.author)?.hex ?? Theme.defaultAccentHex)
+                )
             }
         }
     }

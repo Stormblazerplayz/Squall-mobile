@@ -49,6 +49,7 @@ Tabs along the bottom:
 - **Undo send**: an optional 5 second wait with an Undo button before a message goes (see [docs/undo-send.md](docs/undo-send.md)).
 - **Share as picture**: press and hold a message to share it as a picture card with the teammate's color and name ([docs](docs/share-picture.md)).
 - **Message reactions**: press and hold a message to react with an emoji, which shows on the bubble ([docs](docs/reactions.md)).
+- **Translate and Message info**: press and hold a message to translate it or see when it was sent and how long it is ([docs](docs/message-info.md)).
 - **Inbox**: things that need you (OKs and questions from your bots), problems and finished work. Allow, Deny, pick, Clear, and filters.
 - **Board**: every bot as a card with Chat, Steps and hand-off. A bot with a job running has Watch live.
 - **Routines**: routines that wake a bot on a schedule, with on/off switches. Long-press one to delete it.
