@@ -31,6 +31,7 @@ Tabs along the bottom:
 - **Reply with quote and Forward to**: press and hold a message to quote it in your reply or pass it to another teammate's chat (see [docs/quote-forward.md](docs/quote-forward.md)).
 - **Links in chats**: bare links are tappable, and replies show a card for each link, with localhost links copied instead (see [docs/chat-links.md](docs/chat-links.md)).
 - **Read aloud**: press and hold a reply to hear it, with code mentioned instead of read out and a Stop button by the name (see [docs/read-aloud.md](docs/read-aloud.md)).
+- **Share a chat**: the ••• button in a chat shares or copies the whole chat as Markdown, with real dates and times (see [docs/chat-export.md](docs/chat-export.md)).
 - **Inbox**: things that need you (OKs and questions from your bots), problems and finished work. Allow, Deny, pick, Clear, and filters.
 - **Board**: every bot as a card with Chat, Steps and hand-off. A bot with a job running has Watch live.
 - **Routines**: routines that wake a bot on a schedule, with on/off switches. Long-press one to delete it.

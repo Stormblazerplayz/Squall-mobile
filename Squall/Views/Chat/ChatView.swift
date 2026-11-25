@@ -226,7 +226,6 @@ private struct ChatHeader: View {
     @EnvironmentObject private var store: SquallStore
     let bot: Bot
     @Binding var showLiveLog: Bool
-    @State private var confirmClear = false
 
     var body: some View {
         HStack(spacing: 10) {
@@ -276,23 +275,7 @@ private struct ChatHeader: View {
             StarredButton(bot: bot)
             RemindersButton(bot: bot)
             WorkTimerButton(bot: bot)
-            Button {
-                confirmClear = true
-            } label: {
-                Image(systemName: "trash")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Theme.sub)
-                    .frame(width: 36, height: 44)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Clear chat")
-            .confirmationDialog("Clear this chat?", isPresented: $confirmClear, titleVisibility: .visible) {
-                Button("Clear chat with \(bot.name)", role: .destructive) {
-                    store.clearChat(bot.id)
-                }
-            } message: {
-                Text("\(bot.name) keeps its memory. Only the messages go away, and starred ones stay in Starred.")
-            }
+            ChatMoreMenu(bot: bot)
         }
         .padding(.horizontal, 10)
         .padding(.top, 4)
