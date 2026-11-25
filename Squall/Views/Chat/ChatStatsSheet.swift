@@ -152,7 +152,6 @@ struct ChatStatsSheet: View {
             .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
         .buttonStyle(.plain)
-        .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(sheet.title): \(value)")
         .accessibilityHint("Opens the list")
     }
