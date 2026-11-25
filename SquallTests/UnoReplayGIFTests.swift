@@ -22,7 +22,9 @@ final class UnoReplayGIFTests: XCTestCase {
             UnoReplayGIF.Frame(image: picture(.green), caption: "Step 2 · Typed \"weather in Paris\"")
         ]
         let data = try XCTUnwrap(UnoReplayGIF.make(frames, maxWidth: 400, delay: 0.5, lastDelay: 2))
-        XCTAssertEqual(String(data: data.prefix(6), encoding: .ascii), "GIF89a")
+        // ImageIO may write either GIF version in the header; what matters is that it loops.
+        XCTAssertEqual(String(data: data.prefix(4), encoding: .ascii), "GIF8")
+        XCTAssertNotNil(data.range(of: Data("NETSCAPE2.0".utf8)), "the GIF should loop")
 
         let source = try XCTUnwrap(CGImageSourceCreateWithData(data as CFData, nil))
         XCTAssertEqual(CGImageSourceGetCount(source), 3)
