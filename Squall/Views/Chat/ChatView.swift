@@ -289,6 +289,7 @@ private struct ChatHeader: View {
                         .font(.system(size: 16.5, weight: .bold))
                         .foregroundStyle(Theme.textBright)
                     StatusPill(status: bot.status)
+                    DoneWatchBadge(bot: bot)
                 }
                 Text(bot.task)
                     .font(.system(size: 12))

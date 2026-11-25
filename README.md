@@ -39,6 +39,7 @@ Tabs along the bottom:
 - **New messages line**: opening a chat shows a line above what came in since you last looked, with how many (see [docs/new-messages.md](docs/new-messages.md)).
 - **Send again**: press and hold your own message to send it again, or edit it first (see [docs/send-again.md](docs/send-again.md)).
 - **Grouped replies**: back-to-back replies from one teammate show one picture and name, so a burst reads as one (see [docs/grouped-replies.md](docs/grouped-replies.md)).
+- **Tell me when a teammate is done**: one ping when a busy teammate stops working, from the chat's ••• menu (see [docs/done-watch.md](docs/done-watch.md)).
 - **Inbox**: things that need you (OKs and questions from your bots), problems and finished work. Allow, Deny, pick, Clear, and filters.
 - **Board**: every bot as a card with Chat, Steps and hand-off. A bot with a job running has Watch live.
 - **Routines**: routines that wake a bot on a schedule, with on/off switches. Long-press one to delete it.

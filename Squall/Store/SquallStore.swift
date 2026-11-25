@@ -394,11 +394,14 @@ final class SquallStore: ObservableObject {
         InboxSnooze.shared.keepOnly(Set(inbox.map(\.id)))
         // The evening recap waits with today's real numbers (rebuilt every few minutes at most).
         DailyRecap.update(bots: newBots)
+        // "Tell me when Rex is done" pings once Rex stops working.
+        DoneWatch.shared.update(bots: newBots)
         // Drafts for teammates who were removed go too.
         if !newBots.isEmpty {
             ChatDrafts.shared.keepOnly(Set(newBots.map(\.id)))
             MessageReminders.shared.keepOnly(chats: Set(newBots.map(\.id)))
             LastSeen.shared.keepOnly(chats: Set(newBots.map(\.id)))
+            DoneWatch.shared.keepOnly(Set(newBots.map(\.id)))
         }
         InboxWidgetWriter.update(inbox: inbox, bots: newBots)
         LiveActivities.shared.sync(work: work, inbox: inbox, routines: routines, bots: bots, paused: pausedAll)
@@ -470,6 +473,7 @@ final class SquallStore: ObservableObject {
         ChatDrafts.shared.clear()
         MessageReminders.shared.clear()
         LastSeen.shared.clear()
+        DoneWatch.shared.clear()
         InboxWidgetWriter.forget()
     }
 
