@@ -81,4 +81,12 @@ final class SquallAppDelegate: NSObject, UIApplicationDelegate {
         BackgroundRefresh.register()
         return true
     }
+
+    /// Lets Squall hear Home Screen quick action presses (see QuickActions).
+    func application(_ application: UIApplication, configurationForConnecting connectingSceneSession: UISceneSession,
+                     options: UIScene.ConnectionOptions) -> UISceneConfiguration {
+        let configuration = UISceneConfiguration(name: nil, sessionRole: connectingSceneSession.role)
+        configuration.delegateClass = QuickActionSceneDelegate.self
+        return configuration
+    }
 }

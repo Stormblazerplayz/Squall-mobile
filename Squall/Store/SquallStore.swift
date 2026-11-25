@@ -380,6 +380,8 @@ final class SquallStore: ObservableObject {
             currentChatID = Bot.chiefID
         }
         if let picking, bot(picking) == nil { self.picking = nil }
+        // A teammate picked from the app icon before the team had loaded.
+        QuickActions.openWaitingChat(in: self)
 
         guard live else { return }
         // Siri learns the bots' names, and Spotlight lists them.
@@ -451,6 +453,7 @@ final class SquallStore: ObservableObject {
             WidgetCenter.shared.reloadTimelines(ofKind: SquallShared.widgetKind)
         }
         TeammateWidgetWriter.forget()
+        QuickActions.clear()
     }
 
     /// Takes everything from the computer off the screens.

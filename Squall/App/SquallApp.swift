@@ -53,6 +53,8 @@ struct SquallApp: App {
                 cameFromBackground = true
                 // Ask iOS to let Squall check the computer again in a while.
                 BackgroundRefresh.schedule()
+                // Press and hold the app icon: Inbox, Chief and the teammates you talked to last.
+                QuickActions.update(store: store)
             case .active:
                 // Catch up on anything pressed on the Lock Screen while away, and on the computer.
                 store.handleActivityActions()
