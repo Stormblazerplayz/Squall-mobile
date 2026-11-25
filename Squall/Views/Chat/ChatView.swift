@@ -18,12 +18,12 @@ struct ChatView: View {
     @State private var seenIDs = Set<String>()
     /// Where the "New messages" line goes: the first message that came in since you last had this chat open.
     @State private var newFromID: String?
+    /// The full-screen editor for long messages.
+    @State private var bigEditor = false
     @AppStorage(Prefs.showTyping) private var showTyping = true
     @AppStorage(Prefs.sendOnReturn) private var sendOnReturn = false
     @AppStorage(Prefs.haptics) private var haptics = true
     @State private var showLiveLog = false
-    /// The full-screen editor for long messages.
-    @State private var bigEditor = false
     @FocusState private var inputFocused: Bool
 
     var body: some View {
