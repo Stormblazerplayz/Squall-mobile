@@ -610,9 +610,14 @@ struct MessageView: View {
                     if isStarred { starMark }
                     if let chatID { ReadingMark(id: ReadAloud.id(chatID: chatID, messageID: message.id), tint: who.color) }
                 }
-                MarkdownText(text: message.text, size: textSize, tint: who.color)
-                if let text2 = message.text2 {
-                    MarkdownText(text: text2, size: textSize, tint: who.color)
+                FoldedReply(id: "\(chatID ?? "")/\(message.id)", text: message.text + (message.text2.map { "\n\n" + $0 } ?? ""),
+                            size: textSize, tint: who.color) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        MarkdownText(text: message.text, size: textSize, tint: who.color)
+                        if let text2 = message.text2 {
+                            MarkdownText(text: text2, size: textSize, tint: who.color)
+                        }
+                    }
                 }
                 LinkCards(text: message.text + (message.text2.map { "\n\n" + $0 } ?? ""), tint: who.color)
                 if let chatID, ChatSummaries.canSummarize(message) {
