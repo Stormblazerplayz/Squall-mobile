@@ -17,6 +17,11 @@ struct RootView: View {
                 }
         }
         .demoBanner()
+        .overlay {
+            if store.isDemo {
+                DemoConfetti()
+            }
+        }
         .animation(.easeOut(duration: 0.25), value: store.isDemo)
         .tint(store.accent)
         .background {
