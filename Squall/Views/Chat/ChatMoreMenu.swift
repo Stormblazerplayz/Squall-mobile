@@ -3,8 +3,8 @@ import UIKit
 import UniformTypeIdentifiers
 import UserNotifications
 
-/// The ••• button at the top of a chat: get a ping when the teammate is done, share the chat as a Markdown file,
-/// copy it, or clear it.
+/// The ••• button at the top of a chat: get a ping when the teammate is done, pick a wallpaper, share the chat as a
+/// Markdown file, copy it, or clear it.
 struct ChatMoreMenu: View {
     @EnvironmentObject private var store: SquallStore
     @ObservedObject private var doneWatch = DoneWatch.shared
@@ -31,6 +31,8 @@ struct ChatMoreMenu: View {
                 }
                 Divider()
             }
+            WallpaperMenu(bot: bot)
+            Divider()
             ShareLink(item: transcript, preview: SharePreview(transcript.title, image: Image(systemName: "doc.text"))) {
                 Label("Share chat", systemImage: "square.and.arrow.up")
             }

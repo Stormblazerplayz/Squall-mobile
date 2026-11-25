@@ -32,6 +32,7 @@ struct ChatView: View {
         let isWide = sizeClass == .regular
         ZStack {
             GlowBackground(topHex: bot.hex)
+            ChatWallpaperLayer(chatID: bot.id, tint: bot.color)
             HStack(spacing: 0) {
                 if isWide {
                     // iPad: every chat in a column beside the conversation.

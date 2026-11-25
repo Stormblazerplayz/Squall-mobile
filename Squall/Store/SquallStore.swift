@@ -409,6 +409,7 @@ final class SquallStore: ObservableObject {
             PinnedMessages.shared.keepOnly(chats: Set(newBots.map(\.id)).union(groups.map(\.id)))
             Outbox.shared.keepOnly(chats: Set(newBots.map(\.id)).union(groups.map(\.id)))
             MessageReactions.shared.keepOnly(chats: Set(newBots.map(\.id)).union(groups.map(\.id)))
+            ChatWallpapers.shared.keepOnly(chats: Set(newBots.map(\.id)).union(groups.map(\.id)))
         }
         InboxWidgetWriter.update(inbox: inbox, bots: newBots)
         LiveActivities.shared.sync(work: work, inbox: inbox, routines: routines, bots: bots, paused: pausedAll)
@@ -484,6 +485,7 @@ final class SquallStore: ObservableObject {
         PinnedMessages.shared.clear()
         Outbox.shared.clear()
         MessageReactions.shared.clear()
+        ChatWallpapers.shared.clear()
         InboxWidgetWriter.forget()
     }
 
