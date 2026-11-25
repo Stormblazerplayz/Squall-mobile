@@ -812,9 +812,11 @@ struct MessageView: View {
                                 .font(.system(size: JumboEmoji.size(for: jumbo)))
                         } else {
                             MarkdownText(text: message.text, size: textSize, tint: who.color)
+                                .environment(\.tickListKey, chatID.map { TickLists.key(chatID: $0, messageID: message.id) })
                         }
                         if let text2 = message.text2 {
                             MarkdownText(text: text2, size: textSize, tint: who.color)
+                                .environment(\.tickListKey, chatID.map { TickLists.key(chatID: $0, messageID: message.id, part: 2) })
                         }
                     }
                 }

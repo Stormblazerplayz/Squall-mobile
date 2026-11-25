@@ -10,19 +10,30 @@ struct MarkdownText: View {
     /// The bot's color, for quote bars, bullets and links.
     var tint: Color = Color(hex: Theme.defaultAccentHex)
     @Environment(\.mentionTargets) private var mentionTargets
+    /// Which reply this is, so its task list can be ticked (see TickLists). nil leaves the boxes as written.
+    @Environment(\.tickListKey) private var tickListKey
+    @Environment(\.printing) private var printing
+    @ObservedObject private var tickLists = TickLists.shared
 
     var body: some View {
         let blocks = Markdown.blocks(text)
+        let reply = printing ? nil : tickListKey
         VStack(alignment: .leading, spacing: 8) {
-            ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
-                view(for: block)
+            ForEach(Array(blocks.enumerated()), id: \.offset) { index, block in
+                view(for: block, index: index, reply: reply)
+            }
+            if let reply {
+                let progress = tickLists.progress(blocks, reply: reply)
+                if progress.total >= 2 {
+                    TickProgress(done: progress.done, total: progress.total, tint: tint)
+                }
             }
         }
         .tint(tint)
     }
 
     @ViewBuilder
-    private func view(for block: MarkdownBlock) -> some View {
+    private func view(for block: MarkdownBlock, index: Int, reply: String?) -> some View {
         switch block {
         case .paragraph(let text):
             inline(text)
@@ -31,21 +42,22 @@ struct MarkdownText: View {
                 .padding(.top, level <= 2 ? 4 : 2)
                 .accessibilityAddTraits(.isHeader)
         case .bullet(let indent, let text, let checked):
-            HStack(alignment: .firstTextBaseline, spacing: 7) {
-                if let checked {
-                    Image(systemName: checked ? "checkmark.square.fill" : "square")
-                        .font(.system(size: size - 1, weight: .semibold))
-                        .foregroundStyle(checked ? Theme.green : Theme.muted)
-                        .accessibilityLabel(checked ? "Done" : "Not done")
-                } else {
-                    Text(indent == 0 ? "•" : "◦")
-                        .font(.system(size: size, weight: .bold))
-                        .foregroundStyle(tint.opacity(0.9))
-                        .accessibilityHidden(true)
+            if let checked, let reply {
+                let done = tickLists.isDone(reply, line: index, written: checked)
+                Button {
+                    withAnimation(.easeOut(duration: 0.15)) {
+                        tickLists.toggle(reply, line: index, written: checked)
+                    }
+                } label: {
+                    bullet(indent: indent, text: text, checked: done)
+                        .contentShape(Rectangle())
                 }
-                inline(text, color: checked == true ? Theme.muted : color)
+                .buttonStyle(.plain)
+                .accessibilityHint(done ? "Double tap to untick" : "Double tap to tick")
+                .sensoryFeedback(.selection, trigger: done)
+            } else {
+                bullet(indent: indent, text: text, checked: checked)
             }
-            .padding(.leading, CGFloat(indent) * 16)
         case .numbered(let indent, let number, let text):
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text("\(number).")
@@ -72,6 +84,25 @@ struct MarkdownText: View {
                 .frame(height: 1)
                 .padding(.vertical, 2)
         }
+    }
+
+    private func bullet(indent: Int, text: String, checked: Bool?) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 7) {
+            if let checked {
+                Image(systemName: checked ? "checkmark.square.fill" : "square")
+                    .font(.system(size: size - 1, weight: .semibold))
+                    .foregroundStyle(checked ? Theme.green : Theme.muted)
+                    .accessibilityLabel(checked ? "Done" : "Not done")
+            } else {
+                Text(indent == 0 ? "•" : "◦")
+                    .font(.system(size: size, weight: .bold))
+                    .foregroundStyle(tint.opacity(0.9))
+                    .accessibilityHidden(true)
+            }
+            inline(text, color: checked == true ? Theme.muted : color)
+                .strikethrough(checked == true, color: Theme.muted)
+        }
+        .padding(.leading, CGFloat(indent) * 16)
     }
 
     private func headingSize(_ level: Int) -> Double {
