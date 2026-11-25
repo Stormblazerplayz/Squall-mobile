@@ -282,6 +282,7 @@ final class SquallStore: ObservableObject {
             }
         }
         updateWidgets(computerName: computer.name, syncedAt: date)
+        HistoryFeed.shared.take(data)
     }
 
     /// Writes the small summary the widgets draw, when it changed or every few minutes.
@@ -463,6 +464,7 @@ final class SquallStore: ObservableObject {
         lastSavedAt = nil
         lastWidget = nil
         lastWidgetAt = nil
+        HistoryFeed.shared.clear()
         if !bots.isEmpty { bots = [] }
         if !messages.isEmpty { messages = [:] }
         if !groups.isEmpty { groups = [] }

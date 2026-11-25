@@ -37,6 +37,8 @@ struct InboxView: View {
                     .font(.system(size: 28, weight: .bold))
                     .foregroundStyle(Theme.textBright)
                 Spacer()
+                HistoryButton()
+                    .padding(.trailing, 4)
                 Button(store.unreadInboxCount == 0 ? "All read" : "Mark all read") {
                     store.markAllRead()
                 }
