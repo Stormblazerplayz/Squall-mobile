@@ -121,6 +121,7 @@ struct ChatView: View {
                         }
                         .animation(.easeOut(duration: 0.2), value: showJump)
                     }
+                    SlashPromptBar(draft: $draft, botName: bot.name, tint: bot.color)
                     inputBar(bot)
                 }
                 .readableColumn(isWide ? .infinity : Theme.readableWidth)
