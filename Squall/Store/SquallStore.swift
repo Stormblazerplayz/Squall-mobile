@@ -956,7 +956,8 @@ final class SquallStore: ObservableObject {
 
     // MARK: - Routines
 
-    func saveRoutine(_ routine: Routine) {
+    /// Saves a new routine, or an edited one (same id). `onSaved` runs once the computer has it (the edit sheet closes then).
+    func saveRoutine(_ routine: Routine, onSaved: (() -> Void)? = nil) {
         let name = bot(routine.botID)?.name ?? "Your bot"
         let action = SyncAction(type: "routine.save", fields: [
             "routine": .object([
@@ -976,7 +977,8 @@ final class SquallStore: ObservableObject {
             guard await perform(action, busyKey: "routine.save") != nil else { return }
             if path.last == .newRoutine { path.removeLast() }
             tab = .routines
-            showToast("Saved. \(name) will wake up \(routine.whenText).")
+            onSaved?()
+            showToast(routine.isOn ? "Saved. \(name) will wake up \(routine.whenText)." : "Saved. It's off until you turn it on.")
         }
     }
 
@@ -986,6 +988,19 @@ final class SquallStore: ObservableObject {
             routines[index].isOn = isOn
         }
         send(SyncAction(type: "routine.toggle", fields: ["routineId": .string(id), "isOn": .bool(isOn)]))
+    }
+
+    /// Skips today's run on the computer; the routine runs again on its next day.
+    func skipRoutine(_ id: String) {
+        guard requireConnection() else { return }
+        if let index = routines.firstIndex(where: { $0.id == id }) {
+            routines[index].lastRun = Routine.dayString(Date())
+        }
+        Task {
+            if await perform(SyncAction(type: "routine.skip", fields: ["routineId": .string(id)]), busyKey: "routine.skip") != nil {
+                showToast("Skipped today's run.")
+            }
+        }
     }
 
     func deleteRoutine(_ id: String) {
