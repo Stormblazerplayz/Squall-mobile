@@ -109,12 +109,14 @@ private struct BoardCard: View {
                 Text(bot.status == .idle || bot.status == .napping ? "Nothing in progress right now." : bot.task)
                     .font(.system(size: 12.5))
                     .foregroundStyle(Theme.text)
-                ForEach(bot.log.indices, id: \.self) { index in
-                    Text(bot.log[index])
-                        .font(Theme.mono(11))
-                        .foregroundStyle(bot.log[index].hasPrefix("$") ? Theme.commandText : Theme.sub)
-                        .lineLimit(2)
+                if !bot.log.isEmpty {
+                    StepLog(lines: bot.log, live: bot.status == .working, tint: bot.color)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
                 }
+            } else if let latest = bot.log.last {
+                // Steps closed: just the step it's on now.
+                StepLog(lines: [latest], limit: 1, live: bot.status == .working, tint: bot.color, fontSize: 10.5)
+                    .transition(.opacity)
             }
             Spacer(minLength: 0)
             HStack(spacing: 6) {
