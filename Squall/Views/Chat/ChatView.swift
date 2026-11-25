@@ -83,6 +83,7 @@ struct ChatView: View {
                                     }
                                 }
                                 OutboxBubbles(chatID: bot.id)
+                                WorkNowCard(bot: bot)
                                 if showTyping && store.typingBotID == bot.id {
                                     TypingRow(bot: bot)
                                 }
