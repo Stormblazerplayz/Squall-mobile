@@ -1,30 +1,123 @@
 import SwiftUI
 
-/// Dark background with the purple and teal glow from the concepts.
+/// Dark background with the purple and teal glow from the concepts. The glow slowly
+/// drifts like an aurora, with a few faint stars. It holds still when Reduce Motion,
+/// Low Power Mode or "Softer glow" (Settings) is on.
 struct GlowBackground: View {
     var topHex: UInt32 = 0x7C5CF6
     var bottomHex: UInt32 = 0x20B296
     @AppStorage(Prefs.softGlow) private var softGlow = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
 
     var body: some View {
-        // "Softer glow" in Settings turns the background light down.
-        let dim = softGlow ? 0.4 : 1.0
-        ZStack {
-            Theme.background
-            RadialGradient(
-                colors: [Color(hex: topHex, opacity: 0.24 * dim), Color(hex: topHex, opacity: 0)],
-                center: .topLeading,
-                startRadius: 0,
-                endRadius: 520
-            )
-            RadialGradient(
-                colors: [Color(hex: bottomHex, opacity: 0.16 * dim), Color(hex: bottomHex, opacity: 0)],
-                center: .bottomTrailing,
-                startRadius: 0,
-                endRadius: 480
-            )
+        Group {
+            if moves {
+                TimelineView(.animation(minimumInterval: 1.0 / 20.0)) { context in
+                    AuroraLayers(topHex: topHex, bottomHex: bottomHex, dim: dim,
+                                 time: context.date.timeIntervalSinceReferenceDate)
+                }
+            } else {
+                AuroraLayers(topHex: topHex, bottomHex: bottomHex, dim: dim, time: 0)
+            }
         }
         .ignoresSafeArea()
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+        .onReceive(NotificationCenter.default.publisher(for: .NSProcessInfoPowerStateDidChange)) { _ in
+            lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
+        }
+    }
+
+    /// "Softer glow" in Settings turns the background light down.
+    private var dim: Double { softGlow ? 0.4 : 1.0 }
+
+    private var moves: Bool {
+        !reduceMotion && !softGlow && !lowPower && scenePhase == .active
+    }
+}
+
+/// The glow itself: two big soft lights in the corners, a third that wanders between
+/// them, and faint stars. `time` in seconds moves everything; 0 draws it still.
+private struct AuroraLayers: View {
+    let topHex: UInt32
+    let bottomHex: UInt32
+    let dim: Double
+    let time: Double
+
+    var body: some View {
+        GeometryReader { geo in
+            let size = geo.size
+            let longest = max(size.width, size.height, 1)
+            ZStack {
+                Theme.background
+                glow(topHex, opacity: 0.26 * dim, radius: longest * 0.62,
+                     at: point(size, x: 0.08 + 0.10 * wave(0.045, 0), y: 0.04 + 0.07 * wave(0.037, 1.3)))
+                glow(bottomHex, opacity: 0.17 * dim, radius: longest * 0.56,
+                     at: point(size, x: 0.94 - 0.10 * wave(0.04, 2.1), y: 0.96 - 0.08 * wave(0.033, 0.4)))
+                glow(Self.mix(topHex, bottomHex), opacity: 0.09 * dim, radius: longest * 0.45,
+                     at: point(size, x: 0.5 + 0.32 * wave(0.021, 0.7), y: 0.5 + 0.22 * wave(0.026, 2.6)))
+                StarField(time: time, dim: dim)
+            }
+        }
+    }
+
+    /// A slow wave between -1 and 1.
+    private func wave(_ speed: Double, _ offset: Double) -> Double {
+        sin(time * speed * 2 * .pi + offset)
+    }
+
+    private func point(_ size: CGSize, x: Double, y: Double) -> CGPoint {
+        CGPoint(x: size.width * x, y: size.height * y)
+    }
+
+    private func glow(_ hex: UInt32, opacity: Double, radius: CGFloat, at center: CGPoint) -> some View {
+        RadialGradient(
+            colors: [Color(hex: hex, opacity: opacity), Color(hex: hex, opacity: opacity * 0.35), Color(hex: hex, opacity: 0)],
+            center: .center,
+            startRadius: 0,
+            endRadius: radius
+        )
+        .frame(width: radius * 2, height: radius * 2)
+        .position(center)
+        .blendMode(.screen)
+    }
+
+    /// Halfway between two colors, for the light that wanders between them.
+    static func mix(_ a: UInt32, _ b: UInt32) -> UInt32 {
+        func channel(_ value: UInt32, _ shift: UInt32) -> UInt32 { (value >> shift) & 0xFF }
+        let r = (channel(a, 16) + channel(b, 16)) / 2
+        let g = (channel(a, 8) + channel(b, 8)) / 2
+        let bl = (channel(a, 0) + channel(b, 0)) / 2
+        return (r << 16) | (g << 8) | bl
+    }
+}
+
+/// A few faint stars that twinkle. Always in the same places, so nothing jumps.
+private struct StarField: View {
+    let time: Double
+    let dim: Double
+
+    private static let stars: [(x: Double, y: Double, size: Double, speed: Double)] = {
+        // A fixed little "random" pattern (no Random so it never changes between draws).
+        var seed: UInt64 = 0x5EED_5EED
+        func next() -> Double {
+            seed = seed &* 6364136223846793005 &+ 1442695040888963407
+            return Double(seed >> 33) / Double(UInt32.max >> 1)
+        }
+        return (0..<34).map { _ in (x: next(), y: next(), size: 0.6 + next() * 1.4, speed: 0.15 + next() * 0.5) }
+    }()
+
+    var body: some View {
+        Canvas { context, size in
+            for (index, star) in Self.stars.enumerated() {
+                let twinkle = 0.5 + 0.5 * sin(time * star.speed * 2 * .pi + Double(index))
+                let alpha = (0.08 + 0.22 * twinkle) * dim
+                let rect = CGRect(x: star.x * size.width, y: star.y * size.height, width: star.size, height: star.size)
+                context.fill(Path(ellipseIn: rect), with: .color(Color.white.opacity(alpha)))
+            }
+        }
     }
 }
 
@@ -50,10 +143,28 @@ struct Sphere: View {
                 )
             )
             .frame(width: size, height: size)
+            // A glassy shine on top and a thin bright rim, so the ball looks round and lit.
+            .overlay(
+                Ellipse()
+                    .fill(LinearGradient(colors: [Color.white.opacity(0.38), Color.white.opacity(0)],
+                                         startPoint: .top, endPoint: .bottom))
+                    .frame(width: size * 0.62, height: size * 0.36)
+                    .offset(x: -size * 0.06, y: -size * 0.24)
+                    .blur(radius: size * 0.02)
+            )
+            .overlay(
+                Circle()
+                    .strokeBorder(
+                        LinearGradient(colors: [Color.white.opacity(0.35), Color(hex: hex, opacity: 0.1), Color.white.opacity(0.12)],
+                                       startPoint: .topLeading, endPoint: .bottomTrailing),
+                        lineWidth: max(size * 0.025, 0.75)
+                    )
+            )
             .overlay(
                 Text(letter)
-                    .font(.system(size: size * 0.42, weight: .bold))
+                    .font(.system(size: size * 0.42, weight: .bold, design: .rounded))
                     .foregroundStyle(Color.brightness(hex) > 0.62 ? Theme.darkInk : Color.white)
+                    .shadow(color: .black.opacity(0.18), radius: 1, y: 1)
             )
             .shadow(color: Color(hex: hex, opacity: glow), radius: size * 0.22)
             .accessibilityHidden(true)
@@ -105,6 +216,16 @@ struct GlassCard: ViewModifier {
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
                     .stroke(border, lineWidth: 1)
             )
+            // A faint light along the top edge, like glass catching light.
+            .overlay(
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .stroke(
+                        LinearGradient(colors: [Color.white.opacity(0.10), Color.white.opacity(0)],
+                                       startPoint: .top, endPoint: .center),
+                        lineWidth: 1
+                    )
+                    .allowsHitTesting(false)
+            )
     }
 
     private var fill: LinearGradient {
@@ -143,10 +264,20 @@ struct FilledButtonStyle: ButtonStyle {
             .foregroundStyle(foreground)
             .frame(maxWidth: .infinity)
             .frame(height: height)
-            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(fill))
-            .opacity(configuration.isPressed ? 0.8 : 1)
-            .scaleEffect(configuration.isPressed ? 0.98 : 1)
-            .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(fill)
+                    // A soft shine across the top half, so it looks like a raised button.
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(LinearGradient(colors: [Color.white.opacity(0.16), Color.white.opacity(0)],
+                                                 startPoint: .top, endPoint: .center))
+                    )
+                    .shadow(color: fill.opacity(configuration.isPressed ? 0.15 : 0.35), radius: configuration.isPressed ? 4 : 10, y: 4)
+            )
+            .opacity(configuration.isPressed ? 0.85 : 1)
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isPressed)
     }
 }
 
@@ -171,6 +302,8 @@ struct GhostButtonStyle: ButtonStyle {
             .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(fill))
             .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(border, lineWidth: 1))
             .opacity(configuration.isPressed ? 0.75 : 1)
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isPressed)
     }
 }
 
