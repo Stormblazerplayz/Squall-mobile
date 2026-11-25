@@ -390,6 +390,8 @@ final class SquallStore: ObservableObject {
         ReplyAlerts.process(chats: snapshot.chats, bots: newBots, settings: settings, computerKey: dataComputerKey ?? "",
                             inForeground: UIApplication.shared.applicationState == .active)
         TeammateWidgetWriter.update(chats: snapshot.chats, bots: newBots)
+        // Snoozes for things answered or cleared somewhere else go away.
+        InboxSnooze.shared.keepOnly(Set(inbox.map(\.id)))
         LiveActivities.shared.sync(work: work, inbox: inbox, routines: routines, bots: bots, paused: pausedAll)
     }
 
@@ -454,6 +456,7 @@ final class SquallStore: ObservableObject {
         }
         TeammateWidgetWriter.forget()
         QuickActions.clear()
+        InboxSnooze.shared.clear()
     }
 
     /// Takes everything from the computer off the screens.

@@ -4,10 +4,11 @@ import SwiftUI
 struct AnswerManyBar: View {
     @EnvironmentObject private var store: SquallStore
     @EnvironmentObject private var lock: AppLock
+    @ObservedObject private var snooze = InboxSnooze.shared
     @State private var show = false
 
     var body: some View {
-        let asks = AnswerMany.asks(in: store.inbox)
+        let asks = AnswerMany.asks(in: InboxSnooze.shared.awake(store.inbox))
         if asks.count >= AnswerMany.minimum {
             HStack(spacing: 12) {
                 Image(systemName: "checklist")
@@ -51,9 +52,9 @@ struct AnswerManyView: View {
     @State private var confirmDeny = false
 
     var body: some View {
-        let asks = AnswerMany.asks(in: store.inbox)
+        let asks = AnswerMany.asks(in: InboxSnooze.shared.awake(store.inbox))
         let groups = AnswerMany.groups(asks)
-        let chosen = AnswerMany.stillWaiting(picked, in: store.inbox)
+        let chosen = AnswerMany.stillWaiting(picked, in: InboxSnooze.shared.awake(store.inbox))
         NavigationStack {
             ZStack(alignment: .bottom) {
                 GlowBackground(topHex: Theme.goldHex)
@@ -257,7 +258,7 @@ struct AnswerManyView: View {
             working = false
             picked.subtract(ids)
             store.showToast(AnswerMany.doneText(allow: allow, sent: result.sent, failed: result.failed))
-            if AnswerMany.asks(in: store.inbox).isEmpty { dismiss() }
+            if AnswerMany.asks(in: InboxSnooze.shared.awake(store.inbox)).isEmpty { dismiss() }
         }
     }
 }

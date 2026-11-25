@@ -6,6 +6,7 @@ struct InboxView: View {
     @State private var filter: InboxItem.Filter = .all
     @State private var openDetails: Set<String> = []
     @State private var selectedID: String?
+    @ObservedObject private var snooze = InboxSnooze.shared
     @Environment(\.horizontalSizeClass) private var sizeClass
 
     var body: some View {
@@ -57,7 +58,7 @@ struct InboxView: View {
     }
 
     private var summary: String {
-        let needs = store.waitingOnYouCount
+        let needs = items(for: .needs).count
         let unread = store.unreadInboxCount
         let needsText = needs == 1 ? "1 thing needs you" : "\(needs) things need you"
         return "\(needsText) · \(unread) unread"
@@ -67,12 +68,14 @@ struct InboxView: View {
         items(for: filter).count
     }
 
+    /// Snoozed things wait at the bottom instead (see SnoozedSection).
     private func items(for filter: InboxItem.Filter) -> [InboxItem] {
+        let awake = snooze.awake(store.inbox)
         switch filter {
-        case .all: return store.inbox
-        case .needs: return store.inbox.filter { $0.kind.needsYou }
-        case .problems: return store.inbox.filter { $0.kind == .error }
-        case .done: return store.inbox.filter {
+        case .all: return awake
+        case .needs: return awake.filter { $0.kind.needsYou }
+        case .problems: return awake.filter { $0.kind == .error }
+        case .done: return awake.filter {
             if case .done = $0.kind { return true }
             return false
         }
@@ -109,6 +112,7 @@ struct InboxView: View {
                 return false
             })
         }
+        SnoozedSection()
     }
 
     @ViewBuilder
@@ -160,6 +164,7 @@ struct InboxView: View {
                             return false
                         }, selected: selected?.id)
                     }
+                    SnoozedSection()
                 }
                 .padding(20)
             }
@@ -326,9 +331,13 @@ private struct InboxCard: View {
                         .foregroundStyle(Theme.sub)
                 }
                 Spacer(minLength: 0)
-                Text(item.time)
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(Theme.muted)
+                VStack(alignment: .trailing, spacing: 0) {
+                    Text(item.time)
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(Theme.muted)
+                    SnoozeMenu(item: item)
+                        .offset(x: 8)
+                }
             }
             actions
             if showDetails, item.kind == .error, let details = item.details, !details.isEmpty {

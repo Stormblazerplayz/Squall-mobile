@@ -79,7 +79,8 @@ final class SquallAlerts: NSObject, ObservableObject, UNUserNotificationCenterDe
         let seen = Set(seenList ?? [])
         defaults.set(computerKey, forKey: Self.computerKey)
         defaults.set(Array(current.prefix(500)), forKey: Self.seenKey)
-        updateBadge(inbox.filter { $0.kind.needsYou }.count)
+        // Snoozed things don't count until they wake.
+        updateBadge(inbox.filter { $0.kind.needsYou && !InboxSnooze.shared.isSnoozed($0.id) }.count)
 
         guard sameComputer, seenList != nil else { return }
 
