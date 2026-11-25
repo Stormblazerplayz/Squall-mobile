@@ -758,7 +758,7 @@ final class SquallStore: ObservableObject {
         guard !text.isEmpty else { return }
         let id = chatID ?? currentChatID
         guard requireConnection() else { return }
-        messages[id, default: []].append(ChatMessage(kind: .me, author: ChatMessage.meID, text: text, time: TimeText.now()))
+        messages[id, default: []].append(ChatMessage(kind: .me, author: ChatMessage.meID, text: text, time: TimeText.now(), at: Date()))
         send(SyncAction(type: "chat.send", fields: ["chatId": .string(id), "text": .string(text)]))
     }
 

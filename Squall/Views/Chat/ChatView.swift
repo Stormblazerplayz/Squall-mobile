@@ -8,6 +8,14 @@ struct ChatView: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var draft = ""
     @State private var sentCount = 0
+    /// True while the end of the chat is on screen. New messages only pull the chat down then.
+    @State private var atBottom = true
+    /// When the end of the chat last went off screen. A new message can push it off for a moment, so that doesn't count.
+    @State private var leftBottomAt: Date?
+    /// The jump button, shown once you've really scrolled up.
+    @State private var showJump = false
+    /// The messages that were there when you scrolled up, so the button can count what's new.
+    @State private var seenIDs = Set<String>()
     @AppStorage(Prefs.showTyping) private var showTyping = true
     @AppStorage(Prefs.sendOnReturn) private var sendOnReturn = false
     @AppStorage(Prefs.haptics) private var haptics = true
@@ -17,6 +25,7 @@ struct ChatView: View {
     var body: some View {
         let bot = store.currentChat
         let list = store.messages(for: bot.id)
+        let dividers = ChatDays.dividers(list)
         let isWide = sizeClass == .regular
         ZStack {
             GlowBackground(topHex: bot.hex)
@@ -46,11 +55,14 @@ struct ChatView: View {
                     ScrollViewReader { proxy in
                         ScrollView {
                             LazyVStack(spacing: 12) {
-                                DayDivider(text: "TODAY")
                                 if list.isEmpty && store.typingBotID != bot.id {
                                     emptyState(bot)
                                 }
                                 ForEach(list) { message in
+                                    // A line where a new day starts, from the message's real time.
+                                    if let day = dividers[message.id] {
+                                        DayDivider(text: day)
+                                    }
                                     MessageView(message: message, bot: bot, chatID: bot.id) { chip in
                                         store.send(chip)
                                     }
@@ -59,6 +71,20 @@ struct ChatView: View {
                                     TypingRow(bot: bot)
                                 }
                                 Color.clear.frame(height: 1).id("bottom")
+                                    .onAppear {
+                                        atBottom = true
+                                        leftBottomAt = nil
+                                        showJump = false
+                                    }
+                                    .onDisappear {
+                                        atBottom = false
+                                        leftBottomAt = Date()
+                                        seenIDs = Set(list.map(\.id))
+                                        Task { @MainActor in
+                                            try? await Task.sleep(for: .milliseconds(400))
+                                            if !atBottom { showJump = true }
+                                        }
+                                    }
                             }
                             .padding(.horizontal, 16)
                             .padding(.vertical, 8)
@@ -68,14 +94,32 @@ struct ChatView: View {
                         .scrollDismissesKeyboard(.interactively)
                         .onAppear { proxy.scrollTo("bottom", anchor: .bottom) }
                         .onChange(of: list.count) {
+                            // Reading older messages isn't interrupted: the chat only follows when you're at the end or
+                            // you just sent something. Otherwise the jump button counts what came in.
+                            guard ChatDays.shouldFollow(atBottom: atBottom, leftBottomAt: leftBottomAt, newest: list.last) else { return }
                             withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
                         }
                         .onChange(of: store.typingBotID) {
+                            guard ChatDays.shouldFollow(atBottom: atBottom, leftBottomAt: leftBottomAt, newest: nil) else { return }
                             withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
                         }
                         .onChange(of: bot.id) {
                             proxy.scrollTo("bottom", anchor: .bottom)
                         }
+                        .onChange(of: bot.id) {
+                            seenIDs = Set(list.map(\.id))
+                        }
+                        .overlay(alignment: .bottom) {
+                            if showJump && !list.isEmpty {
+                                let unseen = ChatDays.unseen(seen: seenIDs, new: list)
+                                JumpToLatestButton(count: unseen, tint: bot.color) {
+                                    withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
+                                }
+                                .padding(.bottom, 10)
+                                .transition(.move(edge: .bottom).combined(with: .opacity))
+                            }
+                        }
+                        .animation(.easeOut(duration: 0.2), value: showJump)
                     }
                     inputBar(bot)
                 }
@@ -422,6 +466,36 @@ private struct LiveLogPanel: View {
         .padding(12)
         .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.black.opacity(0.35)))
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Theme.cardBorder, lineWidth: 1))
+    }
+}
+
+/// The pill over the bottom of a chat while you're scrolled up: jumps to the newest message, with a count of new ones.
+private struct JumpToLatestButton: View {
+    let count: Int
+    let tint: Color
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.down")
+                    .font(.system(size: 12.5, weight: .bold))
+                Text(ChatDays.jumpLabel(count))
+                    .font(.system(size: 13, weight: .semibold))
+                    .contentTransition(.numericText())
+            }
+            .foregroundStyle(count > 0 ? .white : Theme.text)
+            .padding(.horizontal, 14)
+            .frame(height: 34)
+            .background(
+                Capsule().fill(count > 0 ? AnyShapeStyle(tint) : AnyShapeStyle(.ultraThinMaterial))
+            )
+            .overlay(Capsule().stroke(Color.white.opacity(0.14), lineWidth: 1))
+            .shadow(color: .black.opacity(0.35), radius: 10, y: 4)
+        }
+        .buttonStyle(.plain)
+        .animation(.easeOut(duration: 0.2), value: count)
+        .accessibilityLabel(count > 0 ? "Jump to \(ChatDays.jumpLabel(count))" : "Jump to the latest message")
     }
 }
 
