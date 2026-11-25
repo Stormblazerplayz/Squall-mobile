@@ -109,6 +109,7 @@ struct SettingsView: View {
     private var secondColumn: some View {
         SectionLabel(text: "Plan usage")
         usageSection
+        TeamModelSection()
         SectionLabel(text: "Safety")
         safetySection
         SectionLabel(text: "Claude Code")
