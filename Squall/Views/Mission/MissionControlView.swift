@@ -21,7 +21,14 @@ struct MissionControlView: View {
                     chiefPanel
                     SectionLabel(text: "Team")
                     if store.teammates.isEmpty {
-                        emptyRow("No teammates yet. Chief works alone for now.")
+                        EmptyStateCard(
+                            icon: "person.badge.plus",
+                            title: "Chief works alone for now",
+                            text: "Add teammates and you can watch, pause and steer all of them from here.",
+                            buttonTitle: "Add a teammate",
+                            tint: Theme.goldBright,
+                            action: { store.showNewTeammate = true }
+                        )
                     } else {
                         LazyVGrid(columns: columns, spacing: 10) {
                             ForEach(store.teammates) { bot in
@@ -194,7 +201,7 @@ struct MissionControlView: View {
     private var needsYou: some View {
         let items = store.inbox.filter { $0.kind.needsYou }
         if items.isEmpty {
-            emptyRow("No bot is waiting on you.")
+            emptyRow("No bot is waiting on you. Nice!", icon: "checkmark.circle")
         } else {
             VStack(spacing: 8) {
                 ForEach(items) { item in
@@ -231,13 +238,21 @@ struct MissionControlView: View {
         }
     }
 
-    private func emptyRow(_ text: String) -> some View {
-        Text(text)
-            .font(.system(size: 13.5))
-            .foregroundStyle(Theme.sub)
-            .padding(12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .glassCard(radius: 14)
+    private func emptyRow(_ text: String, icon: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Theme.muted)
+                .frame(width: 20)
+                .accessibilityHidden(true)
+            Text(text)
+                .font(.system(size: 13.5))
+                .foregroundStyle(Theme.sub)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassCard(radius: 14)
     }
 
     private func askRow<Buttons: View>(botID: String, text: String, done: String?, @ViewBuilder buttons: () -> Buttons) -> some View {
@@ -266,7 +281,7 @@ struct MissionControlView: View {
     @ViewBuilder
     private var handoffs: some View {
         if store.handoffs.isEmpty {
-            emptyRow("No handoffs yet.")
+            emptyRow("No handoffs yet. Long-press a bot on the Team tab and drop it on Chief to hand its work over.", icon: "arrow.left.arrow.right")
         } else {
             VStack(spacing: 8) {
                 ForEach(store.handoffs) { handoff in

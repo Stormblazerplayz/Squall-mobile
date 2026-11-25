@@ -4,6 +4,14 @@ The iPhone and iPad app for Squall, Storm's AI team, built from the Squall Mobil
 
 On first launch the app asks to pair with Squall on your computer (scan a QR code or type a 6-digit code). If you skip, every screen shows **Not connected to your computer** with a **Pair** button.
 
+## Demo mode
+
+No computer yet? Tap **Try the demo** (on first launch, on the Not connected screen, or in Settings > Computer) to play with a pretend team: Chief, a few teammates, chats, jobs you can watch step by step, Inbox asks, routines, groups and Plan usage. Every tab works.
+
+- A purple **DEMO · Not real** bar sits on top of every screen, with **Exit**. Chief's replies, jobs and numbers are all made up on the phone.
+- Nothing in the demo is sent to a computer, saved for offline, shown in widgets, Siri, the Lock Screen or notifications. Settings you change go back when you leave.
+- The demo only starts when no computer is paired, and pairing ends it, so real data and demo data never mix. Outside the demo the app still shows only real data.
+
 A line above the tabs shows the connection with a colored dot: green when it's live, yellow while connecting or trying again, red when the computer isn't answering (tap it to try again), gray when not paired. Squall tries again by itself after 2, 4, 6, 8 and then every 10 seconds, right away when Wi-Fi comes back, and whenever you open the app.
 
 The last real update from your computer is kept on the phone, so screens open right away and can still be read when the computer is off, with when it last synced. Buttons that change something wait for the computer. Unpair (Settings > Computer) removes that copy. How pairing and live data work, and a test desktop to try it with, are in [docs/pairing.md](docs/pairing.md).
@@ -12,7 +20,7 @@ The last real update from your computer is kept on the phone, so screens open ri
 
 Tabs along the bottom:
 
-- **Team**: Chief's card (message Chief, see its steps), quick actions (new teammate, new group, routines) and the team list with unread badges. Long-press a bot, then tap the glowing Chief card to hand its work to Chief.
+- **Team**: a hello with live counts (working, needs you, done today), Chief's card (message Chief, see its steps), quick actions (new teammate, new group, call Chief, routines), **Recent activity** from your team, and the team list with unread badges and progress bars. Long-press a bot, then tap the glowing Chief card to hand its work to Chief.
 - **Chat**: one-on-one chat with any bot, with replies from your computer, Chief's errors with Try again, a strip to jump between bots, reply chips, the Live switch and a call button.
 - **Inbox**: things that need you (OKs and questions from your bots), problems and finished work. Allow, Deny, pick, Clear, and filters.
 - **Board**: every bot as a card with Chat, Steps and hand-off. A bot with a job running has Watch live.
@@ -167,6 +175,7 @@ open Squall.xcodeproj
 - `Squall/Sync`: the live data format from the computer (see docs/pairing.md).
 - `Squall/Pairing`: pairing, the connection to the computer and the Keychain token.
 - `Squall/Views`: one folder per screen.
+- `Squall/Demo`: demo mode's pretend team (`DemoWorld`) and its banner and pretend call.
 - `Squall/LiveActivities`: starts and updates the Live Activities, and the Lock Screen button.
 - `Shared`: Live Activity data, their Lock Screen buttons (App Intents) and the widget's data, used by the app and the extension.
 - `SquallActivities`: the widget extension that draws the Live Activities and the team widget.

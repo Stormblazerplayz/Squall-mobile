@@ -23,13 +23,14 @@ struct ConnectionDot: View {
             .accessibilityHidden(true)
     }
 
-    private var isLive: Bool { store.link == .connected }
+    private var isLive: Bool { store.link == .connected || store.isDemo }
 
     private var isBusy: Bool {
-        store.link == .connecting || store.isRetrying
+        store.isDemo || store.link == .connecting || store.isRetrying
     }
 
     private var color: Color {
+        if store.isDemo { return Theme.demo }
         switch store.link {
         case .connected: return Theme.green
         case .connecting: return Theme.yellow
@@ -63,7 +64,11 @@ struct ConnectionStrip: View {
                     .lineLimit(1)
                 detail
                 Spacer(minLength: 4)
-                if case .offline = store.link, !store.isRetrying {
+                if store.isDemo {
+                    Text("Pair")
+                        .font(.system(size: 11.5, weight: .bold))
+                        .foregroundStyle(Theme.demoText)
+                } else if case .offline = store.link, !store.isRetrying {
                     Text("Try again")
                         .font(.system(size: 11.5, weight: .bold))
                         .foregroundStyle(store.accent)
@@ -88,6 +93,7 @@ struct ConnectionStrip: View {
     }
 
     private var title: String {
+        if store.isDemo { return "Demo mode · nothing here is real" }
         switch store.link {
         case .unpaired: return "Not paired"
         case .connecting: return "Connecting to \(name)..."
@@ -97,6 +103,7 @@ struct ConnectionStrip: View {
     }
 
     private var titleColor: Color {
+        if store.isDemo { return Theme.demoText }
         switch store.link {
         case .connected: return Theme.greenText
         case .offline: return store.isRetrying ? Theme.sub : Theme.redText
@@ -106,7 +113,9 @@ struct ConnectionStrip: View {
 
     @ViewBuilder
     private var detail: some View {
-        if case .offline = store.link, !store.isRetrying {
+        if store.isDemo {
+            EmptyView()
+        } else if case .offline = store.link, !store.isRetrying {
             TimelineView(.periodic(from: .now, by: 1)) { context in
                 Text(offlineDetail(now: context.date))
                     .font(.system(size: 11.5))
@@ -135,13 +144,14 @@ struct ConnectionStrip: View {
 
     private var accessibilityText: String {
         var text = title
-        if let synced = store.lastSynced, store.link != .connected {
+        if let synced = store.lastSynced, store.link != .connected, !store.isDemo {
             text += ". Last synced \(SyncAge.text(synced))"
         }
         return text
     }
 
     private var hint: String {
+        if store.isDemo { return "Leaves the demo and pairs with your computer" }
         switch store.link {
         case .offline: return "Tries your computer again"
         case .unpaired: return "Pairs with your computer"
@@ -150,6 +160,11 @@ struct ConnectionStrip: View {
     }
 
     private func tapped() {
+        if store.isDemo {
+            store.endDemo(quiet: true)
+            store.showPairing = true
+            return
+        }
         switch store.link {
         case .offline:
             store.refreshNow()

@@ -249,6 +249,33 @@ struct SettingsView: View {
                         .foregroundStyle(Theme.muted)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+            } else if store.isDemo {
+                HStack(spacing: 12) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(Theme.demoText)
+                        .frame(width: 40, height: 40)
+                        .background(Circle().fill(Theme.demo.opacity(0.16)))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Demo mode")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(Theme.text)
+                        Text("A pretend team on this phone. Nothing here is real, and nothing is sent to a computer. Settings you change here go back when you leave.")
+                            .font(.system(size: 12.5))
+                            .foregroundStyle(Theme.sub)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 0)
+                }
+                HStack(spacing: 8) {
+                    Button("Leave demo") { store.endDemo() }
+                        .buttonStyle(GhostButtonStyle(height: 40, fontSize: 14, sidePadding: 10))
+                    Button("Pair for real") {
+                        store.endDemo(quiet: true)
+                        store.showPairing = true
+                    }
+                    .buttonStyle(FilledButtonStyle(fill: store.accent, height: 40))
+                }
             } else {
                 HStack(spacing: 12) {
                     Image(systemName: "desktopcomputer")
@@ -269,6 +296,9 @@ struct SettingsView: View {
                 }
                 Button("Pair with computer") { store.showPairing = true }
                     .buttonStyle(FilledButtonStyle(fill: store.accent, height: 42))
+                if store.canStartDemo {
+                    TryDemoButton(height: 40)
+                }
             }
         }
         .padding(14)

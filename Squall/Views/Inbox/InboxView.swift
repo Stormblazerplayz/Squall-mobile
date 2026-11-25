@@ -89,11 +89,8 @@ struct InboxView: View {
     private var sections: some View {
         let shown = items(for: filter)
         if shown.isEmpty {
-            Text(filter.emptyText)
-                .font(.system(size: 14))
-                .foregroundStyle(Theme.sub)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 50)
+            emptyState
+                .padding(.top, 20)
         } else {
             section("Needs you", dot: Theme.goldBright, items: shown.filter { $0.kind.needsYou })
             section("Problems", dot: Theme.redSoft, items: shown.filter { $0.kind == .error })
@@ -102,6 +99,27 @@ struct InboxView: View {
                 return false
             })
         }
+    }
+
+    /// Nothing in this filter: say what shows up here and what to do next.
+    private var emptyState: some View {
+        let allEmpty = store.inbox.isEmpty
+        return EmptyStateCard(
+            icon: filter == .problems ? "checkmark.shield" : (filter == .done ? "checkmark.seal" : "tray"),
+            title: allEmpty ? "Inbox zero" : filter.emptyText,
+            text: allEmpty
+                ? "When a bot needs your OK, asks a question, hits a problem or finishes a job, it lands here."
+                : "Try another filter to see the rest.",
+            buttonTitle: allEmpty ? "Give Chief a job" : "Show everything",
+            tint: filter == .problems ? Theme.green : Theme.goldBright,
+            action: {
+                if allEmpty {
+                    store.openChat(Bot.chiefID)
+                } else {
+                    withAnimation { filter = .all }
+                }
+            }
+        )
     }
 
     @ViewBuilder
@@ -139,11 +157,8 @@ struct InboxView: View {
                     header
                     filterBar
                     if shown.isEmpty {
-                        Text(filter.emptyText)
-                            .font(.system(size: 14))
-                            .foregroundStyle(Theme.sub)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 50)
+                        emptyState
+                            .padding(.top, 20)
                     } else {
                         listSection("Needs you", dot: Theme.goldBright, items: shown.filter { $0.kind.needsYou }, selected: selected?.id)
                         listSection("Problems", dot: Theme.redSoft, items: shown.filter { $0.kind == .error }, selected: selected?.id)

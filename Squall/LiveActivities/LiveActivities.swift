@@ -395,6 +395,9 @@ struct LockScreenButton: View {
             if on {
                 activities.stop(kind)
                 store.showToast("Taken off your Lock Screen.")
+            } else if store.isDemo {
+                // The pretend team never goes on the Lock Screen.
+                store.showToast("The Lock Screen only shows your real team, not the demo.")
             } else if !store.isConnected {
                 // Only live data from the computer goes on the Lock Screen.
                 store.showToast("Connect to your computer first.", action: .pair)

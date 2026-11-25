@@ -88,13 +88,26 @@ struct ChatView: View {
             Text("Start a chat with \(bot.name)")
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(Theme.textBright)
-            Text("Say hi, or give \(bot.name) something to work on.")
+            Text("Say hi, or give \(bot.name) something to work on. Tap one to send it.")
                 .font(.system(size: 13.5))
                 .foregroundStyle(Theme.sub)
                 .multilineTextAlignment(.center)
+            FlowChips(chips: starters(for: bot), tint: bot.color) { chip in
+                store.send(chip, to: bot.id)
+            }
+            .padding(.top, 6)
         }
         .padding(.vertical, 40)
         .frame(maxWidth: .infinity)
+        .appearIn()
+    }
+
+    /// Ideas for a first message, so an empty chat has a next step.
+    private func starters(for bot: Bot) -> [String] {
+        if bot.isChief {
+            return ["What's the team up to?", "Make me a small game", "What can you do?"]
+        }
+        return ["Hi \(bot.name)! What can you do?", "What are you working on?"]
     }
 
     private func inputBar(_ bot: Bot) -> some View {

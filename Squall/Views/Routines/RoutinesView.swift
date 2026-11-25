@@ -57,23 +57,15 @@ struct RoutinesView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "clock.badge")
-                .font(.system(size: 36))
-                .foregroundStyle(Theme.sub)
-            Text("No routines yet")
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(Theme.textBright)
-            Text("A routine wakes a teammate on a schedule to check in or pick up work.")
-                .font(.system(size: 13.5))
-                .foregroundStyle(Theme.sub)
-                .multilineTextAlignment(.center)
-            Button("New routine") { store.path.append(.newRoutine) }
-                .buttonStyle(FilledButtonStyle(fill: store.accent))
-                .frame(maxWidth: 220)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 40)
+        EmptyStateCard(
+            icon: "clock.badge",
+            title: "No routines yet",
+            text: "A routine wakes a teammate on a schedule, like checking for bugs every morning or tidying up on Fridays.",
+            buttonTitle: "New routine",
+            tint: Theme.goldBright,
+            action: { store.path.append(.newRoutine) }
+        )
+        .padding(.top, 12)
     }
 }
 

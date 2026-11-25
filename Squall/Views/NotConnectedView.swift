@@ -104,6 +104,14 @@ struct NotConnectedView: View {
                 openPairing()
             }
             .buttonStyle(FilledButtonStyle(fill: store.accent, height: 48))
+            if store.canStartDemo {
+                TryDemoButton { startDemo() }
+                Text("No computer yet? Play with a pretend team. Nothing in the demo is real.")
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(Theme.muted)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             if case .offline = store.link {
                 Button(store.isRetrying ? "Trying again..." : "Try again") { store.refreshNow() }
                     .buttonStyle(GhostButtonStyle(height: 44))
@@ -121,6 +129,19 @@ struct NotConnectedView: View {
                 Button("Settings") { store.path.append(.settings) }
                     .buttonStyle(GhostButtonStyle(height: 44, foreground: Theme.sub))
             }
+        }
+    }
+
+    private func startDemo() {
+        if let onClose {
+            // Close this screen first, then start the demo on the main screen.
+            onClose()
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(0.6))
+                store.startDemo()
+            }
+        } else {
+            store.startDemo()
         }
     }
 
