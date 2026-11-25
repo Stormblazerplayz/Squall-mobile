@@ -72,6 +72,9 @@ struct ChatView: View {
                                     MessageView(message: message, bot: bot, chatID: bot.id, continued: continued.contains(message.id)) { chip in
                                         store.send(chip)
                                     }
+                                    .swipeToReply(message, chatID: bot.id,
+                                                  authorName: message.kind == .me ? "You" : (store.bot(message.author)?.name ?? bot.name),
+                                                  tint: message.kind == .me ? store.accent : (store.bot(message.author)?.color ?? bot.color))
                                 }
                                 if let last = list.last, last.kind == .bot, last.chips.isEmpty, store.typingBotID != bot.id {
                                     // A quick question at the end of the chat gets tap-to-send answers.
