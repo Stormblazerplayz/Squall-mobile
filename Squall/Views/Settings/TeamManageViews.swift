@@ -62,6 +62,7 @@ struct TeamManageSection: View {
                 }
                 .buttonStyle(.plain)
             }
+            AddTeammateRow()
             if info?.manage != true, store.isConnected {
                 Text("Update Squall on your computer to rename, promote or remove teammates from here.")
                     .font(.system(size: 12.5))
