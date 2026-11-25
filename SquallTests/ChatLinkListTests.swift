@@ -44,4 +44,12 @@ final class ChatLinkListTests: XCTestCase {
         XCTAssertEqual(ChatLinkList.only(list, site: nil).count, 3)
         XCTAssertEqual(ChatLinkList.sites([]), [])
     }
+
+    func testPlainAndMarkdown() {
+        let list = Array(ChatLinkList.entries(messages).prefix(2))
+        XCTAssertEqual(ChatLinkList.plain(list),
+                       "https://github.com/stormblazerplayz/squall-mobile\nhttps://github.com/stormblazerplayz/squall-mobile/pull/5")
+        XCTAssertEqual(ChatLinkList.markdown(Array(list.prefix(1))), "- [github.com](https://github.com/stormblazerplayz/squall-mobile)")
+        XCTAssertEqual(ChatLinkList.plain([]), "")
+    }
 }

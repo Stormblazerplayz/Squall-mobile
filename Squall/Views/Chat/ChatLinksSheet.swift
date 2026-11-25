@@ -51,6 +51,30 @@ struct ChatLinksSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
                 }
+                if !shown.isEmpty {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Menu {
+                            Button {
+                                UIPasteboard.general.string = ChatLinkList.plain(shown)
+                                store.showToast(shown.count == 1 ? "Link copied." : "\(shown.count) links copied.")
+                            } label: {
+                                Label(shown.count == 1 ? "Copy the link" : "Copy all \(shown.count) links", systemImage: "doc.on.doc")
+                            }
+                            Button {
+                                UIPasteboard.general.string = ChatLinkList.markdown(shown)
+                                store.showToast("Copied as a Markdown list.")
+                            } label: {
+                                Label("Copy as a Markdown list", systemImage: "list.bullet")
+                            }
+                            ShareLink(item: ChatLinkList.plain(shown)) {
+                                Label("Share the links", systemImage: "square.and.arrow.up")
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis.circle")
+                        }
+                        .accessibilityLabel("Link actions")
+                    }
+                }
             }
         }
         .presentationDetents([.medium, .large])

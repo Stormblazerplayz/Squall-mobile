@@ -6,3 +6,4 @@ Tap ••• at the top of a chat and pick **Browse this chat** > **Links** to 
 - Press and hold for Copy link, Share, or Go to message, which jumps to the message it was in.
 - Search by site or any part of the link.
 - When a chat has links to two or more sites, a row of site chips shows how many links each site has. Tap one to see only those links, or All to see them all again.
+- The ••• button in the list copies every link shown (one per line), copies them as a Markdown list, or shares them. It goes by what's shown, so pick a site chip or search first to copy just those.

@@ -65,6 +65,16 @@ enum ChatLinkList {
         return entries.filter { $0.card.site == site }
     }
 
+    /// The links one per line, ready to paste.
+    static func plain(_ entries: [Entry]) -> String {
+        entries.map(\.card.url.absoluteString).joined(separator: "\n")
+    }
+
+    /// The links as a Markdown list, each with its site, ready to paste into notes.
+    static func markdown(_ entries: [Entry]) -> String {
+        entries.map { "- [\($0.card.site)](\($0.card.url.absoluteString))" }.joined(separator: "\n")
+    }
+
     /// "4 links · 2 sites".
     static func summary(_ entries: [Entry]) -> String {
         let sites = Set(entries.map(\.card.site)).count
