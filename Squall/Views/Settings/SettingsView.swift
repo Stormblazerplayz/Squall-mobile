@@ -17,6 +17,7 @@ struct SettingsView: View {
     /// Words typed in the search field at the top. Only matching sections show while it has some.
     @State private var search = ""
     @AppStorage(UndoSend.key) private var undoSend = false
+    @AppStorage(ChatSounds.key) private var chatSounds = false
     @AppStorage(BubbleStyle.key) private var bubbleStyle = BubbleStyle.rounded
 
     /// Asset name (nil is the normal icon), name shown, and the small preview image.
@@ -624,6 +625,8 @@ struct SettingsView: View {
             SwitchRow(title: "Send with Return", subtitle: "Handy with an iPad keyboard. Off makes Return start a new line.", isOn: $sendOnReturn, tint: store.accent)
             line
             SwitchRow(title: "Undo send", subtitle: "Messages wait 5 seconds in the chat with an Undo button before they go", isOn: $undoSend, tint: store.accent)
+            line
+            SwitchRow(title: "Chat sounds", subtitle: "A soft sound when you send and when a reply comes in. A silenced iPhone stays quiet.", isOn: $chatSounds, tint: store.accent)
             line
             rowTitle("Chat opens on", "What you see when Squall starts")
             PillSegments(

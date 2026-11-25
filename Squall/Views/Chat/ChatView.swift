@@ -172,6 +172,12 @@ struct ChatView: View {
             }
         }
         .onChange(of: sentCount) { newFromID = nil }
+        // Chat sounds (Settings, Chat): one when you send, one when a reply comes in here.
+        .onChange(of: sentCount) { ChatSounds.play(.sent) }
+        .onChange(of: ChatSounds.snapshot(chatID: store.currentChat.id, messages: store.messages(for: store.currentChat.id))) { old, new in
+            let newest = store.messages(for: new.chatID).last
+            if let sound = ChatSounds.sound(from: old, to: new, newest: newest) { ChatSounds.play(sound) }
+        }
         .onDisappear { rememberSeen() }
         .onReceive(SavedPrompts.shared.$insert) { request in
             // A saved prompt picked from the header goes into the message box; what you'd typed stays in front of it.
