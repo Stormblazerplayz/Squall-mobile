@@ -6,6 +6,7 @@ enum AppTab: String, CaseIterable, Identifiable {
     case inbox
     case board
     case routines
+    case uno
 
     var id: String { rawValue }
 
@@ -16,6 +17,7 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .inbox: return "Inbox"
         case .board: return "Board"
         case .routines: return "Routines"
+        case .uno: return "Uno"
         }
     }
 
@@ -26,6 +28,7 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .inbox: return "tray.fill"
         case .board: return "square.grid.2x2.fill"
         case .routines: return "clock.fill"
+        case .uno: return "desktopcomputer"
         }
     }
 }

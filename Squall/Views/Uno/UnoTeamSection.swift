@@ -53,7 +53,7 @@ struct UnoTeamSection: View {
     }
 }
 
-private struct UnoComputerRow: View {
+struct UnoComputerRow: View {
     @EnvironmentObject private var store: SquallStore
     @EnvironmentObject private var uno: UnoModel
     let agent: Bot

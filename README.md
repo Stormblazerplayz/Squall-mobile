@@ -54,9 +54,13 @@ Squall checks the computer while it's open, for a little while after you leave i
 
 Add **Pause my team** (a switch) and **Call Chief** from Control Center's edit screen, or put them on the Lock Screen or the Action button.
 
+## Squall Uno
+
+The **Uno** tab shows every teammate's own computer inside Squall. Give one a task and watch Squall Uno click and type on it live, take the wheel, hand it back or stop everything. The same computers are also listed on the Team tab. It needs Squall on the PC with Docker Desktop running and an Anthropic API key (Uno settings).
+
 ## Keyboard (iPad)
 
-⌘1 to ⌘5 switch tabs, ⌘R refreshes, ⌘N adds a teammate, ⇧⌘K calls Chief, ⇧⌘M opens Mission control, ⌘, opens Settings and ⌘[ goes back. Hold ⌘ to see them all.
+⌘1 to ⌘6 switch tabs, ⌘R refreshes, ⌘N adds a teammate, ⇧⌘K calls Chief, ⇧⌘M opens Mission control, ⌘, opens Settings and ⌘[ goes back. Hold ⌘ to see them all.
 
 ## Widgets
 

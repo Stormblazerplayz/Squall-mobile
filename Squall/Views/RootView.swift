@@ -84,6 +84,8 @@ struct RootView: View {
             BoardView()
         case .routines:
             RoutinesView()
+        case .uno:
+            UnoTabView()
         }
     }
 
@@ -131,7 +133,7 @@ extension View {
     }
 }
 
-/// The bar along the bottom: Team, Chat, Inbox, Board, Routines.
+/// The bar along the bottom: Team, Chat, Inbox, Board, Routines, Squall Uno.
 struct SquallTabBar: View {
     @EnvironmentObject private var store: SquallStore
 
@@ -188,11 +190,11 @@ struct SquallTabBar: View {
         }
         .buttonStyle(.plain)
         .keyboardShortcut(Self.key(for: tab), modifiers: .command)
-        .accessibilityLabel(tab.label)
+        .accessibilityLabel(tab == .uno ? "Squall Uno" : tab.label)
         .accessibilityAddTraits(isOn ? .isSelected : [])
     }
 
-    /// ⌘1 to ⌘5 on a keyboard, in the order of the tabs.
+    /// ⌘1 to ⌘6 on a keyboard, in the order of the tabs.
     private static func key(for tab: AppTab) -> KeyEquivalent {
         let number = (AppTab.allCases.firstIndex(of: tab) ?? 0) + 1
         return KeyEquivalent(Character(String(number)))
@@ -200,7 +202,7 @@ struct SquallTabBar: View {
 }
 
 /// Keyboard shortcuts for iPad (and iPhone with a keyboard). Hold ⌘ to see them all.
-/// The tabs are ⌘1 to ⌘5, on the tab bar itself.
+/// The tabs are ⌘1 to ⌘6, on the tab bar itself.
 private struct KeyCommands: View {
     @EnvironmentObject private var store: SquallStore
 
