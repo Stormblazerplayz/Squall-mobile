@@ -28,6 +28,7 @@ struct ChatView: View {
         let bot = store.currentChat
         let list = store.messages(for: bot.id)
         let dividers = ChatDays.dividers(list)
+        let continued = ChatGrouping.continued(list)
         let isWide = sizeClass == .regular
         ZStack {
             GlowBackground(topHex: bot.hex)
@@ -68,7 +69,7 @@ struct ChatView: View {
                                     if message.id == newFromID {
                                         NewMessagesLine(count: NewMessages.count(list, from: message.id))
                                     }
-                                    MessageView(message: message, bot: bot, chatID: bot.id) { chip in
+                                    MessageView(message: message, bot: bot, chatID: bot.id, continued: continued.contains(message.id)) { chip in
                                         store.send(chip)
                                     }
                                 }
@@ -566,6 +567,8 @@ struct MessageView: View {
     let bot: Bot
     /// The chat it's in, for Summary under long messages. nil leaves that out.
     var chatID: String? = nil
+    /// True when it follows another reply from the same teammate (see ChatGrouping): no picture or name, and closer up.
+    var continued = false
     var onChip: (String) -> Void = { _ in }
     @AppStorage(Prefs.chatTextSize) private var textSize = 15.0
     @AppStorage(Prefs.showTimes) private var showTimes = true
@@ -636,12 +639,18 @@ struct MessageView: View {
     private var theirs: some View {
         let who = author
         return HStack(alignment: .top, spacing: 8) {
-            Sphere(bot: who, size: 28)
+            if continued {
+                Color.clear.frame(width: 28, height: 1)
+            } else {
+                Sphere(bot: who, size: 28)
+            }
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
-                    Text(who.name)
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(who.nameColor)
+                    if !continued {
+                        Text(who.name)
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(who.nameColor)
+                    }
                     if showTimes {
                         Text(message.time)
                             .font(.system(size: 11))
@@ -672,6 +681,7 @@ struct MessageView: View {
             .messageMenu(message, chatID: chatID, authorName: who.name)
             Spacer(minLength: 20)
         }
+        .padding(.top, continued ? -6 : 0)
     }
 
     private func handoff(fromName: String, fromHex: UInt32, note: String) -> some View {
