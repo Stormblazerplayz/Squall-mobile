@@ -30,6 +30,16 @@ final class AppLock: ObservableObject {
         }
     }
 
+    /// The SF Symbol for the unlock method: faceid, touchid, opticid or a lock.
+    static var methodSymbol: String {
+        switch methodName {
+        case "Face ID": return "faceid"
+        case "Touch ID": return "touchid"
+        case "Optic ID": return "opticid"
+        default: return "lock.fill"
+        }
+    }
+
     /// True when the device has Face ID, Touch ID or at least a passcode set.
     static var canLock: Bool {
         var error: NSError?
@@ -65,29 +75,91 @@ final class AppLock: ObservableObject {
     }
 }
 
-/// What you see while Squall is locked.
+/// What you see while Squall is locked: the logo with soft rings rippling out,
+/// a padlock that opens while you unlock, and a button with your unlock method's icon.
 struct LockScreen: View {
     @EnvironmentObject private var lock: AppLock
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var ripple = false
+    @State private var shown = false
 
     var body: some View {
         ZStack {
             GlowBackground()
             VStack(spacing: 18) {
-                LogoTile(size: 72)
-                Text("Squall is locked")
-                    .font(.system(size: 22, weight: .bold))
-                    .foregroundStyle(Theme.textBright)
-                Text("Unlock with \(AppLock.methodName) to see your team.")
-                    .font(.system(size: 14))
-                    .foregroundStyle(Theme.sub)
-                    .multilineTextAlignment(.center)
-                Button(lock.unlocking ? "Unlocking..." : "Unlock") { lock.unlock() }
-                    .buttonStyle(FilledButtonStyle(fill: Color(hex: Theme.defaultAccentHex), height: 46))
-                    .frame(maxWidth: 260)
-                    .disabled(lock.unlocking)
+                ZStack {
+                    if !reduceMotion {
+                        ForEach(0..<3, id: \.self) { index in
+                            Circle()
+                                .stroke(Color(hex: Theme.defaultAccentHex).opacity(0.5), lineWidth: 1.5)
+                                .frame(width: 96, height: 96)
+                                .scaleEffect(ripple ? 2.1 : 1)
+                                .opacity(ripple ? 0 : 0.7)
+                                .animation(
+                                    .easeOut(duration: 2.6).repeatForever(autoreverses: false).delay(Double(index) * 0.85),
+                                    value: ripple
+                                )
+                        }
+                    }
+                    Circle()
+                        .fill(Color(hex: Theme.defaultAccentHex).opacity(0.16))
+                        .frame(width: 112, height: 112)
+                        .blur(radius: 10)
+                    LogoTile(size: 80)
+                        .overlay(alignment: .bottomTrailing) {
+                            Image(systemName: lock.unlocking ? "lock.open.fill" : "lock.fill")
+                                .font(.system(size: 13, weight: .bold))
+                                .foregroundStyle(Theme.darkInk)
+                                .contentTransition(.symbolEffect(.replace))
+                                .frame(width: 30, height: 30)
+                                .background(Circle().fill(Theme.goldBright))
+                                .overlay(Circle().stroke(Theme.background, lineWidth: 3))
+                                .offset(x: 8, y: 8)
+                        }
+                }
+                .frame(height: 180)
+                .accessibilityHidden(true)
+                VStack(spacing: 8) {
+                    Text("Squall is locked")
+                        .font(.system(size: 24, weight: .bold))
+                        .foregroundStyle(Theme.textBright)
+                    Text("Unlock with \(AppLock.methodName) to see your team.")
+                        .font(.system(size: 14.5))
+                        .foregroundStyle(Theme.sub)
+                        .multilineTextAlignment(.center)
+                }
+                .opacity(shown ? 1 : 0)
+                .offset(y: shown ? 0 : 8)
+                Button {
+                    lock.unlock()
+                } label: {
+                    HStack(spacing: 8) {
+                        if lock.unlocking {
+                            ProgressView().tint(.white)
+                        } else {
+                            Image(systemName: AppLock.methodSymbol)
+                                .font(.system(size: 17, weight: .semibold))
+                        }
+                        Text(lock.unlocking ? "Unlocking..." : "Unlock")
+                    }
+                }
+                .buttonStyle(FilledButtonStyle(fill: Color(hex: Theme.defaultAccentHex), height: 50))
+                .frame(maxWidth: 260)
+                .disabled(lock.unlocking)
+                .opacity(shown ? 1 : 0)
+                .offset(y: shown ? 0 : 12)
             }
             .padding(24)
         }
+        .onAppear {
+            ripple = true
+            if reduceMotion {
+                shown = true
+            } else {
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.85).delay(0.1)) { shown = true }
+            }
+        }
+        .animation(.snappy, value: lock.unlocking)
     }
 }
 
